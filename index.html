@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagonal Tiles</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0b0b1a;
+            --fg: #e6e6f0;
+            --muted: #6e6e90;
+            --accent: #e07a5f;
+            --accent-dim: rgba(224, 122, 95, 0.15);
+            --card: #13132a;
+            --card2: #1a1a38;
+            --border: #28284a;
+            --sidebar-w: 310px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            overflow: hidden;
+            height: 100vh;
+            display: flex
+        }
+
+        #canvas-wrap {
+            flex: 1;
+            position: relative;
+            overflow: hidden
+        }
+
+        #hexCanvas {
+            display: block;
+            cursor: grab
+        }
+
+        #hexCanvas:active {
+            cursor: grabbing
+        }
+
+        .zoom-bar {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 6px 14px;
+            backdrop-filter: blur(8px);
+            z-index: 10
+        }
+
+        .zoom-bar button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 10px;
+            background: var(--card2);
+            color: var(--fg);
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s
+        }
+
+        .zoom-bar button:hover {
+            background: var(--accent);
+            color: #fff;
+            transform: scale(1.08)
+        }
+
+        .zoom-bar .zlabel {
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 52px;
+            text-align: center;
+            user-select: none
+        }
+
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--card);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 5px
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px
+        }
+
+        .sb-header {
+            padding: 22px 20px 14px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .sb-header h2 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -.5px
+        }
+
+        .sb-header p {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 4px
+        }
+
+        .sb-section {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .sb-section label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            font-weight: 600;
+            display: block;
+            margin-bottom: 10px
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 22px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all .25s
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: var(--accent-dim)
+        }
+
+        .upload-zone i {
+            font-size: 26px;
+            color: var(--muted);
+            display: block;
+            margin-bottom: 6px
+        }
+
+        .upload-zone p {
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .upload-zone .filename {
+            font-size: 11px;
+            color: var(--accent);
+            margin-top: 6px;
+            word-break: break-all
+        }
+
+        #fileInput {
+            display: none
+        }
+
+        .editor {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            animation: fadeSlide .3s ease
+        }
+
+        .editor.open {
+            display: flex
+        }
+
+        @keyframes fadeSlide {
+            from {
+                opacity: 0;
+                transform: translateY(8px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .preview-wrap {
+            display: flex;
+            justify-content: center;
+            padding: 14px;
+            background: var(--bg);
+            border-radius: 12px
+        }
+
+        #previewCanvas {
+            border-radius: 8px
+        }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px
+        }
+
+        .slider-row .s-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center
+        }
+
+        .slider-row .s-top span {
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .slider-row .s-top .s-val {
+            font-size: 12px;
+            color: var(--accent);
+            font-weight: 600;
+            min-width: 40px;
+            text-align: right
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 5px;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            transition: transform .12s
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.25)
+        }
+
+        input[type=range]::-moz-range-thumb {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            border: none
+        }
+
+        .btn {
+            padding: 9px 14px;
+            border: none;
+            border-radius: 9px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: #fff
+        }
+
+        .btn-accent:hover {
+            filter: brightness(1.15);
+            transform: translateY(-1px)
+        }
+
+        .btn-ghost {
+            background: var(--card2);
+            color: var(--fg);
+            border: 1px solid var(--border)
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--muted)
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px
+        }
+
+        .btn-row .btn {
+            flex: 1
+        }
+
+        .tile-info {
+            padding: 12px 14px;
+            background: var(--bg);
+            border-radius: 10px;
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.7
+        }
+
+        .tile-info strong {
+            color: var(--fg);
+            font-weight: 600
+        }
+
+        .hover-info {
+            padding: 10px 14px;
+            background: var(--accent-dim);
+            border: 1px solid rgba(224, 122, 95, .2);
+            border-radius: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            display: none
+        }
+
+        .hover-info.visible {
+            display: block
+        }
+
+        .hover-info .hi-coord {
+            color: var(--accent);
+            font-weight: 600
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px
+        }
+
+        .toggle-row span {
+            font-size: 13px;
+            color: var(--fg)
+        }
+
+        .switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0
+        }
+
+        .switch .track {
+            position: absolute;
+            inset: 0;
+            background: var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background .25s
+        }
+
+        .switch .track::after {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: 3px;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform .25s
+        }
+
+        .switch input:checked+.track {
+            background: var(--accent)
+        }
+
+        .switch input:checked+.track::after {
+            transform: translateX(20px)
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--card2);
+            border: 1px solid var(--accent);
+            color: var(--fg);
+            padding: 10px 22px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-family: 'Space Grotesk', sans-serif;
+            z-index: 1000;
+            transition: transform .35s cubic-bezier(.34, 1.56, .64, 1);
+            pointer-events: none;
+            white-space: nowrap
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0)
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-wrap">
+        <canvas id="hexCanvas"></canvas>
+        <div class="zoom-bar">
+            <button id="zoomOut" title="Zoom out"><i class="fas fa-minus"></i></button>
+            <span class="zlabel" id="zoomLabel">100%</span>
+            <button id="zoomIn" title="Zoom in"><i class="fas fa-plus"></i></button>
+            <button id="resetView" title="Reset view"><i class="fas fa-crosshairs"></i></button>
+        </div>
+    </div>
+
+    <aside class="sidebar">
+        <div class="sb-header">
+            <h2>Hex Tiles</h2>
+            <p>Infinite tiled canvas with per-tile rotation</p>
+        </div>
+
+        <div class="sb-section">
+            <label>Hovered Tile</label>
+            <div class="hover-info" id="hoverInfo">
+                <span class="hi-coord" id="hiCoord">—</span><br>
+                Rotation: <strong id="hiRot">—</strong>
+            </div>
+            <div class="tile-info" id="defaultInfo">
+                <strong>Click</strong> a tile to rotate by 60 deg<br>
+                <strong>Scroll</strong> to zoom &middot; <strong>Drag</strong> to pan<br>
+                <strong>Double-click</strong> a tile to reset to 0 deg
+            </div>
+        </div>
+
+        <div class="sb-section">
+            <label>Display</label>
+            <div class="toggle-row">
+                <span><i class="fas fa-border-all" style="margin-right:6px;color:var(--muted)"></i>Grid lines</span>
+                <label class="switch">
+                    <input type="checkbox" id="gridToggle" checked>
+                    <span class="track"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="sb-section">
+            <label>Texture</label>
+            <div class="upload-zone" id="uploadZone">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Click or drop an image</p>
+                <div class="filename" id="fileName"></div>
+            </div>
+            <input type="file" id="fileInput" accept="image/*">
+            <div style="margin-top:8px">
+                <button class="btn btn-ghost" id="resetTexBtn" style="width:100%"><i class="fas fa-undo"></i> Reset to
+                    White</button>
+            </div>
+        </div>
+
+        <div class="sb-section editor" id="editorPanel">
+            <label>Align Texture to Hex</label>
+            <div class="preview-wrap">
+                <canvas id="previewCanvas" width="220" height="220"></canvas>
+            </div>
+            <div class="slider-row">
+                <div class="s-top"><span>Rotation</span><span class="s-val" id="vRot">0°</span></div>
+                <input type="range" id="sRot" min="0" max="360" step="1" value="0">
+            </div>
+            <div class="slider-row">
+                <div class="s-top"><span>Scale</span><span class="s-val" id="vScale">1.00x</span></div>
+                <input type="range" id="sScale" min="0.1" max="4" step="0.05" value="1">
+            </div>
+            <div class="slider-row">
+                <div class="s-top"><span>Stretch X</span><span class="s-val" id="vSX">1.00x</span></div>
+                <input type="range" id="sSX" min="0.2" max="3" step="0.05" value="1">
+            </div>
+            <div class="slider-row">
+                <div class="s-top"><span>Stretch Y</span><span class="s-val" id="vSY">1.00x</span></div>
+                <input type="range" id="sSY" min="0.2" max="3" step="0.05" value="1">
+            </div>
+            <div class="slider-row">
+                <div class="s-top"><span>Offset X</span><span class="s-val" id="vOX">0</span></div>
+                <input type="range" id="sOX" min="-150" max="150" step="1" value="0">
+            </div>
+            <div class="slider-row">
+                <div class="s-top"><span>Offset Y</span><span class="s-val" id="vOY">0</span></div>
+                <input type="range" id="sOY" min="-150" max="150" step="1" value="0">
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-ghost" id="cancelEd">Close</button>
+                <button class="btn btn-accent" id="applyEd">Apply Texture</button>
+            </div>
+        </div>
+
+        <div class="sb-section" style="border-bottom:none">
+            <button class="btn btn-ghost" id="randomizeBtn" style="width:100%;margin-bottom:8px"><i
+                    class="fas fa-dice"></i> Randomize All Angles</button>
+            <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset All
+                Tile Rotations</button>
+        </div>
+    </aside>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        (() => {
+            // ──── Constants ────
+            const HEX_R = 62;
+            const S3 = Math.sqrt(3);
+            const MIN_Z = 0.12;
+            const MAX_Z = 6;
+            const CLICK_THRESH = 5;
+            const CLICK_DUR = 280;
+            const BULK_DUR = 420;
+            const ROT_STEP = 60;
+            const ROT_MOD = 360 / ROT_STEP;
+
+            // ──── State ────
+            let zoom = 1, panX = 0, panY = 0;
+            let isDrag = false, dragSX = 0, dragSY = 0, dragPX = 0, dragPY = 0, dragMoved = false;
+            let mouseScreenX = -9999, mouseScreenY = -9999;
+            let hoveredQ = null, hoveredR = null;
+            let showGrid = true;
+
+            let rotMode = 'hash';
+            let randomSeed = 0;
+
+            let texImg = null;
+            let pendImg = null;
+            let texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+
+            const rotOverrides = new Map();
+            const animMap = new Map();
+
+            // ──── DOM refs ────
+            const cvs = document.getElementById('hexCanvas');
+            const ctx = cvs.getContext('2d');
+            const wrap = document.getElementById('canvas-wrap');
+
+            // ──── Hash for deterministic random rotation ────
+            function hashQR(q, r) {
+                let h = (q * 374761393 + r * 668265263 + randomSeed * 1013904223 + 2654435761) | 0;
+                h = Math.imul(h ^ (h >>> 13), 1274126177);
+                return Math.abs(h ^ (h >>> 16));
+            }
+
+            function baseRot(q, r) {
+                if (rotMode === 'zero') return 0;
+                return (hashQR(q, r) % ROT_MOD) * ROT_STEP;
+            }
+
+            function tileRot(q, r) {
+                const k = q + ',' + r;
+                return rotOverrides.has(k) ? rotOverrides.get(k) : baseRot(q, r);
+            }
+
+            function nearestTarget(from, target) {
+                const diff = ((target - from) % 360 + 540) % 360 - 180;
+                return from + diff;
+            }
+
+            function displayRot(q, r, now) {
+                const k = q + ',' + r;
+                const a = animMap.get(k);
+                if (!a) return tileRot(q, r);
+                const elapsed = now - a.start;
+                if (elapsed >= a.duration) return tileRot(q, r);
+                const t = elapsed / a.duration;
+                const ease = 1 - Math.pow(1 - t, 3);
+                return a.from + (a.to - a.from) * ease;
+            }
+
+            // ──── Hex math (flat-top, axial) ────
+            function hexToPix(q, r) {
+                return {
+                    x: HEX_R * 1.5 * q * zoom + panX,
+                    y: HEX_R * (S3 * 0.5 * q + S3 * r) * zoom + panY
+                };
+            }
+            function pixToHex(px, py) {
+                const x = (px - panX) / (HEX_R * zoom);
+                const y = (py - panY) / (HEX_R * zoom);
+                const fq = x * 2 / 3;
+                const fr = -x / 3 + S3 / 3 * y;
+                return hexRound(fq, fr);
+            }
+            function hexRound(fq, fr) {
+                const fs = -fq - fr;
+                let rq = Math.round(fq), rr = Math.round(fr), rs = Math.round(fs);
+                const dq = Math.abs(rq - fq), dr = Math.abs(rr - fr), ds = Math.abs(rs - fs);
+                if (dq > dr && dq > ds) rq = -rr - rs;
+                else if (dr > ds) rr = -rq - rs;
+                return { q: rq, r: rr };
+            }
+
+            // ──── Hex path (flat-top) ────
+            function hexPath(cx, cy, sz) {
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = Math.PI / 3 * i;
+                    const vx = cx + sz * Math.cos(a);
+                    const vy = cy + sz * Math.sin(a);
+                    i === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+                }
+                ctx.closePath();
+            }
+
+            // ──── Get visible hex list ────
+            function visibleHexes() {
+                const W = cvs.width, H = cvs.height;
+                const margin = HEX_R * zoom * 3;
+                const tl = pixToHex(-margin, -margin);
+                const tr = pixToHex(W + margin, -margin);
+                const bl = pixToHex(-margin, H + margin);
+                const br = pixToHex(W + margin, H + margin);
+                const minQ = Math.min(tl.q, tr.q, bl.q, br.q);
+                const maxQ = Math.max(tl.q, tr.q, bl.q, br.q);
+                const minR = Math.min(tl.r, tr.r, bl.r, br.r);
+                const maxR = Math.max(tl.r, tr.r, bl.r, br.r);
+                const out = [];
+                for (let q = minQ; q <= maxQ; q++) {
+                    for (let r = minR; r <= maxR; r++) {
+                        const p = hexToPix(q, r);
+                        if (p.x > -margin && p.x < W + margin && p.y > -margin && p.y < H + margin) {
+                            out.push({ q, r, x: p.x, y: p.y });
+                        }
+                    }
+                }
+                return out;
+            }
+
+            // ──── Draw one hex tile ────
+            function drawTile(cx, cy, sz, rot, isHover) {
+                const rSz = showGrid ? sz * 0.95 : sz;
+                ctx.save();
+                hexPath(cx, cy, rSz);
+                ctx.clip();
+                ctx.translate(cx, cy);
+                ctx.rotate(rot * Math.PI / 180);
+
+                if (texImg) {
+                    ctx.rotate(texTf.rot * Math.PI / 180);
+                    ctx.scale(texTf.sx * texTf.scale, texTf.sy * texTf.scale);
+                    ctx.translate(texTf.ox, texTf.oy);
+                    const iSz = sz * 2.6;
+                    ctx.drawImage(texImg, -iSz / 2, -iSz / 2, iSz, iSz);
+                } else {
+                    // White background
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-sz, -sz, sz * 2, sz * 2);
+
+                    // Black arches pattern
+                    const a = sz * S3 / 2;
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = sz / 3;
+                    ctx.lineCap = 'butt';
+
+                    // Arch 1: Connects center of Top-Left side to center of Bottom-Left side.
+                    // Center is the Left corner (-sz, 0). Radius = 0.5 * side length.
+                    // Top-Left midpoint is at angle -60deg (-PI/3), Bottom-Left at 60deg (PI/3).
+                    // Draws clockwise from -60deg to 60deg, bulging inwards.
+                    ctx.beginPath();
+                    ctx.arc(-sz, 0, sz / 2, -Math.PI / 3, Math.PI / 3, false);
+                    ctx.stroke();
+
+                    // Arch 2: Connects center of Top side to center of Bottom-Right side.
+                    // Center is the Top-Right tile center (1.5*sz, -a). Radius = 1.5 * side length.
+                    // Top midpoint is at angle 180deg (PI), Bottom-Right at 120deg (2PI/3).
+                    // Draws clockwise from 120deg to 180deg, bulging inwards.
+                    ctx.beginPath();
+                    ctx.arc(1.5 * sz, -a, 1.5 * sz, 2 * Math.PI / 3, Math.PI, false);
+                    ctx.stroke();
+
+                    // Arch 3: Connects center of Bottom side to center of Top-Right side.
+                    // Center is the Bottom-Right tile center (1.5*sz, a). Radius = 1.5 * side length.
+                    // Bottom midpoint is at angle 180deg (PI), Top-Right at 240deg (4PI/3).
+                    // Draws clockwise from 180deg to 240deg, bulging inwards.
+                    ctx.beginPath();
+                    ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, 4 * Math.PI / 3, false);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+
+                if (showGrid) {
+                    hexPath(cx, cy, rSz);
+                    ctx.strokeStyle = isHover ? 'rgba(224,122,95,0.7)' : 'rgba(80,80,120,0.35)';
+                    ctx.lineWidth = isHover ? 2.5 : 1;
+                    ctx.stroke();
+                } else if (isHover) {
+                    hexPath(cx, cy, rSz);
+                    ctx.strokeStyle = 'rgba(224,122,95,0.7)';
+                    ctx.lineWidth = 2.5;
+                    ctx.stroke();
+                }
+
+                if (isHover) {
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(224,122,95,0.4)';
+                    ctx.shadowBlur = 18;
+                    hexPath(cx, cy, rSz);
+                    ctx.strokeStyle = 'rgba(224,122,95,0.3)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // ──── Main render loop ────
+            function render() {
+                const W = cvs.width, H = cvs.height;
+                const now = Date.now();
+
+                for (const [k, a] of animMap) {
+                    if (now - a.start >= a.duration) animMap.delete(k);
+                }
+
+                const bg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+                bg.addColorStop(0, '#111128');
+                bg.addColorStop(1, '#080814');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
+
+                ctx.fillStyle = 'rgba(255,255,255,0.012)';
+                const dotSpacing = 40;
+                const offXMod = ((panX % dotSpacing) + dotSpacing) % dotSpacing;
+                const offYMod = ((panY % dotSpacing) + dotSpacing) % dotSpacing;
+                for (let dx = offXMod; dx < W; dx += dotSpacing) {
+                    for (let dy = offYMod; dy < H; dy += dotSpacing) {
+                        ctx.fillRect(dx, dy, 1, 1);
+                    }
+                }
+
+                const hexes = visibleHexes();
+                const sz = HEX_R * zoom;
+                const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
+
+                for (const h of hexes) {
+                    const isHover = (h.q === hoveredQ && h.r === hoveredR);
+                    const rot = displayRot(h.q, h.r, now);
+                    drawTile(h.x, h.y, sz, rot, isHover && lod >= 1);
+                }
+
+                requestAnimationFrame(render);
+            }
+
+            // ──── Resize ────
+            function resize() {
+                cvs.width = wrap.clientWidth;
+                cvs.height = wrap.clientHeight;
+                if (panX === 0 && panY === 0) {
+                    panX = cvs.width / 2;
+                    panY = cvs.height / 2;
+                }
+            }
+            window.addEventListener('resize', resize);
+
+            // ──── Zoom helpers ────
+            function setZoom(nz, cx, cy) {
+                const oz = zoom;
+                zoom = Math.max(MIN_Z, Math.min(MAX_Z, nz));
+                if (cx !== undefined) {
+                    panX = cx - (cx - panX) * (zoom / oz);
+                    panY = cy - (cy - panY) * (zoom / oz);
+                }
+                document.getElementById('zoomLabel').textContent = Math.round(zoom * 100) + '%';
+            }
+
+            // ──── Mouse interaction ────
+            cvs.addEventListener('wheel', e => {
+                e.preventDefault();
+                const r = cvs.getBoundingClientRect();
+                setZoom(zoom * (e.deltaY > 0 ? 0.88 : 1.12), e.clientX - r.left, e.clientY - r.top);
+            }, { passive: false });
+
+            cvs.addEventListener('mousedown', e => {
+                isDrag = true; dragMoved = false;
+                dragSX = e.clientX; dragSY = e.clientY;
+                dragPX = panX; dragPY = panY;
+            });
+            window.addEventListener('mousemove', e => {
+                const r = cvs.getBoundingClientRect();
+                mouseScreenX = e.clientX - r.left;
+                mouseScreenY = e.clientY - r.top;
+                const h = pixToHex(mouseScreenX, mouseScreenY);
+                hoveredQ = h.q; hoveredR = h.r;
+                updateHoverInfo();
+
+                if (isDrag) {
+                    const dx = e.clientX - dragSX, dy = e.clientY - dragSY;
+                    if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) dragMoved = true;
+                    panX = dragPX + dx;
+                    panY = dragPY + dy;
+                }
+            });
+            window.addEventListener('mouseup', e => {
+                if (isDrag && !dragMoved) handleClick(e);
+                isDrag = false;
+            });
+
+            cvs.addEventListener('dblclick', e => {
+                const r = cvs.getBoundingClientRect();
+                const h = pixToHex(e.clientX - r.left, e.clientY - r.top);
+                const k = h.q + ',' + h.r;
+                const now = Date.now();
+                const curDisplay = displayRot(h.q, h.r, now);
+
+                rotOverrides.delete(k);
+                rotMode = 'zero';
+                const target = nearestTarget(curDisplay, 0);
+                animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
+                toast('Tile reset to default orientation');
+            });
+
+            function handleClick(e) {
+                const r = cvs.getBoundingClientRect();
+                const h = pixToHex(e.clientX - r.left, e.clientY - r.top);
+                const k = h.q + ',' + h.r;
+                const now = Date.now();
+
+                const curDisplay = displayRot(h.q, h.r, now);
+                const curLogical = tileRot(h.q, h.r);
+                const nextLogical = (curLogical + ROT_STEP) % 360;
+                rotOverrides.set(k, nextLogical);
+
+                const target = curDisplay + ROT_STEP;
+                animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
+            }
+
+            // ──── Hover info ────
+            function updateHoverInfo() {
+                const info = document.getElementById('hoverInfo');
+                const def = document.getElementById('defaultInfo');
+                if (hoveredQ !== null) {
+                    info.classList.add('visible');
+                    def.style.display = 'none';
+                    document.getElementById('hiCoord').textContent = `(${hoveredQ}, ${hoveredR})`;
+                    document.getElementById('hiRot').textContent = ((tileRot(hoveredQ, hoveredR) % 360) + 360) % 360 + '°';
+                } else {
+                    info.classList.remove('visible');
+                    def.style.display = '';
+                }
+            }
+
+            // ──── Zoom buttons ────
+            document.getElementById('zoomIn').onclick = () => setZoom(zoom * 1.25, cvs.width / 2, cvs.height / 2);
+            document.getElementById('zoomOut').onclick = () => setZoom(zoom / 1.25, cvs.width / 2, cvs.height / 2);
+            document.getElementById('resetView').onclick = () => {
+                zoom = 1; panX = cvs.width / 2; panY = cvs.height / 2;
+                document.getElementById('zoomLabel').textContent = '100%';
+            };
+
+            window.addEventListener('keydown', e => {
+                if (e.key === '=' || e.key === '+') setZoom(zoom * 1.15, cvs.width / 2, cvs.height / 2);
+                if (e.key === '-') setZoom(zoom / 1.15, cvs.width / 2, cvs.height / 2);
+            });
+
+            document.getElementById('gridToggle').addEventListener('change', function () {
+                showGrid = this.checked;
+            });
+
+            // ──── Bulk animate all visible tiles to new base rotation ────
+            function bulkAnimate(newMode, newSeed) {
+                const now = Date.now();
+                const hexes = visibleHexes();
+
+                const snapshots = new Map();
+                for (const h of hexes) {
+                    snapshots.set(h.q + ',' + h.r, displayRot(h.q, h.r, now));
+                }
+
+                rotOverrides.clear();
+                rotMode = newMode;
+                randomSeed = newSeed;
+
+                for (const h of hexes) {
+                    const k = h.q + ',' + h.r;
+                    const curDisplay = snapshots.get(k);
+                    const newBase = baseRot(h.q, h.r);
+                    const target = nearestTarget(curDisplay, newBase);
+                    if (Math.abs(target - curDisplay) > 0.5) {
+                        animMap.set(k, { start: now, from: curDisplay, to: target, duration: BULK_DUR });
+                    } else {
+                        animMap.delete(k);
+                    }
+                }
+            }
+
+            document.getElementById('randomizeBtn').onclick = () => {
+                const newSeed = (randomSeed + 1) & 0x7FFFFFFF;
+                bulkAnimate('hash', newSeed);
+                toast('All tile angles randomized');
+            };
+
+            document.getElementById('resetAllRot').onclick = () => {
+                bulkAnimate('zero', 0);
+                toast('All tile rotations reset to default');
+            };
+
+            // ──── Image upload ────
+            const uploadZone = document.getElementById('uploadZone');
+            const fileInput = document.getElementById('fileInput');
+            uploadZone.onclick = () => fileInput.click();
+            uploadZone.ondragover = e => { e.preventDefault(); uploadZone.style.borderColor = 'var(--accent)'; };
+            uploadZone.ondragleave = () => { uploadZone.style.borderColor = ''; };
+            uploadZone.ondrop = e => {
+                e.preventDefault(); uploadZone.style.borderColor = '';
+                if (e.dataTransfer.files[0]?.type.startsWith('image/')) loadFile(e.dataTransfer.files[0]);
+            };
+            fileInput.onchange = () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); };
+
+            function loadFile(file) {
+                document.getElementById('fileName').textContent = file.name;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    const img = new Image();
+                    img.onload = () => { pendImg = img; openEditor(); };
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+
+            // ──── Editor ────
+            const slIds = ['sRot', 'sScale', 'sSX', 'sSY', 'sOX', 'sOY'];
+
+            function readSliders() {
+                return {
+                    rot: +document.getElementById('sRot').value,
+                    scale: +document.getElementById('sScale').value,
+                    sx: +document.getElementById('sSX').value,
+                    sy: +document.getElementById('sSY').value,
+                    ox: +document.getElementById('sOX').value,
+                    oy: +document.getElementById('sOY').value
+                };
+            }
+
+            function writeSliders(tf) {
+                document.getElementById('sRot').value = tf.rot;
+                document.getElementById('sScale').value = tf.scale;
+                document.getElementById('sSX').value = tf.sx;
+                document.getElementById('sSY').value = tf.sy;
+                document.getElementById('sOX').value = tf.ox;
+                document.getElementById('sOY').value = tf.oy;
+                syncSliderLabels();
+            }
+
+            function openEditor() {
+                document.getElementById('editorPanel').classList.add('open');
+                writeSliders(texTf);
+                drawPreview();
+            }
+            function closeEditor() {
+                document.getElementById('editorPanel').classList.remove('open');
+                pendImg = null;
+            }
+            function applyTexture() {
+                if (pendImg) texImg = pendImg;
+                texTf = readSliders();
+                toast('Texture applied — keep adjusting or close the editor');
+            }
+
+            document.getElementById('cancelEd').onclick = closeEditor;
+            document.getElementById('applyEd').onclick = applyTexture;
+            document.getElementById('resetTexBtn').onclick = () => {
+                texImg = null;
+                texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+                if (document.getElementById('editorPanel').classList.contains('open')) {
+                    writeSliders(texTf);
+                    drawPreview();
+                }
+                pendImg = null;
+                closeEditor();
+                document.getElementById('fileName').textContent = '';
+                toast('Texture reset to white');
+            };
+
+            slIds.forEach(id => {
+                document.getElementById(id).addEventListener('input', () => { syncSliderLabels(); drawPreview(); });
+            });
+
+            function syncSliderLabels() {
+                document.getElementById('vRot').textContent = document.getElementById('sRot').value + '°';
+                document.getElementById('vScale').textContent = (+document.getElementById('sScale').value).toFixed(2) + 'x';
+                document.getElementById('vSX').textContent = (+document.getElementById('sSX').value).toFixed(2) + 'x';
+                document.getElementById('vSY').textContent = (+document.getElementById('sSY').value).toFixed(2) + 'x';
+                document.getElementById('vOX').textContent = document.getElementById('sOX').value;
+                document.getElementById('vOY').textContent = document.getElementById('sOY').value;
+            }
+
+            // ──── Preview canvas ────
+            function drawPreview() {
+                const pc = document.getElementById('previewCanvas');
+                const pctx = pc.getContext('2d');
+                const cX = 110, cY = 110, rSz = 85;
+
+                pctx.clearRect(0, 0, 220, 220);
+                pctx.fillStyle = '#0b0b1a';
+                pctx.fillRect(0, 0, 220, 220);
+
+                pctx.save();
+                pctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = Math.PI / 3 * i;
+                    const vx = cX + rSz * Math.cos(a);
+                    const vy = cY + rSz * Math.sin(a);
+                    i === 0 ? pctx.moveTo(vx, vy) : pctx.lineTo(vx, vy);
+                }
+                pctx.closePath();
+                pctx.clip();
+
+                pctx.translate(cX, cY);
+
+                const img = pendImg || texImg;
+                if (img) {
+                    const tf = readSliders();
+                    pctx.rotate(tf.rot * Math.PI / 180);
+                    pctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
+                    pctx.translate(tf.ox, tf.oy);
+                    const iSz = rSz * 2.6;
+                    pctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
+                } else {
+                    pctx.fillStyle = '#f0f0f5';
+                    pctx.fillRect(-rSz, -rSz, rSz * 2, rSz * 2);
+                }
+                pctx.restore();
+
+                pctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = Math.PI / 3 * i;
+                    const vx = cX + rSz * Math.cos(a);
+                    const vy = cY + rSz * Math.sin(a);
+                    i === 0 ? pctx.moveTo(vx, vy) : pctx.lineTo(vx, vy);
+                }
+                pctx.closePath();
+                pctx.strokeStyle = 'rgba(224,122,95,0.6)';
+                pctx.lineWidth = 2;
+                pctx.stroke();
+
+                for (let i = 0; i < 6; i++) {
+                    const a = Math.PI / 3 * i;
+                    pctx.beginPath();
+                    pctx.arc(cX + rSz * Math.cos(a), cY + rSz * Math.sin(a), 3, 0, Math.PI * 2);
+                    pctx.fillStyle = '#e07a5f';
+                    pctx.fill();
+                }
+            }
+
+            // ──── Toast ────
+            let toastTimer = null;
+            function toast(msg) {
+                const el = document.getElementById('toast');
+                el.textContent = msg;
+                el.classList.add('show');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+            }
+
+            // ──── Init ────
+            resize();
+            render();
+        })();
+    </script>
+</body>
+
+</html>
