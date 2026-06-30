@@ -1,4 +1,5 @@
 # [hextiles](https://phlaster.github.io/hextiles/)
+
 ![Horizontal Ornament](assets/tiles.png)
 
 An infinite, interactive hexagonal tile canvas for exploring peculiar pattens emerging from simple rule.
@@ -13,12 +14,11 @@ An infinite, interactive hexagonal tile canvas for exploring peculiar pattens em
 
 ## Controls
 
-| Action | Effect |
-| :--- | :--- |
-| **Scroll Wheel** | Zoom in / out towards cursor |
-| **Click + Drag** | Pan the canvas |
-| **Left Click** | Rotate tile by 60° |
-| **Double Click** | Reset tile to default orientation (0°) |
-| **`+` / `-` Keys** | Zoom in / out from center |
+| Action                       | Effect                                  |
+| :--------------------------- | :-------------------------------------- |
+| **Scroll Wheel**       | Zoom in / out towards cursor            |
+| **Click + Drag**       | Pan the canvas                          |
+| **Left Click**         | Rotate tile by 60°                     |
+| **`+` / `-` Keys** | Zoom in / out from center               |
 
 > Built with assistance of [GLM 5.1](https://z.ai)

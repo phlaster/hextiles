@@ -535,14 +535,13 @@
             transform: translateX(-50%) translateY(0);
         }
 
-        /* ── Hover glow for reset/randomize buttons ── */
         #resetTexBtn, #resetAllRot, #randAnglesBtn {
-            transition: box-shadow .2s, border-color .2s, color .2s;
+            transition: background .2s, border-color .2s, color .2s;
         }
         #resetTexBtn:hover, #resetAllRot:hover, #randAnglesBtn:hover {
-            box-shadow: 0 0 14px var(--col-accent), 0 0 28px var(--col-accent-dim);
+            background: var(--col-accent);
             border-color: var(--col-accent);
-            color: var(--col-accent);
+            color: #fff;
         }
 
         /* ── Export button in header ── */
@@ -635,7 +634,7 @@
                 <h2>Hex Tiles</h2>
                 <p>Infinite tiled canvas with per-tile rotation</p>
             </div>
-            <button class="export-btn" id="exportBtn" title="Export"><i class="fas fa-file-export"></i></button>
+            <button class="export-btn" id="exportBtn" title="Export"><i class="fas fa-share"></i></button>
         </div>
 
         <div class="sb-section">
@@ -697,7 +696,7 @@
         </div>
 
         <div class="sb-section">
-            <label>Texture & Tiles</label>
+            <label>Texture</label>
             <div class="upload-zone" id="uploadZone">
                 <i class="fas fa-cloud-upload-alt"></i>
                 <p>Click or drop an image</p>
@@ -1451,8 +1450,8 @@
                         curves.get(c2).size = curves.get(c2).edges.size;
                         queue.push({ q: n1.q, r: n1.r, e: n1.edge });
                     } else {
-                        let color = availableColors[Math.floor(Math.random() * availableColors.length)];
                         let curveID = nextCurveID++;
+                        let color = hashQR(q, r) % curveColors.length;
                         curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
                         curveMap.set(id1, curveID);
                         curveMap.set(id2, curveID);
@@ -1774,18 +1773,19 @@
             }
 
             // ──── Check if 95% of drawn segments are of the same color ────
-            let lastSolvedState = false;
             function checkIfSolved() {
-                // 1. Only check if there is more than 1 curve color in the menu
-                if (curveColors.length <= 1) return;
+                if (curveColors.length <= 1) {
+                    window.dispatchEvent(new CustomEvent('hexCurveSolved', { detail: { solved: false } }));
+                    try { 
+                        if (isEmbedMode) window.parent.postMessage({ type: 'HEX_CURVE_SOLVED', solved: false }, '*'); 
+                    } catch(e) {}
+                    return;
+                }
 
-                // 2. Drain queue so all visible edges are assigned before checking
-                let safety = 1000;
-                while (safety-- > 0) {
+                // Process a small chunk of the queue to keep the UI responsive (no freezing!)
+                for (let i = 0; i < 1000; i++) {
+                    if (queue.length === 0) break;
                     processQueue();
-                    if (queue.length === 0) {
-                        if (!findNextUncoloredTile()) break;
-                    }
                 }
 
                 const W = dom.cvs.width,
@@ -1793,11 +1793,13 @@
                 const hexes = visibleHexes(zoom, panX, panY, W, H);
                 if (hexes.length === 0) return;
                 
-                // Use a Set to ensure each shared edge segment is only counted once
                 const visibleEdges = new Set();
                 for (const h of hexes) {
-                    for (let e = 0; e < 6; e++) {
-                        visibleEdges.add(edgeID(h.q, h.r, e));
+                    // STRICT CHECK: Only count tiles with their centers inside the actual frame
+                    if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
+                        for (let e = 0; e < 6; e++) {
+                            visibleEdges.add(edgeID(h.q, h.r, e));
+                        }
                     }
                 }
                 
@@ -1823,23 +1825,34 @@
                     }
                 }
                 
-                // 3. If at least 95% of the drawn segments share the same color
                 let isSolved = false;
-                if (totalColored > 0) {
-                    isSolved = (maxColorCount / totalColored) >= 0.95;
+                // Wait until at least 80% of visible edges are colored before evaluating
+                // This prevents false negatives while panning/zooming
+                if (totalColored >= visibleEdges.size * 0.9) {
+                    if (totalColored > 0) {
+                        isSolved = (maxColorCount / totalColored) >= 0.99;
+                    }
                 }
                 
                 if (isSolved) {
-                    console.log("Curve solved (95% threshold reached)");
+                    console.log("Curve solved (99% threshold reached)");
                 }
 
-                // 4. Notify parent window if state changed and we are in embed mode
-                if (isEmbedMode && isSolved !== lastSolvedState) {
-                    lastSolvedState = isSolved;
-                    window.parent.postMessage({ 
-                        type: 'HEX_CURVE_SOLVED', 
-                        solved: isSolved 
-                    }, '*'); 
+                // 1. Dispatch a local DOM event (Regular page)
+                window.dispatchEvent(new CustomEvent('hexCurveSolved', { 
+                    detail: { solved: isSolved } 
+                }));
+
+                // 2. Notify parent window (Embedded page) - wrapped in try/catch for Firefox security
+                try {
+                    if (isEmbedMode) {
+                        window.parent.postMessage({ 
+                            type: 'HEX_CURVE_SOLVED', 
+                            solved: isSolved 
+                        }, '*'); 
+                    }
+                } catch (e) {
+                    console.warn("PostMessage failed:", e);
                 }
             }
 
@@ -1970,6 +1983,12 @@
                 setZoom(zoom * (e.deltaY > 0 ? 0.88 : 1.12), e.clientX - r.left, e.clientY - r.top);
                 checkIfSolved();
             }, { passive: false });
+
+            dom.cvs.addEventListener('mouseleave', () => {
+                hoveredQ = null;
+                hoveredR = null;
+                updateHoverInfo();
+            });
 
             dom.cvs.addEventListener('mousedown', e => {
                 if (isEmbedMode) {
