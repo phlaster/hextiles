@@ -536,7 +536,7 @@
         (() => {
             // ──── Constants ────
             const HEX_R = 62;
-            const S3 = Math.sqrt(3);
+            const SQRT3 = Math.sqrt(3);
             const MIN_Z = 0.12;
             const MAX_Z = 6;
             const CLICK_THRESH = 5;
@@ -545,12 +545,19 @@
             const ROT_STEP = 60;
             const ROT_MOD = 360 / ROT_STEP;
 
+            // Pre-calculated Math constants
+            const DEG2RAD = Math.PI / 180;
+            const PI_DIV_3 = Math.PI / 3;
+            const TWO_PI_DIV_3 = 2 * Math.PI / 3;
+            const FOUR_PI_DIV_3 = 4 * Math.PI / 3;
+
             // ──── State ────
             let zoom = 1, panX = 0, panY = 0;
             let isDrag = false, dragSX = 0, dragSY = 0, dragPX = 0, dragPY = 0, dragMoved = false;
             let mouseScreenX = -9999, mouseScreenY = -9999;
             let hoveredQ = null, hoveredR = null;
             let showGrid = true;
+            let isInitialized = false;
 
             let rotMode = 'hash';
             let randomSeed = 0;
@@ -559,13 +566,54 @@
             let pendImg = null;
             let texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
 
+            // Optimized Map keys using bitwise shift to avoid string concatenation/garbage collection
             const rotOverrides = new Map();
             const animMap = new Map();
 
-            // ──── DOM refs ────
-            const cvs = document.getElementById('hexCanvas');
-            const ctx = cvs.getContext('2d');
-            const wrap = document.getElementById('canvas-wrap');
+            // ──── DOM Cache ────
+            const dom = {
+                cvs: document.getElementById('hexCanvas'),
+                wrap: document.getElementById('canvas-wrap'),
+                hoverInfo: document.getElementById('hoverInfo'),
+                defaultInfo: document.getElementById('defaultInfo'),
+                hiCoord: document.getElementById('hiCoord'),
+                hiRot: document.getElementById('hiRot'),
+                zoomLabel: document.getElementById('zoomLabel'),
+                zoomIn: document.getElementById('zoomIn'),
+                zoomOut: document.getElementById('zoomOut'),
+                resetView: document.getElementById('resetView'),
+                gridToggle: document.getElementById('gridToggle'),
+                uploadZone: document.getElementById('uploadZone'),
+                fileInput: document.getElementById('fileInput'),
+                fileName: document.getElementById('fileName'),
+                editorPanel: document.getElementById('editorPanel'),
+                resetTexBtn: document.getElementById('resetTexBtn'),
+                cancelEd: document.getElementById('cancelEd'),
+                applyEd: document.getElementById('applyEd'),
+                randomizeBtn: document.getElementById('randomizeBtn'),
+                resetAllRot: document.getElementById('resetAllRot'),
+                toast: document.getElementById('toast'),
+                previewCanvas: document.getElementById('previewCanvas'),
+                sRot: document.getElementById('sRot'),
+                sScale: document.getElementById('sScale'),
+                sSX: document.getElementById('sSX'),
+                sSY: document.getElementById('sSY'),
+                sOX: document.getElementById('sOX'),
+                sOY: document.getElementById('sOY'),
+                vRot: document.getElementById('vRot'),
+                vScale: document.getElementById('vScale'),
+                vSX: document.getElementById('vSX'),
+                vSY: document.getElementById('vSY'),
+                vOX: document.getElementById('vOX'),
+                vOY: document.getElementById('vOY')
+            };
+
+            const ctx = dom.cvs.getContext('2d');
+
+            // ──── Hash Map Key Helper ────
+            function hexKey(q, r) {
+                return (q << 16) ^ r; // Fast integer key
+            }
 
             // ──── Hash for deterministic random rotation ────
             function hashQR(q, r) {
@@ -580,7 +628,7 @@
             }
 
             function tileRot(q, r) {
-                const k = q + ',' + r;
+                const k = hexKey(q, r);
                 return rotOverrides.has(k) ? rotOverrides.get(k) : baseRot(q, r);
             }
 
@@ -590,7 +638,7 @@
             }
 
             function displayRot(q, r, now) {
-                const k = q + ',' + r;
+                const k = hexKey(q, r);
                 const a = animMap.get(k);
                 if (!a) return tileRot(q, r);
                 const elapsed = now - a.start;
@@ -601,19 +649,21 @@
             }
 
             // ──── Hex math (flat-top, axial) ────
-            function hexToPix(q, r) {
+            function hexToPix(q, r, z, px, py) {
                 return {
-                    x: HEX_R * 1.5 * q * zoom + panX,
-                    y: HEX_R * (S3 * 0.5 * q + S3 * r) * zoom + panY
+                    x: HEX_R * 1.5 * q * z + px,
+                    y: HEX_R * (SQRT3 * 0.5 * q + SQRT3 * r) * z + py
                 };
             }
-            function pixToHex(px, py) {
-                const x = (px - panX) / (HEX_R * zoom);
-                const y = (py - panY) / (HEX_R * zoom);
+            
+            function pixToHex(sx, sy, z, px, py) {
+                const x = (sx - px) / (HEX_R * z);
+                const y = (sy - py) / (HEX_R * z);
                 const fq = x * 2 / 3;
-                const fr = -x / 3 + S3 / 3 * y;
+                const fr = -x / 3 + SQRT3 / 3 * y;
                 return hexRound(fq, fr);
             }
+
             function hexRound(fq, fr) {
                 const fs = -fq - fr;
                 let rq = Math.round(fq), rr = Math.round(fr), rs = Math.round(fs);
@@ -623,26 +673,25 @@
                 return { q: rq, r: rr };
             }
 
-            // ──── Hex path (flat-top) ────
-            function hexPath(cx, cy, sz) {
-                ctx.beginPath();
+            // ──── Reusable Hex Path Helper ────
+            function traceHexPath(c, cx, cy, sz) {
+                c.beginPath();
                 for (let i = 0; i < 6; i++) {
-                    const a = Math.PI / 3 * i;
+                    const a = PI_DIV_3 * i;
                     const vx = cx + sz * Math.cos(a);
                     const vy = cy + sz * Math.sin(a);
-                    i === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+                    i === 0 ? c.moveTo(vx, vy) : c.lineTo(vx, vy);
                 }
-                ctx.closePath();
+                c.closePath();
             }
 
             // ──── Get visible hex list ────
-            function visibleHexes() {
-                const W = cvs.width, H = cvs.height;
-                const margin = HEX_R * zoom * 3;
-                const tl = pixToHex(-margin, -margin);
-                const tr = pixToHex(W + margin, -margin);
-                const bl = pixToHex(-margin, H + margin);
-                const br = pixToHex(W + margin, H + margin);
+            function visibleHexes(z, px, py, W, H) {
+                const margin = HEX_R * z * 3;
+                const tl = pixToHex(-margin, -margin, z, px, py);
+                const tr = pixToHex(W + margin, -margin, z, px, py);
+                const bl = pixToHex(-margin, H + margin, z, px, py);
+                const br = pixToHex(W + margin, H + margin, z, px, py);
                 const minQ = Math.min(tl.q, tr.q, bl.q, br.q);
                 const maxQ = Math.max(tl.q, tr.q, bl.q, br.q);
                 const minR = Math.min(tl.r, tr.r, bl.r, br.r);
@@ -650,7 +699,7 @@
                 const out = [];
                 for (let q = minQ; q <= maxQ; q++) {
                     for (let r = minR; r <= maxR; r++) {
-                        const p = hexToPix(q, r);
+                        const p = hexToPix(q, r, z, px, py);
                         if (p.x > -margin && p.x < W + margin && p.y > -margin && p.y < H + margin) {
                             out.push({ q, r, x: p.x, y: p.y });
                         }
@@ -660,86 +709,71 @@
             }
 
             // ──── Draw one hex tile ────
-            function drawTile(cx, cy, sz, rot, isHover) {
-                const rSz = showGrid ? sz * 0.95 : sz;
+            function drawTile(cx, cy, sz, rot, isHover, grid, img, tf) {
+                const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
-                hexPath(cx, cy, rSz);
+                traceHexPath(ctx, cx, cy, rSz);
                 ctx.clip();
                 ctx.translate(cx, cy);
-                ctx.rotate(rot * Math.PI / 180);
+                ctx.rotate(rot * DEG2RAD);
 
-                if (texImg) {
-                    ctx.rotate(texTf.rot * Math.PI / 180);
-                    ctx.scale(texTf.sx * texTf.scale, texTf.sy * texTf.scale);
-                    ctx.translate(texTf.ox, texTf.oy);
+                if (img) {
+                    ctx.rotate(tf.rot * DEG2RAD);
+                    ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
+                    ctx.translate(tf.ox, tf.oy);
                     const iSz = sz * 2.6;
-                    ctx.drawImage(texImg, -iSz / 2, -iSz / 2, iSz, iSz);
+                    ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
                 } else {
                     // White background
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(-sz, -sz, sz * 2, sz * 2);
 
                     // Black arches pattern
-                    const a = sz * S3 / 2;
+                    const a = sz * SQRT3 / 2;
                     ctx.strokeStyle = '#000000';
                     ctx.lineWidth = sz / 3;
                     ctx.lineCap = 'butt';
 
-                    // Arch 1: Connects center of Top-Left side to center of Bottom-Left side.
-                    // Center is the Left corner (-sz, 0). Radius = 0.5 * side length.
-                    // Top-Left midpoint is at angle -60deg (-PI/3), Bottom-Left at 60deg (PI/3).
-                    // Draws clockwise from -60deg to 60deg, bulging inwards.
                     ctx.beginPath();
-                    ctx.arc(-sz, 0, sz / 2, -Math.PI / 3, Math.PI / 3, false);
+                    ctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
                     ctx.stroke();
 
-                    // Arch 2: Connects center of Top side to center of Bottom-Right side.
-                    // Center is the Top-Right tile center (1.5*sz, -a). Radius = 1.5 * side length.
-                    // Top midpoint is at angle 180deg (PI), Bottom-Right at 120deg (2PI/3).
-                    // Draws clockwise from 120deg to 180deg, bulging inwards.
                     ctx.beginPath();
-                    ctx.arc(1.5 * sz, -a, 1.5 * sz, 2 * Math.PI / 3, Math.PI, false);
+                    ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
                     ctx.stroke();
 
-                    // Arch 3: Connects center of Bottom side to center of Top-Right side.
-                    // Center is the Bottom-Right tile center (1.5*sz, a). Radius = 1.5 * side length.
-                    // Bottom midpoint is at angle 180deg (PI), Top-Right at 240deg (4PI/3).
-                    // Draws clockwise from 180deg to 240deg, bulging inwards.
                     ctx.beginPath();
-                    ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, 4 * Math.PI / 3, false);
+                    ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
                     ctx.stroke();
                 }
 
                 ctx.restore();
 
-                if (showGrid) {
-                    hexPath(cx, cy, rSz);
-                    ctx.strokeStyle = isHover ? 'rgba(224,122,95,0.7)' : 'rgba(80,80,120,0.35)';
-                    ctx.lineWidth = isHover ? 2.5 : 1;
-                    ctx.stroke();
-                } else if (isHover) {
-                    hexPath(cx, cy, rSz);
-                    ctx.strokeStyle = 'rgba(224,122,95,0.7)';
-                    ctx.lineWidth = 2.5;
-                    ctx.stroke();
-                }
-
+                // Draw Hover / Grid outlines
                 if (isHover) {
                     ctx.save();
                     ctx.shadowColor = 'rgba(224,122,95,0.4)';
                     ctx.shadowBlur = 18;
-                    hexPath(cx, cy, rSz);
-                    ctx.strokeStyle = 'rgba(224,122,95,0.3)';
-                    ctx.lineWidth = 2;
+                    traceHexPath(ctx, cx, cy, rSz);
+                    ctx.strokeStyle = 'rgba(224,122,95,0.7)';
+                    ctx.lineWidth = 2.5;
                     ctx.stroke();
                     ctx.restore();
+                } else if (grid) {
+                    traceHexPath(ctx, cx, cy, rSz);
+                    ctx.strokeStyle = 'rgba(80,80,120,0.35)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
                 }
             }
 
             // ──── Main render loop ────
             function render() {
-                const W = cvs.width, H = cvs.height;
+                // Cache state locally for the loop to reduce scope lookup
+                const W = dom.cvs.width, H = dom.cvs.height;
                 const now = Date.now();
+                const z = zoom, px = panX, py = panY;
+                const grid = showGrid, img = texImg, tf = texTf;
 
                 for (const [k, a] of animMap) {
                     if (now - a.start >= a.duration) animMap.delete(k);
@@ -751,24 +785,25 @@
                 ctx.fillStyle = bg;
                 ctx.fillRect(0, 0, W, H);
 
+                // Draw subtle dots
                 ctx.fillStyle = 'rgba(255,255,255,0.012)';
                 const dotSpacing = 40;
-                const offXMod = ((panX % dotSpacing) + dotSpacing) % dotSpacing;
-                const offYMod = ((panY % dotSpacing) + dotSpacing) % dotSpacing;
+                const offXMod = ((px % dotSpacing) + dotSpacing) % dotSpacing;
+                const offYMod = ((py % dotSpacing) + dotSpacing) % dotSpacing;
                 for (let dx = offXMod; dx < W; dx += dotSpacing) {
                     for (let dy = offYMod; dy < H; dy += dotSpacing) {
                         ctx.fillRect(dx, dy, 1, 1);
                     }
                 }
 
-                const hexes = visibleHexes();
-                const sz = HEX_R * zoom;
+                const hexes = visibleHexes(z, px, py, W, H);
+                const sz = HEX_R * z;
                 const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
 
                 for (const h of hexes) {
                     const isHover = (h.q === hoveredQ && h.r === hoveredR);
                     const rot = displayRot(h.q, h.r, now);
-                    drawTile(h.x, h.y, sz, rot, isHover && lod >= 1);
+                    drawTile(h.x, h.y, sz, rot, isHover && lod >= 1, grid, img, tf);
                 }
 
                 requestAnimationFrame(render);
@@ -776,11 +811,12 @@
 
             // ──── Resize ────
             function resize() {
-                cvs.width = wrap.clientWidth;
-                cvs.height = wrap.clientHeight;
-                if (panX === 0 && panY === 0) {
-                    panX = cvs.width / 2;
-                    panY = cvs.height / 2;
+                dom.cvs.width = dom.wrap.clientWidth;
+                dom.cvs.height = dom.wrap.clientHeight;
+                if (!isInitialized) {
+                    panX = dom.cvs.width / 2;
+                    panY = dom.cvs.height / 2;
+                    isInitialized = true;
                 }
             }
             window.addEventListener('resize', resize);
@@ -793,26 +829,27 @@
                     panX = cx - (cx - panX) * (zoom / oz);
                     panY = cy - (cy - panY) * (zoom / oz);
                 }
-                document.getElementById('zoomLabel').textContent = Math.round(zoom * 100) + '%';
+                dom.zoomLabel.textContent = Math.round(zoom * 100) + '%';
             }
 
             // ──── Mouse interaction ────
-            cvs.addEventListener('wheel', e => {
+            dom.cvs.addEventListener('wheel', e => {
                 e.preventDefault();
-                const r = cvs.getBoundingClientRect();
+                const r = dom.cvs.getBoundingClientRect();
                 setZoom(zoom * (e.deltaY > 0 ? 0.88 : 1.12), e.clientX - r.left, e.clientY - r.top);
             }, { passive: false });
 
-            cvs.addEventListener('mousedown', e => {
+            dom.cvs.addEventListener('mousedown', e => {
                 isDrag = true; dragMoved = false;
                 dragSX = e.clientX; dragSY = e.clientY;
                 dragPX = panX; dragPY = panY;
             });
+            
             window.addEventListener('mousemove', e => {
-                const r = cvs.getBoundingClientRect();
+                const r = dom.cvs.getBoundingClientRect();
                 mouseScreenX = e.clientX - r.left;
                 mouseScreenY = e.clientY - r.top;
-                const h = pixToHex(mouseScreenX, mouseScreenY);
+                const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
                 hoveredQ = h.q; hoveredR = h.r;
                 updateHoverInfo();
 
@@ -823,15 +860,16 @@
                     panY = dragPY + dy;
                 }
             });
+            
             window.addEventListener('mouseup', e => {
                 if (isDrag && !dragMoved) handleClick(e);
                 isDrag = false;
             });
 
-            cvs.addEventListener('dblclick', e => {
-                const r = cvs.getBoundingClientRect();
-                const h = pixToHex(e.clientX - r.left, e.clientY - r.top);
-                const k = h.q + ',' + h.r;
+            dom.cvs.addEventListener('dblclick', e => {
+                const r = dom.cvs.getBoundingClientRect();
+                const h = pixToHex(e.clientX - r.left, e.clientY - r.top, zoom, panX, panY);
+                const k = hexKey(h.q, h.r);
                 const now = Date.now();
                 const curDisplay = displayRot(h.q, h.r, now);
 
@@ -843,9 +881,9 @@
             });
 
             function handleClick(e) {
-                const r = cvs.getBoundingClientRect();
-                const h = pixToHex(e.clientX - r.left, e.clientY - r.top);
-                const k = h.q + ',' + h.r;
+                const r = dom.cvs.getBoundingClientRect();
+                const h = pixToHex(e.clientX - r.left, e.clientY - r.top, zoom, panX, panY);
+                const k = hexKey(h.q, h.r);
                 const now = Date.now();
 
                 const curDisplay = displayRot(h.q, h.r, now);
@@ -859,44 +897,42 @@
 
             // ──── Hover info ────
             function updateHoverInfo() {
-                const info = document.getElementById('hoverInfo');
-                const def = document.getElementById('defaultInfo');
                 if (hoveredQ !== null) {
-                    info.classList.add('visible');
-                    def.style.display = 'none';
-                    document.getElementById('hiCoord').textContent = `(${hoveredQ}, ${hoveredR})`;
-                    document.getElementById('hiRot').textContent = ((tileRot(hoveredQ, hoveredR) % 360) + 360) % 360 + '°';
+                    dom.hoverInfo.classList.add('visible');
+                    dom.defaultInfo.style.display = 'none';
+                    dom.hiCoord.textContent = `(${hoveredQ}, ${hoveredR})`;
+                    dom.hiRot.textContent = ((tileRot(hoveredQ, hoveredR) % 360) + 360) % 360 + '°';
                 } else {
-                    info.classList.remove('visible');
-                    def.style.display = '';
+                    dom.hoverInfo.classList.remove('visible');
+                    dom.defaultInfo.style.display = '';
                 }
             }
 
             // ──── Zoom buttons ────
-            document.getElementById('zoomIn').onclick = () => setZoom(zoom * 1.25, cvs.width / 2, cvs.height / 2);
-            document.getElementById('zoomOut').onclick = () => setZoom(zoom / 1.25, cvs.width / 2, cvs.height / 2);
-            document.getElementById('resetView').onclick = () => {
-                zoom = 1; panX = cvs.width / 2; panY = cvs.height / 2;
-                document.getElementById('zoomLabel').textContent = '100%';
+            dom.zoomIn.onclick = () => setZoom(zoom * 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
+            dom.zoomOut.onclick = () => setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
+            dom.resetView.onclick = () => {
+                zoom = 1; panX = dom.cvs.width / 2; panY = dom.cvs.height / 2;
+                dom.zoomLabel.textContent = '100%';
             };
 
             window.addEventListener('keydown', e => {
-                if (e.key === '=' || e.key === '+') setZoom(zoom * 1.15, cvs.width / 2, cvs.height / 2);
-                if (e.key === '-') setZoom(zoom / 1.15, cvs.width / 2, cvs.height / 2);
+                if (e.key === '=' || e.key === '+') setZoom(zoom * 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
+                if (e.key === '-') setZoom(zoom / 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
             });
 
-            document.getElementById('gridToggle').addEventListener('change', function () {
+            dom.gridToggle.addEventListener('change', function () {
                 showGrid = this.checked;
             });
 
             // ──── Bulk animate all visible tiles to new base rotation ────
             function bulkAnimate(newMode, newSeed) {
                 const now = Date.now();
-                const hexes = visibleHexes();
+                const hexes = visibleHexes(zoom, panX, panY, dom.cvs.width, dom.cvs.height);
 
                 const snapshots = new Map();
                 for (const h of hexes) {
-                    snapshots.set(h.q + ',' + h.r, displayRot(h.q, h.r, now));
+                    snapshots.set(hexKey(h.q, h.r), displayRot(h.q, h.r, now));
                 }
 
                 rotOverrides.clear();
@@ -904,7 +940,7 @@
                 randomSeed = newSeed;
 
                 for (const h of hexes) {
-                    const k = h.q + ',' + h.r;
+                    const k = hexKey(h.q, h.r);
                     const curDisplay = snapshots.get(k);
                     const newBase = baseRot(h.q, h.r);
                     const target = nearestTarget(curDisplay, newBase);
@@ -916,31 +952,29 @@
                 }
             }
 
-            document.getElementById('randomizeBtn').onclick = () => {
+            dom.randomizeBtn.onclick = () => {
                 const newSeed = (randomSeed + 1) & 0x7FFFFFFF;
                 bulkAnimate('hash', newSeed);
                 toast('All tile angles randomized');
             };
 
-            document.getElementById('resetAllRot').onclick = () => {
+            dom.resetAllRot.onclick = () => {
                 bulkAnimate('zero', 0);
                 toast('All tile rotations reset to default');
             };
 
             // ──── Image upload ────
-            const uploadZone = document.getElementById('uploadZone');
-            const fileInput = document.getElementById('fileInput');
-            uploadZone.onclick = () => fileInput.click();
-            uploadZone.ondragover = e => { e.preventDefault(); uploadZone.style.borderColor = 'var(--accent)'; };
-            uploadZone.ondragleave = () => { uploadZone.style.borderColor = ''; };
-            uploadZone.ondrop = e => {
-                e.preventDefault(); uploadZone.style.borderColor = '';
+            dom.uploadZone.onclick = () => dom.fileInput.click();
+            dom.uploadZone.ondragover = e => { e.preventDefault(); dom.uploadZone.style.borderColor = 'var(--accent)'; };
+            dom.uploadZone.ondragleave = () => { dom.uploadZone.style.borderColor = ''; };
+            dom.uploadZone.ondrop = e => {
+                e.preventDefault(); dom.uploadZone.style.borderColor = '';
                 if (e.dataTransfer.files[0]?.type.startsWith('image/')) loadFile(e.dataTransfer.files[0]);
             };
-            fileInput.onchange = () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); };
+            dom.fileInput.onchange = () => { if (dom.fileInput.files[0]) loadFile(dom.fileInput.files[0]); };
 
             function loadFile(file) {
-                document.getElementById('fileName').textContent = file.name;
+                dom.fileName.textContent = file.name;
                 const reader = new FileReader();
                 reader.onload = ev => {
                     const img = new Image();
@@ -951,75 +985,75 @@
             }
 
             // ──── Editor ────
-            const slIds = ['sRot', 'sScale', 'sSX', 'sSY', 'sOX', 'sOY'];
-
             function readSliders() {
                 return {
-                    rot: +document.getElementById('sRot').value,
-                    scale: +document.getElementById('sScale').value,
-                    sx: +document.getElementById('sSX').value,
-                    sy: +document.getElementById('sSY').value,
-                    ox: +document.getElementById('sOX').value,
-                    oy: +document.getElementById('sOY').value
+                    rot: +dom.sRot.value,
+                    scale: +dom.sScale.value,
+                    sx: +dom.sSX.value,
+                    sy: +dom.sSY.value,
+                    ox: +dom.sOX.value,
+                    oy: +dom.sOY.value
                 };
             }
 
             function writeSliders(tf) {
-                document.getElementById('sRot').value = tf.rot;
-                document.getElementById('sScale').value = tf.scale;
-                document.getElementById('sSX').value = tf.sx;
-                document.getElementById('sSY').value = tf.sy;
-                document.getElementById('sOX').value = tf.ox;
-                document.getElementById('sOY').value = tf.oy;
+                dom.sRot.value = tf.rot;
+                dom.sScale.value = tf.scale;
+                dom.sSX.value = tf.sx;
+                dom.sSY.value = tf.sy;
+                dom.sOX.value = tf.ox;
+                dom.sOY.value = tf.oy;
                 syncSliderLabels();
             }
 
             function openEditor() {
-                document.getElementById('editorPanel').classList.add('open');
+                dom.editorPanel.classList.add('open');
                 writeSliders(texTf);
                 drawPreview();
             }
+            
             function closeEditor() {
-                document.getElementById('editorPanel').classList.remove('open');
+                dom.editorPanel.classList.remove('open');
                 pendImg = null;
             }
+            
             function applyTexture() {
                 if (pendImg) texImg = pendImg;
                 texTf = readSliders();
                 toast('Texture applied — keep adjusting or close the editor');
             }
 
-            document.getElementById('cancelEd').onclick = closeEditor;
-            document.getElementById('applyEd').onclick = applyTexture;
-            document.getElementById('resetTexBtn').onclick = () => {
+            dom.cancelEd.onclick = closeEditor;
+            dom.applyEd.onclick = applyTexture;
+            dom.resetTexBtn.onclick = () => {
                 texImg = null;
                 texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
-                if (document.getElementById('editorPanel').classList.contains('open')) {
+                if (dom.editorPanel.classList.contains('open')) {
                     writeSliders(texTf);
                     drawPreview();
                 }
                 pendImg = null;
                 closeEditor();
-                document.getElementById('fileName').textContent = '';
+                dom.fileName.textContent = '';
                 toast('Texture reset to white');
             };
 
-            slIds.forEach(id => {
-                document.getElementById(id).addEventListener('input', () => { syncSliderLabels(); drawPreview(); });
+            [dom.sRot, dom.sScale, dom.sSX, dom.sSY, dom.sOX, dom.sOY].forEach(el => {
+                el.addEventListener('input', () => { syncSliderLabels(); drawPreview(); });
             });
 
             function syncSliderLabels() {
-                document.getElementById('vRot').textContent = document.getElementById('sRot').value + '°';
-                document.getElementById('vScale').textContent = (+document.getElementById('sScale').value).toFixed(2) + 'x';
-                document.getElementById('vSX').textContent = (+document.getElementById('sSX').value).toFixed(2) + 'x';
-                document.getElementById('vSY').textContent = (+document.getElementById('sSY').value).toFixed(2) + 'x';
-                document.getElementById('vOX').textContent = document.getElementById('sOX').value;
-                document.getElementById('vOY').textContent = document.getElementById('sOY').value;
+                dom.vRot.textContent = dom.sRot.value + '°';
+                dom.vScale.textContent = (+dom.sScale.value).toFixed(2) + 'x';
+                dom.vSX.textContent = (+dom.sSX.value).toFixed(2) + 'x';
+                dom.vSY.textContent = (+dom.sSY.value).toFixed(2) + 'x';
+                dom.vOX.textContent = dom.sOX.value;
+                dom.vOY.textContent = dom.sOY.value;
             }
 
             // ──── Preview canvas ────
             function drawPreview() {
-                const pc = document.getElementById('previewCanvas');
+                const pc = dom.previewCanvas;
                 const pctx = pc.getContext('2d');
                 const cX = 110, cY = 110, rSz = 85;
 
@@ -1028,22 +1062,14 @@
                 pctx.fillRect(0, 0, 220, 220);
 
                 pctx.save();
-                pctx.beginPath();
-                for (let i = 0; i < 6; i++) {
-                    const a = Math.PI / 3 * i;
-                    const vx = cX + rSz * Math.cos(a);
-                    const vy = cY + rSz * Math.sin(a);
-                    i === 0 ? pctx.moveTo(vx, vy) : pctx.lineTo(vx, vy);
-                }
-                pctx.closePath();
+                traceHexPath(pctx, cX, cY, rSz);
                 pctx.clip();
-
                 pctx.translate(cX, cY);
 
                 const img = pendImg || texImg;
                 if (img) {
                     const tf = readSliders();
-                    pctx.rotate(tf.rot * Math.PI / 180);
+                    pctx.rotate(tf.rot * DEG2RAD);
                     pctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
                     pctx.translate(tf.ox, tf.oy);
                     const iSz = rSz * 2.6;
@@ -1054,20 +1080,15 @@
                 }
                 pctx.restore();
 
-                pctx.beginPath();
-                for (let i = 0; i < 6; i++) {
-                    const a = Math.PI / 3 * i;
-                    const vx = cX + rSz * Math.cos(a);
-                    const vy = cY + rSz * Math.sin(a);
-                    i === 0 ? pctx.moveTo(vx, vy) : pctx.lineTo(vx, vy);
-                }
-                pctx.closePath();
+                // Draw outline
+                traceHexPath(pctx, cX, cY, rSz);
                 pctx.strokeStyle = 'rgba(224,122,95,0.6)';
                 pctx.lineWidth = 2;
                 pctx.stroke();
 
+                // Draw vertices
                 for (let i = 0; i < 6; i++) {
-                    const a = Math.PI / 3 * i;
+                    const a = PI_DIV_3 * i;
                     pctx.beginPath();
                     pctx.arc(cX + rSz * Math.cos(a), cY + rSz * Math.sin(a), 3, 0, Math.PI * 2);
                     pctx.fillStyle = '#e07a5f';
@@ -1078,11 +1099,10 @@
             // ──── Toast ────
             let toastTimer = null;
             function toast(msg) {
-                const el = document.getElementById('toast');
-                el.textContent = msg;
-                el.classList.add('show');
+                dom.toast.textContent = msg;
+                dom.toast.classList.add('show');
                 clearTimeout(toastTimer);
-                toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+                toastTimer = setTimeout(() => dom.toast.classList.remove('show'), 2200);
             }
 
             // ──── Init ────
