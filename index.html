@@ -14,7 +14,7 @@
             --fg: #e6e6f0;
             --muted: #6e6e90;
             --accent: #e07a5f;
-            --accent-dim: rgba(224, 122, 95, 0.15);
+            --accent-dim: #e07a5f26;
             --card: #13132a;
             --card2: #1a1a38;
             --border: #28284a;
@@ -145,6 +145,40 @@
             font-weight: 600;
             display: block;
             margin-bottom: 10px
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .section-header label {
+            margin-bottom: 0;
+            flex: 1;
+            text-align: center;
+        }
+
+        .icon-btn {
+            width: 26px;
+            height: 26px;
+            border: none;
+            border-radius: 6px;
+            background: var(--card2);
+            color: var(--accent);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all .2s;
+            padding: 0;
+        }
+
+        .icon-btn:hover {
+            background: var(--accent);
+            color: #fff;
         }
 
         .upload-zone {
@@ -337,7 +371,7 @@
         .hover-info {
             padding: 10px 14px;
             background: var(--accent-dim);
-            border: 1px solid rgba(224, 122, 95, .2);
+            border: 1px solid #e07a5f33;
             border-radius: 10px;
             font-size: 12px;
             line-height: 1.6;
@@ -451,10 +485,22 @@
             border-radius: 4px
         }
 
-        .grad-item span {
-            font-size: 12px;
+        .hex-input {
+            background: var(--card2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
             color: var(--fg);
-            flex: 1
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 12px;
+            padding: 4px 6px;
+            width: 80px;
+            text-transform: uppercase;
+            flex: 1;
+        }
+
+        .hex-input:focus {
+            outline: none;
+            border-color: var(--accent);
         }
 
         .grad-remove-btn {
@@ -475,7 +521,7 @@
         }
 
         .grad-remove-btn:hover {
-            background: rgba(224, 122, 95, 0.2);
+            background: #e07a5f33;
             color: var(--accent)
         }
 
@@ -529,11 +575,10 @@
             </div>
             <div class="tile-info" id="defaultInfo">
                 <strong>Click</strong> a tile to rotate by 60 deg<br>
-                <strong>Scroll</strong> to zoom &middot; <strong>Drag</strong> to pan<br>
-                <strong>Double-click</strong> a tile to reset to 0 deg
+                <strong>Scroll</strong> to zoom &middot; <strong>Drag</strong> to pan
             </div>
         </div>
-
+        
         <div class="sb-section">
             <label>Display</label>
             <div class="toggle-row">
@@ -543,20 +588,38 @@
                     <span class="track"></span>
                 </label>
             </div>
+            <div class="toggle-row" style="margin-top:10px">
+                <span><i class="fas fa-circle-dot" style="margin-right:6px;color:var(--muted)"></i>Unrendered dotted</span>
+                <label class="switch">
+                    <input type="checkbox" id="unrenderedToggle" checked>
+                    <span class="track"></span>
+                </label>
+            </div>
+            <div class="toggle-row" style="margin-top:10px">
+                <span><i class="fas fa-map-pin" style="margin-right:6px;color:var(--muted)"></i>Markers</span>
+                <label class="switch">
+                    <input type="checkbox" id="markersToggle" checked>
+                    <span class="track"></span>
+                </label>
+            </div>
         </div>
 
         <div class="sb-section">
-            <label>Color Gradient</label>
+            <div class="section-header">
+                <button class="icon-btn" id="addMarkerBtn" title="Add Marker"><i class="fas fa-plus"></i></button>
+                <label>Color Gradient</label>
+                <button class="icon-btn" id="randGradColorsBtn" title="Randomize Gradient Colors"><i class="fas fa-dice"></i></button>
+            </div>
             <div id="gradientList" class="grad-list"></div>
-            <button class="btn btn-ghost" id="addMarkerBtn" style="width:100%"><i class="fas fa-plus"></i> Add
-                Marker</button>
         </div>
 
         <div class="sb-section">
-            <label>Curve Colors</label>
+            <div class="section-header">
+                <button class="icon-btn" id="addCurveBtn" title="Add Color"><i class="fas fa-plus"></i></button>
+                <label>Curve Colors</label>
+                <button class="icon-btn" id="randLineColorsBtn" title="Randomize Line Colors"><i class="fas fa-dice"></i></button>
+            </div>
             <div id="curveList" class="grad-list"></div>
-            <button class="btn btn-ghost" id="addCurveBtn" style="width:100%"><i class="fas fa-plus"></i> Add
-                Color</button>
         </div>
 
         <div class="sb-section">
@@ -567,10 +630,7 @@
                 <div class="filename" id="fileName"></div>
             </div>
             <input type="file" id="fileInput" accept="image/*">
-            <div style="margin-top:8px">
-                <button class="btn btn-ghost" id="resetTexBtn" style="width:100%"><i class="fas fa-undo"></i> Reset to
-                    White</button>
-            </div>
+            <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i class="fas fa-image"></i> Reset Texture</button>
         </div>
 
         <div class="sb-section editor" id="editorPanel">
@@ -609,11 +669,13 @@
         </div>
 
         <div class="sb-section" style="border-bottom:none">
-            <button class="btn btn-ghost" id="randomizeBtn" style="width:100%;margin-bottom:8px"><i
-                    class="fas fa-dice"></i> Randomize All Angles</button>
-            <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset All
-                Tile Rotations</button>
+            <label>Tiles</label>
+            <div class="btn-row" style="margin-bottom: 8px;">
+                <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset rotation</button>
+            </div>
+            <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%"><i class="fas fa-compass"></i> Randomize angles</button>
         </div>
+
     </aside>
 
     <div class="toast" id="toast"></div>
@@ -623,7 +685,7 @@
             // ──── Constants ────
             const HEX_R = 62;
             const SQRT3 = Math.sqrt(3);
-            const MIN_Z = 0.12;
+            const MIN_Z = 0.25;
             const MAX_Z = 6;
             const CLICK_THRESH = 5;
             const CLICK_DUR = 280;
@@ -635,18 +697,18 @@
             const TWO_PI_DIV_3 = 2 * Math.PI / 3;
             const FOUR_PI_DIV_3 = 4 * Math.PI / 3;
 
-            // ──── Tracing Algorithm Limits ────
-            const TRACE_QUEUE_MARGIN = 10;      // Extra hex tiles beyond visible bounds to process curves
-            const TRACE_MAX_PER_FRAME = 1000;   // Max curve segments to process per frame to avoid lag
-            const TRACE_SEARCH_MARGIN = 5;      // Extra hex tiles beyond visible bounds to search for uncolored tiles
-            const VISIBLE_BOUND_MULT = 3;       // Multiplier for HEX_R to define visible screen bounds
+            const TRACE_QUEUE_MARGIN = 10;
+            const TRACE_MAX_PER_FRAME = 1000;
+            const TRACE_SEARCH_MARGIN = 5;
+            const VISIBLE_BOUND_MULT = 3;
 
             // ──── State ────
             let zoom = 1, panX = 0, panY = 0;
             let isDrag = false, dragSX = 0, dragSY = 0, dragPX = 0, dragPY = 0, dragMoved = false;
             let mouseScreenX = -9999, mouseScreenY = -9999;
             let hoveredQ = null, hoveredR = null;
-            let showGrid = false;
+            let showGrid = true;
+            let showUnrenderedDotted = true;
             let isInitialized = false;
             let rotMode = 'hash';
             let randomSeed = 0;
@@ -656,25 +718,25 @@
             const rotOverrides = new Map();
             const animMap = new Map();
 
-            // Gradient State
             let gradientMarkers = [];
-            let activeMarkerIndex = 0;
+            let draggedMarkerIndex = -1;
             let isDragMarker = false;
             let dragMarkerOffsetX = 0;
             let dragMarkerOffsetY = 0;
             let gradientCanvas = null;
             let markersVisible = true;
+            let activeMarkerIndex = 0;
 
-            // Curve Color State & Cache Layers
-            let curveColors = ['#000000'];
+            const markerPalette = ['#cccccc', '#4878D0', '#EE854A', '#6ACC64', '#D65F5F', '#956CB4', '#8C613C', '#DC7EC0', '#797979', '#D5BB67', '#82C6E2'];
+            const curvePalette = ['#444444', '#001C7F', '#B1400D', '#12711C', '#8C0800', '#591E71', '#592F0D', '#A23582', '#3C3C3C', '#B8850A', '#006374'];
+            
+            let curveColors = [curvePalette[0]]; 
             let activeCurveIndex = 0;
             let nextCurveID = 0;
-            const curveMap = new Map();      // Maps EdgeID -> CurveID
-            const curves = new Map();        // Maps CurveID -> { color, size, locked, edges }
-            let queue = [];                  // DFS queue for curve extension
+            const curveMap = new Map();
+            const curves = new Map();
+            let queue = [];
 
-            const markerPalette = ['#ffffff', '#3d5a80', '#81b29a', '#f2cc8f', '#98c1d9', '#ee6c4d', '#c08497', '#7b9e89'];
-            const curvePalette = ['#e07a5f', '#3d5a80', '#81b29a', '#f2cc8f', '#98c1d9', '#ee6c4d', '#c08497', '#7b9e89'];
 
             // ──── DOM Cache ────
             const dom = {
@@ -694,10 +756,14 @@
                 fileName: document.getElementById('fileName'),
                 editorPanel: document.getElementById('editorPanel'),
                 resetTexBtn: document.getElementById('resetTexBtn'),
+                resetAllRot: document.getElementById('resetAllRot'),
+                randAnglesBtn: document.getElementById('randAnglesBtn'),
+                randLineColorsBtn: document.getElementById('randLineColorsBtn'),
+                randGradColorsBtn: document.getElementById('randGradColorsBtn'),
+                unrenderedToggle: document.getElementById('unrenderedToggle'),
+                markersToggle: document.getElementById('markersToggle'),
                 cancelEd: document.getElementById('cancelEd'),
                 applyEd: document.getElementById('applyEd'),
-                randomizeBtn: document.getElementById('randomizeBtn'),
-                resetAllRot: document.getElementById('resetAllRot'),
                 toast: document.getElementById('toast'),
                 previewCanvas: document.getElementById('previewCanvas'),
                 sRot: document.getElementById('sRot'),
@@ -814,7 +880,6 @@
             // ──── IDW Gradient ────
             function drawIDWGradient(W, H) {
                 if (gradientMarkers.length === 0) return;
-
                 const scale = 0.2;
                 const lowW = Math.max(2, Math.ceil(W * scale));
                 const lowH = Math.max(2, Math.ceil(H * scale));
@@ -825,7 +890,6 @@
                     gradientCanvas.height = lowH;
                 }
                 const gctx = gradientCanvas.getContext('2d');
-
                 const imgData = gctx.createImageData(lowW, lowH);
                 const data = imgData.data;
 
@@ -838,49 +902,31 @@
                 }));
 
                 const n = ms.length;
-
                 if (n === 1) {
                     const m = ms[0];
                     for (let i = 0; i < lowW * lowH; i++) {
                         const idx = i * 4;
-                        data[idx] = m.r;
-                        data[idx + 1] = m.g;
-                        data[idx + 2] = m.b;
-                        data[idx + 3] = 255;
+                        data[idx] = m.r; data[idx + 1] = m.g; data[idx + 2] = m.b; data[idx + 3] = 255;
                     }
                 } else {
                     for (let py = 0; py < lowH; py++) {
                         for (let px = 0; px < lowW; px++) {
-                            let totalWeight = 0;
-                            let r = 0, g = 0, b = 0;
-
+                            let totalWeight = 0, r = 0, g = 0, b = 0;
                             for (let i = 0; i < n; i++) {
                                 const m = ms[i];
-                                const dx = px - m.x;
-                                const dy = py - m.y;
+                                const dx = px - m.x, dy = py - m.y;
                                 const distSq = dx * dx + dy * dy + 0.5;
                                 const weight = 1 / (distSq * distSq);
                                 totalWeight += weight;
-                                r += m.r * weight;
-                                g += m.g * weight;
-                                b += m.b * weight;
+                                r += m.r * weight; g += m.g * weight; b += m.b * weight;
                             }
-
-                            r /= totalWeight;
-                            g /= totalWeight;
-                            b /= totalWeight;
-
+                            r /= totalWeight; g /= totalWeight; b /= totalWeight;
                             const idx = (py * lowW + px) * 4;
-                            data[idx] = r;
-                            data[idx + 1] = g;
-                            data[idx + 2] = b;
-                            data[idx + 3] = 255;
+                            data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 255;
                         }
                     }
                 }
-
                 gctx.putImageData(imgData, 0, 0);
-
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(gradientCanvas, 0, 0, lowW, lowH, 0, 0, W, H);
@@ -894,7 +940,7 @@
                 return lum > 140 ? '#000000' : '#ffffff';
             }
 
-            // ──── Curve Deduction Engine (Topological DFS) ────
+            // ──── Curve Deduction Engine ────
             function getNeighbor(q, r, e) {
                 if (e === 0) return { q: q + 1, r: r, edge: 3 };
                 if (e === 1) return { q: q, r: r + 1, edge: 4 };
@@ -928,24 +974,13 @@
                 let curve1 = curves.get(c1);
                 let curve2 = curves.get(c2);
                 if (!curve1 || !curve2) return;
-
                 let target, source;
-                if (curve1.size > curve2.size) {
-                    target = curve1; source = curve2;
-                } else if (curve2.size > curve1.size) {
-                    target = curve2; source = curve1;
-                } else {
-                    if (Math.random() < 0.5) { target = curve1; source = curve2; }
-                    else { target = curve2; source = curve1; }
-                }
-
-                for (let id of source.edges) {
-                    curveMap.set(id, target.id);
-                    target.edges.add(id);
-                }
+                if (curve1.size > curve2.size) { target = curve1; source = curve2; } 
+                else if (curve2.size > curve1.size) { target = curve2; source = curve1; } 
+                else { if (Math.random() < 0.5) { target = curve1; source = curve2; } else { target = curve2; source = curve1; } }
+                for (let id of source.edges) { curveMap.set(id, target.id); target.edges.add(id); }
                 target.size = target.edges.size;
                 if (source.locked) target.locked = true;
-
                 curves.delete(source.id);
             }
 
@@ -954,39 +989,26 @@
                 let margin = TRACE_QUEUE_MARGIN;
                 let processed = 0;
                 let maxPerFrame = TRACE_MAX_PER_FRAME;
-
                 while (queue.length > 0 && processed < maxPerFrame) {
-                    let item = queue.pop(); // DFS 
+                    let item = queue.pop();
                     processed++;
-
-                    if (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin ||
-                        item.r < bounds.minR - margin || item.r > bounds.maxR + margin) {
-                        continue;
-                    }
-
+                    if (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin || item.r < bounds.minR - margin || item.r > bounds.maxR + margin) continue;
                     let id = edgeID(item.q, item.r, item.e);
                     if (!curveMap.has(id)) continue;
-
                     let curveID = curveMap.get(id);
                     let curve = curves.get(curveID);
                     if (!curve || curve.locked) continue;
-
                     let k = (tileRot(item.q, item.r) / 60) % 6;
                     let pe = getOtherEdge(k, item.e);
                     let pid = edgeID(item.q, item.r, pe);
-
                     if (curveMap.has(pid)) {
                         let existingCurve = curveMap.get(pid);
-                        if (existingCurve === curveID) {
-                            curve.locked = true; // Loop completed
-                        } else {
-                            mergeCurves(curveID, existingCurve);
-                        }
+                        if (existingCurve === curveID) curve.locked = true;
+                        else mergeCurves(curveID, existingCurve);
                     } else {
                         curveMap.set(pid, curveID);
                         curve.edges.add(pid);
                         curve.size++;
-
                         let n = getNeighbor(item.q, item.r, pe);
                         queue.push({ q: n.q, r: n.r, e: n.edge });
                     }
@@ -998,30 +1020,19 @@
                 let margin = TRACE_SEARCH_MARGIN;
                 let bestTile = null;
                 let bestDist = Infinity;
-
                 let center = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, zoom, panX, panY);
-
                 for (let q = bounds.minQ - margin; q <= bounds.maxQ + margin; q++) {
                     for (let r = bounds.minR - margin; r <= bounds.maxR + margin; r++) {
-                        let dq = q - center.q;
-                        let dr = r - center.r;
+                        let dq = q - center.q, dr = r - center.r;
                         let dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(-dq - dr));
                         if (dist < bestDist) {
                             for (let i = 0; i < 6; i++) {
-                                if (!curveMap.has(edgeID(q, r, i))) {
-                                    bestDist = dist;
-                                    bestTile = { q, r };
-                                    break;
-                                }
+                                if (!curveMap.has(edgeID(q, r, i))) { bestDist = dist; bestTile = { q, r }; break; }
                             }
                         }
                     }
                 }
-
-                if (bestTile) {
-                    recalculateTile(bestTile.q, bestTile.r);
-                    return true;
-                }
+                if (bestTile) { recalculateTile(bestTile.q, bestTile.r); return true; }
                 return false;
             }
 
@@ -1033,7 +1044,6 @@
                 let tr = pixToHex(W + margin, -margin, z, px, py);
                 let bl = pixToHex(-margin, H + margin, z, px, py);
                 let br = pixToHex(W + margin, H + margin, z, px, py);
-                // FIX: Check all 4 corners, otherwise the bounds crop diagonally
                 return {
                     minQ: Math.min(tl.q, tr.q, bl.q, br.q),
                     maxQ: Math.max(tl.q, tr.q, bl.q, br.q),
@@ -1051,10 +1061,8 @@
             function splitCurve(curveID) {
                 let curve = curves.get(curveID);
                 if (!curve || curve.size <= 1) return;
-
                 let visited = new Set();
                 let components = [];
-
                 for (let id of curve.edges) {
                     if (visited.has(id)) continue;
                     let comp = [];
@@ -1063,49 +1071,30 @@
                     while (q.length > 0) {
                         let curr = q.pop();
                         comp.push(curr);
-
                         let parts = curr.split(',');
                         let q1 = parseInt(parts[0]), r1 = parseInt(parts[1]), e1 = parseInt(parts[2]);
                         let n1 = getNeighbor(q1, r1, e1);
-
                         let k1 = (tileRot(q1, r1) / 60) % 6;
                         let pe1 = getOtherEdge(k1, e1);
                         let pid1 = edgeID(q1, r1, pe1);
-                        if (curve.edges.has(pid1) && !visited.has(pid1)) {
-                            visited.add(pid1);
-                            q.push(pid1);
-                        }
-
+                        if (curve.edges.has(pid1) && !visited.has(pid1)) { visited.add(pid1); q.push(pid1); }
                         let q2 = n1.q, r2 = n1.r, e2 = n1.edge;
                         let k2 = (tileRot(q2, r2) / 60) % 6;
                         let pe2 = getOtherEdge(k2, e2);
                         let pid2 = edgeID(q2, r2, pe2);
-                        if (curve.edges.has(pid2) && !visited.has(pid2)) {
-                            visited.add(pid2);
-                            q.push(pid2);
-                        }
+                        if (curve.edges.has(pid2) && !visited.has(pid2)) { visited.add(pid2); q.push(pid2); }
                     }
                     components.push(comp);
                 }
-
                 if (components.length > 1) {
                     components.sort((a, b) => b.length - a.length);
                     curve.edges = new Set(components[0]);
                     curve.size = curve.edges.size;
-
                     for (let i = 1; i < components.length; i++) {
                         let newID = nextCurveID++;
-                        let newCurve = {
-                            id: newID,
-                            color: curve.color,
-                            size: components[i].length,
-                            locked: false,
-                            edges: new Set(components[i])
-                        };
+                        let newCurve = { id: newID, color: curve.color, size: components[i].length, locked: false, edges: new Set(components[i]) };
                         curves.set(newID, newCurve);
-                        for (let id of newCurve.edges) {
-                            curveMap.set(id, newID);
-                        }
+                        for (let id of newCurve.edges) curveMap.set(id, newID);
                     }
                 } else if (components.length === 1) {
                     curve.edges = new Set(components[0]);
@@ -1121,99 +1110,57 @@
                 for (let i = 0; i < 6; i++) {
                     let id = edgeID(q, r, i);
                     ids.push(id);
-                    if (curveMap.has(id)) {
-                        affectedCurves.add(curveMap.get(id));
-                    }
+                    if (curveMap.has(id)) affectedCurves.add(curveMap.get(id));
                 }
-
-                if (affectedCurves.size === 0) {
-                    recalculateTile(q, r);
-                    return;
-                }
-
-                // Opt 2: If all 6 edges belong to the same curve, no splits or merges can occur.
+                if (affectedCurves.size === 0) { recalculateTile(q, r); return; }
                 if (affectedCurves.size === 1) {
                     let cid = [...affectedCurves][0];
                     let allEdgesSame = true;
                     for (let i = 0; i < 6; i++) {
-                        if (!curveMap.has(ids[i]) || curveMap.get(ids[i]) !== cid) {
-                            allEdgesSame = false;
-                            break;
-                        }
+                        if (!curveMap.has(ids[i]) || curveMap.get(ids[i]) !== cid) { allEdgesSame = false; break; }
                     }
-                    if (allEdgesSame) {
-                        return; 
-                    }
+                    if (allEdgesSame) return;
                 }
-
-                // Collect available colors BEFORE cutting
                 let availableColors = [];
-                for (let cid of affectedCurves) {
-                    let curve = curves.get(cid);
-                    if (curve) {
-                        availableColors.push(curve.color);
-                    }
-                }
-                if (availableColors.length === 0) {
-                    availableColors.push(Math.floor(Math.random() * curveColors.length));
-                }
-
-                // Cut the 6 edges
+                for (let cid of affectedCurves) { let curve = curves.get(cid); if (curve) availableColors.push(curve.color); }
+                if (availableColors.length === 0) availableColors.push(Math.floor(Math.random() * curveColors.length));
                 for (let i = 0; i < 6; i++) {
                     let id = ids[i];
                     if (curveMap.has(id)) {
                         let cid = curveMap.get(id);
                         let curve = curves.get(cid);
-                        if (curve) {
-                            curve.edges.delete(id);
-                            curve.size = curve.edges.size;
-                        }
+                        if (curve) { curve.edges.delete(id); curve.size = curve.edges.size; }
                         curveMap.delete(id);
                     }
                 }
-
-                // Delete empty curves and split the rest
                 let validAffected = [];
                 for (let cid of affectedCurves) {
                     let curve = curves.get(cid);
                     if (curve) {
-                        if (curve.size === 0) {
-                            curves.delete(cid);
-                        } else {
-                            validAffected.push(cid);
-                        }
+                        if (curve.size === 0) curves.delete(cid);
+                        else validAffected.push(cid);
                     }
                 }
-
-                for (let cid of validAffected) {
-                    splitCurve(cid);
-                }
-
-                // Form the new pairs
+                for (let cid of validAffected) splitCurve(cid);
                 let k = (tileRot(q, r) / 60) % 6;
                 let pairs = [
                     [(2 + k) % 6, (3 + k) % 6],
                     [(4 + k) % 6, (0 + k) % 6],
                     [(1 + k) % 6, (5 + k) % 6]
                 ];
-
                 for (let pair of pairs) {
                     let e1 = pair[0], e2 = pair[1];
-                    let id1 = ids[e1];
-                    let id2 = ids[e2];
-
+                    let id1 = ids[e1], id2 = ids[e2];
                     let n1 = getNeighbor(q, r, e1);
                     let k1 = (tileRot(n1.q, n1.r) / 60) % 6;
                     let n1_other = getOtherEdge(k1, n1.edge);
                     let n1_other_id = edgeID(n1.q, n1.r, n1_other);
                     let c1 = curveMap.has(n1_other_id) ? curveMap.get(n1_other_id) : -1;
-
                     let n2 = getNeighbor(q, r, e2);
                     let k2 = (tileRot(n2.q, n2.r) / 60) % 6;
                     let n2_other = getOtherEdge(k2, n2.edge);
                     let n2_other_id = edgeID(n2.q, n2.r, n2_other);
                     let c2 = curveMap.has(n2_other_id) ? curveMap.get(n2_other_id) : -1;
-
                     if (c1 !== -1 && c2 !== -1) {
                         if (c1 !== c2) mergeCurves(c1, c2);
                         let targetCurveID = curveMap.get(n1_other_id);
@@ -1237,7 +1184,6 @@
                         curves.get(c2).size = curves.get(c2).edges.size;
                         queue.push({ q: n1.q, r: n1.r, e: n1.edge });
                     } else {
-                        // Both uncolored. Create new curve with an available color.
                         let color = availableColors[Math.floor(Math.random() * availableColors.length)];
                         let curveID = nextCurveID++;
                         curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
@@ -1259,15 +1205,12 @@
                     [(4 + k) % 6, (0 + k) % 6],
                     [(1 + k) % 6, (5 + k) % 6]
                 ];
-
                 for (let pair of pairs) {
                     let e1 = pair[0], e2 = pair[1];
                     let id1 = edgeID(q, r, e1);
                     let id2 = edgeID(q, r, e2);
-
                     let c1 = curveMap.has(id1) ? curveMap.get(id1) : -1;
                     let c2 = curveMap.has(id2) ? curveMap.get(id2) : -1;
-
                     if (c1 !== -1 && c2 !== -1) {
                         if (c1 !== c2) mergeCurves(c1, c2);
                     } else if (c1 !== -1) {
@@ -1286,13 +1229,11 @@
                         let curveID = nextCurveID++;
                         let color = Math.floor(Math.random() * curveColors.length);
                         curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
-
                         curveMap.set(id1, curveID);
                         curves.get(curveID).edges.add(id1);
                         curves.get(curveID).size++;
                         let n1 = getNeighbor(q, r, e1);
                         queue.push({ q: n1.q, r: n1.r, e: n1.edge });
-
                         curveMap.set(id2, curveID);
                         curves.get(curveID).edges.add(id2);
                         curves.get(curveID).size++;
@@ -1302,15 +1243,32 @@
                 }
             }
 
-            function getCurveColor(q, r, e) {
-                if (curveColors.length === 1) return curveColors[0];
+            function applyCurveStyle(q, r, e, sz) {
+                ctx.setLineDash([]);
+                if (curveColors.length === 1) {
+                    ctx.strokeStyle = curveColors[0];
+                    ctx.lineWidth = sz / 3;
+                    return true;
+                }
                 let id = edgeID(q, r, e);
                 if (curveMap.has(id)) {
                     let curveID = curveMap.get(id);
                     let curve = curves.get(curveID);
-                    if (curve) return curveColors[curve.color % curveColors.length];
+                    if (curve) {
+                        let c = curve.color;
+                        ctx.strokeStyle = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
+                        ctx.lineWidth = sz / 3;
+                        return true;
+                    }
                 }
-                return '#000000';
+                if (showUnrenderedDotted) {
+                    ctx.strokeStyle = '#a0a0af8c';
+                    ctx.lineWidth = Math.max(1, sz / 10);
+                    const dash = Math.max(2, sz / 8);
+                    ctx.setLineDash([dash, dash]);
+                    return true;
+                }
+                return false;
             }
 
             // ──── Gradient List UI ────
@@ -1321,21 +1279,62 @@
 
                 gradientMarkers.forEach((m, i) => {
                     const item = document.createElement('div');
-                    item.className = 'grad-item' + (i === activeMarkerIndex ? ' active' : '');
+                    item.className = 'grad-item';
 
                     const colorInput = document.createElement('input');
                     colorInput.type = 'color';
                     colorInput.value = m.color;
+                    let originalColor = m.color;
                     colorInput.addEventListener('input', (e) => {
                         gradientMarkers[i].color = e.target.value;
+                        // Sync text box
+                        hexInput.value = e.target.value.toUpperCase();
+                    });
+                    colorInput.addEventListener('change', (e) => {
+                        const newColor = e.target.value.toLowerCase();
+                        const isDuplicate = gradientMarkers.some((mm, idx) =>
+                            idx !== i && mm.color.toLowerCase() === newColor);
+                        if (isDuplicate) {
+                            gradientMarkers[i].color = originalColor;
+                            e.target.value = originalColor;
+                            hexInput.value = originalColor.toUpperCase();
+                            toast('Color already exists in gradient');
+                        } else {
+                            originalColor = e.target.value;
+                        }
                     });
                     colorInput.addEventListener('click', (e) => e.stopPropagation());
 
-                    const label = document.createElement('span');
-                    label.innerText = `Marker ${i + 1}`;
+                    const hexInput = document.createElement('input');
+                    hexInput.type = 'text';
+                    hexInput.className = 'hex-input';
+                    hexInput.value = m.color.toUpperCase();
+                    hexInput.maxLength = 7;
+                    hexInput.addEventListener('change', (e) => {
+                        let val = e.target.value.trim();
+                        if (!val.startsWith('#')) val = '#' + val;
+                        if (/^#[0-9A-F]{6}$/i.test(val)) {
+                            const newColor = val.toLowerCase();
+                            const isDuplicate = gradientMarkers.some((mm, idx) =>
+                                idx !== i && mm.color.toLowerCase() === newColor);
+                            if (isDuplicate) {
+                                toast('Color already exists in gradient');
+                                e.target.value = m.color.toUpperCase();
+                            } else {
+                                gradientMarkers[i].color = newColor;
+                                originalColor = newColor;
+                                colorInput.value = newColor;
+                                e.target.value = newColor.toUpperCase();
+                            }
+                        } else {
+                            toast('Invalid hex color (e.g. #FF0000)');
+                            e.target.value = m.color.toUpperCase();
+                        }
+                    });
+                    hexInput.addEventListener('click', (e) => e.stopPropagation());
 
                     item.appendChild(colorInput);
-                    item.appendChild(label);
+                    item.appendChild(hexInput);
 
                     if (canRemove) {
                         const removeBtn = document.createElement('button');
@@ -1345,21 +1344,10 @@
                         removeBtn.addEventListener('click', (e) => {
                             e.stopPropagation();
                             gradientMarkers.splice(i, 1);
-                            if (activeMarkerIndex === i) {
-                                activeMarkerIndex = Math.min(i, gradientMarkers.length - 1);
-                            } else if (activeMarkerIndex > i) {
-                                activeMarkerIndex--;
-                            }
                             renderGradientList();
                         });
                         item.appendChild(removeBtn);
                     }
-
-                    item.addEventListener('click', () => {
-                        activeMarkerIndex = i;
-                        markersVisible = true;
-                        renderGradientList();
-                    });
 
                     list.appendChild(item);
                 });
@@ -1378,16 +1366,56 @@
                     const colorInput = document.createElement('input');
                     colorInput.type = 'color';
                     colorInput.value = m;
+                    let originalColor = m;
                     colorInput.addEventListener('input', (e) => {
                         curveColors[i] = e.target.value;
+                        hexInput.value = e.target.value.toUpperCase();
+                    });
+                    colorInput.addEventListener('change', (e) => {
+                        const newColor = e.target.value.toLowerCase();
+                        const isDuplicate = curveColors.some((mm, idx) =>
+                            idx !== i && mm.toLowerCase() === newColor);
+                        if (isDuplicate) {
+                            curveColors[i] = originalColor;
+                            e.target.value = originalColor;
+                            hexInput.value = originalColor.toUpperCase();
+                            toast('Color already exists in curve palette');
+                        } else {
+                            originalColor = e.target.value;
+                        }
                     });
                     colorInput.addEventListener('click', (e) => e.stopPropagation());
 
-                    const label = document.createElement('span');
-                    label.innerText = `Color ${i + 1}`;
+                    const hexInput = document.createElement('input');
+                    hexInput.type = 'text';
+                    hexInput.className = 'hex-input';
+                    hexInput.value = m.toUpperCase();
+                    hexInput.maxLength = 7;
+                    hexInput.addEventListener('change', (e) => {
+                        let val = e.target.value.trim();
+                        if (!val.startsWith('#')) val = '#' + val;
+                        if (/^#[0-9A-F]{6}$/i.test(val)) {
+                            const newColor = val.toLowerCase();
+                            const isDuplicate = curveColors.some((mm, idx) =>
+                                idx !== i && mm.toLowerCase() === newColor);
+                            if (isDuplicate) {
+                                toast('Color already exists in curve palette');
+                                e.target.value = m.toUpperCase();
+                            } else {
+                                curveColors[i] = newColor;
+                                originalColor = newColor;
+                                colorInput.value = newColor;
+                                e.target.value = newColor.toUpperCase();
+                            }
+                        } else {
+                            toast('Invalid hex color (e.g. #FF0000)');
+                            e.target.value = m.toUpperCase();
+                        }
+                    });
+                    hexInput.addEventListener('click', (e) => e.stopPropagation());
 
                     item.appendChild(colorInput);
-                    item.appendChild(label);
+                    item.appendChild(hexInput);
 
                     if (canRemove) {
                         const removeBtn = document.createElement('button');
@@ -1432,42 +1460,42 @@
                     ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
                 } else {
                     const a = sz * SQRT3 / 2;
-                    ctx.lineWidth = sz / 3;
                     ctx.lineCap = 'butt';
-
                     const logicalRot = tileRot(hq, hr);
                     const k = (logicalRot / 60) % 6;
 
-                    ctx.strokeStyle = getCurveColor(hq, hr, (2 + k) % 6);
-                    ctx.beginPath();
-                    ctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
-                    ctx.stroke();
-
-                    ctx.strokeStyle = getCurveColor(hq, hr, (4 + k) % 6);
-                    ctx.beginPath();
-                    ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
-                    ctx.stroke();
-
-                    ctx.strokeStyle = getCurveColor(hq, hr, (1 + k) % 6);
-                    ctx.beginPath();
-                    ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
-                    ctx.stroke();
+                    if (applyCurveStyle(hq, hr, (2 + k) % 6, sz)) {
+                        ctx.beginPath();
+                        ctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
+                        ctx.stroke();
+                    }
+                    if (applyCurveStyle(hq, hr, (4 + k) % 6, sz)) {
+                        ctx.beginPath();
+                        ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
+                        ctx.stroke();
+                    }
+                    if (applyCurveStyle(hq, hr, (1 + k) % 6, sz)) {
+                        ctx.beginPath();
+                        ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
+                        ctx.stroke();
+                    }
+                    ctx.setLineDash([]);
                 }
 
                 ctx.restore();
 
                 if (isHover) {
                     ctx.save();
-                    ctx.shadowColor = 'rgba(224,122,95,0.4)';
+                    ctx.shadowColor = '#e07a5f66';
                     ctx.shadowBlur = 18;
                     traceHexPath(ctx, cx, cy, rSz);
-                    ctx.strokeStyle = 'rgba(224,122,95,0.7)';
+                    ctx.strokeStyle = '#e07a5fb3';
                     ctx.lineWidth = 2.5;
                     ctx.stroke();
                     ctx.restore();
                 } else if (grid) {
                     traceHexPath(ctx, cx, cy, rSz);
-                    ctx.strokeStyle = 'rgba(10,10,25,0.35)';
+                    ctx.strokeStyle = '#0a0a1959';
                     ctx.lineWidth = 1;
                     ctx.stroke();
                 }
@@ -1486,10 +1514,9 @@
 
                 ctx.fillStyle = '#0b0b1a';
                 ctx.fillRect(0, 0, W, H);
-
                 drawIDWGradient(W, H);
 
-                ctx.fillStyle = 'rgba(255,255,255,0.025)';
+                ctx.fillStyle = '#ffffff06';
                 const dotSpacing = 40;
                 const offXMod = ((px % dotSpacing) + dotSpacing) % dotSpacing;
                 const offYMod = ((py % dotSpacing) + dotSpacing) % dotSpacing;
@@ -1504,13 +1531,8 @@
                 const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
 
                 if (curveColors.length > 1) {
-                    if (queue.length > 0) {
-                        processQueue();
-                    } else {
-                        if (findNextUncoloredTile()) {
-                            processQueue();
-                        }
-                    }
+                    if (queue.length > 0) processQueue();
+                    else if (findNextUncoloredTile()) processQueue();
                 }
 
                 for (const h of hexes) {
@@ -1525,40 +1547,20 @@
                         const outline = getContrastColor(m.color);
 
                         ctx.save();
-
-                        if (i === activeMarkerIndex) {
-                            ctx.beginPath();
-                            ctx.arc(m.x, m.y, 14, 0, Math.PI * 2);
-                            ctx.strokeStyle = outline;
-                            ctx.lineWidth = 3;
-                            ctx.stroke();
-
-                            ctx.beginPath();
-                            ctx.arc(m.x, m.y, 9, 0, Math.PI * 2);
-                            ctx.fillStyle = m.color;
-                            ctx.fill();
-                            ctx.strokeStyle = outline;
-                            ctx.lineWidth = 2;
-                            ctx.stroke();
-
-                            ctx.beginPath();
-                            ctx.moveTo(m.x - 22, m.y); ctx.lineTo(m.x - 8, m.y);
-                            ctx.moveTo(m.x + 8, m.y); ctx.lineTo(m.x + 22, m.y);
-                            ctx.moveTo(m.x, m.y - 22); ctx.lineTo(m.x, m.y - 8);
-                            ctx.moveTo(m.x, m.y + 8); ctx.lineTo(m.x, m.y + 22);
-                            ctx.strokeStyle = outline;
-                            ctx.lineWidth = 2;
-                            ctx.stroke();
-                        } else {
-                            ctx.beginPath();
-                            ctx.arc(m.x, m.y, 8, 0, Math.PI * 2);
-                            ctx.fillStyle = m.color;
-                            ctx.fill();
-                            ctx.strokeStyle = outline;
-                            ctx.lineWidth = 2.5;
-                            ctx.stroke();
-                        }
-
+                        ctx.beginPath();
+                        // Draw an equilateral triangle centered at m.x, m.y
+                        const r = 30;
+                        const h = r * SQRT3 / 2; // SQRT3 is already defined at the top of your script
+                        ctx.moveTo(m.x, m.y - r);
+                        ctx.lineTo(m.x + h, m.y + r / 2);
+                        ctx.lineTo(m.x - h, m.y + r / 2);
+                        ctx.closePath();
+                        
+                        ctx.fillStyle = m.color;
+                        ctx.fill();
+                        ctx.strokeStyle = outline;
+                        ctx.lineWidth = 7; // Thicker stroke for all markers
+                        ctx.stroke();
                         ctx.restore();
                     }
                 }
@@ -1579,9 +1581,11 @@
                         panY = h / 2;
                         isInitialized = true;
 
+                        // Use the random placement function for the first marker
+                        const pos = getRandomMarkerPosition();
                         gradientMarkers.push({
-                            x: w / 2,
-                            y: h / 2,
+                            x: pos.x,
+                            y: pos.y,
                             color: markerPalette[0]
                         });
                         activeMarkerIndex = 0;
@@ -1627,11 +1631,9 @@
                             break;
                         }
                     }
-
                     if (clickedMarkerIdx !== -1) {
                         isDragMarker = true;
-                        activeMarkerIndex = clickedMarkerIdx;
-                        renderGradientList();
+                        draggedMarkerIndex = clickedMarkerIdx;
                         dragMarkerOffsetX = mx - gradientMarkers[clickedMarkerIdx].x;
                         dragMarkerOffsetY = my - gradientMarkers[clickedMarkerIdx].y;
                         return;
@@ -1648,9 +1650,9 @@
                 const mx = e.clientX - r.left;
                 const my = e.clientY - r.top;
 
-                if (isDragMarker && activeMarkerIndex !== -1) {
-                    gradientMarkers[activeMarkerIndex].x = mx - dragMarkerOffsetX;
-                    gradientMarkers[activeMarkerIndex].y = my - dragMarkerOffsetY;
+                if (isDragMarker && draggedMarkerIndex !== -1) {
+                    gradientMarkers[draggedMarkerIndex].x = mx - dragMarkerOffsetX;
+                    gradientMarkers[draggedMarkerIndex].y = my - dragMarkerOffsetY;
                     return;
                 }
 
@@ -1663,10 +1665,7 @@
                 if (isDrag) {
                     const dx = e.clientX - dragSX, dy = e.clientY - dragSY;
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
-                        if (!dragMoved) {
-                            dragMoved = true;
-                            markersVisible = false;
-                        }
+                        if (!dragMoved) dragMoved = true;
                     }
                     panX = dragPX + dx;
                     panY = dragPY + dy;
@@ -1676,26 +1675,14 @@
             window.addEventListener('mouseup', e => {
                 if (isDragMarker) {
                     isDragMarker = false;
+                    draggedMarkerIndex = -1;
                     return;
                 }
                 if (isDrag && !dragMoved) handleClick(e);
                 isDrag = false;
             });
 
-            dom.cvs.addEventListener('dblclick', e => {
-                const r = dom.cvs.getBoundingClientRect();
-                const h = pixToHex(e.clientX - r.left, e.clientY - r.top, zoom, panX, panY);
-                const k = hexKey(h.q, h.r);
-                const now = Date.now();
-                const curDisplay = displayRot(h.q, h.r, now);
-
-                rotOverrides.delete(k);
-                const base = baseRot(h.q, h.r);
-                const target = nearestTarget(curDisplay, base);
-                animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
-                updateLocalCurves(h.q, h.r);
-                toast('Tile reset to default orientation');
-            });
+            // Double click behavior entirely removed
 
             function handleClick(e) {
                 const r = dom.cvs.getBoundingClientRect();
@@ -1738,6 +1725,8 @@
             });
 
             dom.gridToggle.addEventListener('change', function () { showGrid = this.checked; });
+            dom.unrenderedToggle.addEventListener('change', function () { showUnrenderedDotted = this.checked; });
+            dom.markersToggle.addEventListener('change', function () { markersVisible = this.checked; });
 
             function bulkAnimate(newMode, newSeed) {
                 const now = Date.now();
@@ -1764,14 +1753,38 @@
                 initializeCentralTile();
             }
 
-            dom.randomizeBtn.onclick = () => {
+            dom.randAnglesBtn.onclick = () => {
                 bulkAnimate('hash', (randomSeed + 1) & 0x7FFFFFFF);
-                toast('All tile angles randomized');
+                toast('Angles randomized');
+            };
+
+            dom.randLineColorsBtn.onclick = () => {
+                if (curveColors.length === 0) return;
+                // Combine picked colors and built-in curve palette
+                const allColors = [...new Set([...curveColors, ...curvePalette])];
+                
+                // Randomize the actual curveColors array so the list UI updates
+                for (let i = 0; i < curveColors.length; i++) {
+                    curveColors[i] = allColors[Math.floor(Math.random() * allColors.length)];
+                }
+                
+                renderCurveList(); // Refresh hex inputs visually
+                toast('Line colors randomized');
+            };
+
+            dom.randGradColorsBtn.onclick = () => {
+                if (gradientMarkers.length === 0) return;
+                const allColors = [...new Set([...gradientMarkers.map(m => m.color), ...markerPalette])];
+                for (let m of gradientMarkers) {
+                    m.color = allColors[Math.floor(Math.random() * allColors.length)];
+                }
+                renderGradientList();
+                toast('Gradient colors randomized');
             };
 
             dom.resetAllRot.onclick = () => {
                 bulkAnimate('zero', 0);
-                toast('All tile rotations reset to default');
+                toast('All tile rotations reset to 0°');
             };
 
             dom.uploadZone.onclick = () => dom.fileInput.click();
@@ -1821,7 +1834,7 @@
                 if (dom.editorPanel.classList.contains('open')) { writeSliders(texTf); drawPreview(); }
                 pendImg = null; closeEditor();
                 dom.fileName.textContent = '';
-                toast('Texture reset to white');
+                toast('Texture reset to default');
             };
 
             [dom.sRot, dom.sScale, dom.sSX, dom.sSY, dom.sOX, dom.sOY].forEach(el => {
@@ -1862,7 +1875,7 @@
                 }
                 pctx.restore();
                 traceHexPath(pctx, cX, cY, rSz);
-                pctx.strokeStyle = 'rgba(224,122,95,0.6)';
+                pctx.strokeStyle = '#e07a5f99';
                 pctx.lineWidth = 2;
                 pctx.stroke();
                 for (let i = 0; i < 6; i++) {
@@ -1882,21 +1895,101 @@
                 toastTimer = setTimeout(() => dom.toast.classList.remove('show'), 2200);
             }
 
+            function pickNewMarkerColor() {
+                const existing = new Set(gradientMarkers.map(m => m.color.toLowerCase()));
+                const available = markerPalette.filter(c => !existing.has(c.toLowerCase()));
+                if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
+                for (let attempts = 0; attempts < 200; attempts++) {
+                    const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+                    if (!existing.has(c.toLowerCase())) return c;
+                }
+                return null;
+            }
+
+            function pickNewCurveColor() {
+                const existing = new Set(curveColors.map(c => c.toLowerCase()));
+                const available = curvePalette.filter(c => !existing.has(c.toLowerCase()));
+                if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
+                for (let attempts = 0; attempts < 200; attempts++) {
+                    const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+                    if (!existing.has(c.toLowerCase())) return c;
+                }
+                return null;
+            }
+
+            function getRandomMarkerPosition() {
+                const W = dom.cvs.width;
+                const H = dom.cvs.height;
+                
+                // Keep markers within the central 60% of the screen (20% border margin)
+                const minX = W * 0.2;
+                const maxX = W * 0.8;
+                const minY = H * 0.2;
+                const maxY = H * 0.8;
+
+                let bestX = minX + Math.random() * (maxX - minX);
+                let bestY = minY + Math.random() * (maxY - minY);
+
+                if (gradientMarkers.length > 0) {
+                    let maxMinDist = -1;
+                    const candidates = 100; // Number of random points to sample
+
+                    for (let i = 0; i < candidates; i++) {
+                        const cx = minX + Math.random() * (maxX - minX);
+                        const cy = minY + Math.random() * (maxY - minY);
+                        
+                        let minDist = Infinity;
+                        for (const m of gradientMarkers) {
+                            const dx = cx - m.x;
+                            const dy = cy - m.y;
+                            const dist = dx * dx + dy * dy; // squared distance
+                            if (dist < minDist) minDist = dist;
+                        }
+                        
+                        // Pick the candidate that is furthest away from its nearest neighbor
+                        if (minDist > maxMinDist) {
+                            maxMinDist = minDist;
+                            bestX = cx;
+                            bestY = cy;
+                        }
+                    }
+                }
+                
+                return { x: bestX, y: bestY };
+            }
+
             dom.addMarkerBtn.onclick = () => {
-                const cx = dom.cvs.width / 2 + (Math.random() - 0.5) * 200;
-                const cy = dom.cvs.height / 2 + (Math.random() - 0.5) * 200;
-                const color = markerPalette[gradientMarkers.length % markerPalette.length];
-                gradientMarkers.push({ x: cx, y: cy, color: color });
-                activeMarkerIndex = gradientMarkers.length - 1;
+                const color = pickNewMarkerColor();
+                if (!color) {
+                    toast('All colors are already in use');
+                    return;
+                }
+                
+                const pos = getRandomMarkerPosition();
+                gradientMarkers.push({ x: pos.x, y: pos.y, color: color });
+                
+                // Force markers to be visible if user just added one
                 markersVisible = true;
+                dom.markersToggle.checked = true;
+                
                 renderGradientList();
             };
 
             dom.addCurveBtn.onclick = () => {
-                const color = curvePalette[curveColors.length % curvePalette.length];
+                const color = pickNewCurveColor();
+                if (!color) {
+                    toast('All colors are already in use');
+                    return;
+                }
                 curveColors.push(color);
                 activeCurveIndex = curveColors.length - 1;
                 renderCurveList();
+
+                // Clear existing curves and recalculate so the new color is utilized
+                curveMap.clear();
+                curves.clear();
+                queue = [];
+                initializeCentralTile();
             };
 
             resize();
