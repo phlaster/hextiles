@@ -534,6 +534,86 @@
         .toast.show {
             transform: translateX(-50%) translateY(0);
         }
+
+        /* ── Hover glow for reset/randomize buttons ── */
+        #resetTexBtn, #resetAllRot, #randAnglesBtn {
+            transition: box-shadow .2s, border-color .2s, color .2s;
+        }
+        #resetTexBtn:hover, #resetAllRot:hover, #randAnglesBtn:hover {
+            box-shadow: 0 0 14px var(--col-accent), 0 0 28px var(--col-accent-dim);
+            border-color: var(--col-accent);
+            color: var(--col-accent);
+        }
+
+        /* ── Export button in header ── */
+        .sb-header { display: flex; align-items: center; justify-content: space-between; }
+        .sb-header .title-wrap { flex: 1; }
+        .export-btn {
+            width: 34px; height: 34px; border: 1px solid var(--col-border);
+            border-radius: 8px; background: var(--col-card2); color: var(--col-accent);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 15px; transition: all .2s; padding: 0; flex-shrink: 0;
+        }
+        .export-btn:hover { background: var(--col-accent); color: #fff; }
+
+        /* ── Export overlay ── */
+        .export-overlay {
+            position: fixed; inset: 0; z-index: 500; display: none;
+        }
+        .export-overlay.active { display: block; }
+        .export-backdrop {
+            position: absolute; inset: 0; background: rgba(0,0,0,.35);
+        }
+        .export-frame {
+            position: absolute; border: 2px solid var(--col-accent);
+            box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
+            cursor: move; box-sizing: border-box;
+        }
+        .export-frame .handle {
+            position: absolute; width: 14px; height: 14px;
+            background: var(--col-accent); border: 2px solid #fff;
+            border-radius: 50%; z-index: 2;
+        }
+        .export-frame .handle.tl { top: -7px; left: -7px; cursor: nwse-resize; }
+        .export-frame .handle.tr { top: -7px; right: -7px; cursor: nesw-resize; }
+        .export-frame .handle.bl { bottom: -7px; left: -7px; cursor: nesw-resize; }
+        .export-frame .handle.br { bottom: -7px; right: -7px; cursor: nwse-resize; }
+
+        .export-menu {
+            position: absolute; background: var(--col-card);
+            border: 1px solid var(--col-border); border-radius: 12px;
+            padding: 16px; z-index: 510; min-width: 260px;
+            box-shadow: 0 8px 32px rgba(0,0,0,.5);
+        }
+        .export-menu label {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--col-muted); font-weight: 600; display: block; margin-bottom: 8px;
+        }
+        .export-menu .size-row { display: flex; gap: 10px; margin-bottom: 14px; }
+        .export-menu .size-input { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .export-menu .size-input span { font-size: 11px; color: var(--col-muted); }
+        .export-menu input[type=number] {
+            background: var(--col-card2); border: 1px solid var(--col-border);
+            border-radius: 6px; color: var(--col-fg); font-family: 'Space Grotesk',sans-serif;
+            font-size: 13px; padding: 6px 8px; width: 100%; box-sizing: border-box;
+        }
+        .export-menu input[type=number]:focus { outline: none; border-color: var(--col-accent); }
+        .export-menu .btn-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .export-menu .embed-code { display: none; margin-top: 12px; }
+        .export-menu .embed-code.visible { display: block; }
+        .export-menu textarea {
+            width: 100%; height: 110px; background: var(--col-card2);
+            border: 1px solid var(--col-border); border-radius: 6px;
+            color: var(--col-fg); font-family: monospace; font-size: 10px;
+            padding: 8px; resize: vertical; box-sizing: border-box; word-break: break-all;
+        }
+        .export-menu .close-export { width: 100%; margin-top: 8px; }
+
+        /* ── Embed mode: hide all UI ── */
+        body.embed-mode .sidebar,
+        body.embed-mode .zoom-bar { display: none !important; }
+        body.embed-mode #canvas-wrap { flex: 1; }
+        body.embed-mode #hexCanvas { cursor: pointer; }
     </style>
 </head>
 
@@ -551,8 +631,11 @@
 
     <aside class="sidebar">
         <div class="sb-header">
-            <h2>Hex Tiles</h2>
-            <p>Infinite tiled canvas with per-tile rotation</p>
+            <div class="title-wrap">
+                <h2>Hex Tiles</h2>
+                <p>Infinite tiled canvas with per-tile rotation</p>
+            </div>
+            <button class="export-btn" id="exportBtn" title="Export"><i class="fas fa-file-export"></i></button>
         </div>
 
         <div class="sb-section">
@@ -614,15 +697,18 @@
         </div>
 
         <div class="sb-section">
-            <label>Texture</label>
+            <label>Texture & Tiles</label>
             <div class="upload-zone" id="uploadZone">
                 <i class="fas fa-cloud-upload-alt"></i>
                 <p>Click or drop an image</p>
                 <div class="filename" id="fileName"></div>
             </div>
             <input type="file" id="fileInput" accept="image/*" />
-            <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i
-                class="fas fa-image"></i> Reset Texture</button>
+            <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i class="fas fa-image"></i> Reset Texture</button>
+            <div class="btn-row" style="margin-top: 8px;">
+                <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset rotation</button>
+            </div>
+            <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%; margin-top: 8px;"><i class="fas fa-compass"></i> Randomize angles</button>
         </div>
 
         <div class="sb-section editor" id="editorPanel">
@@ -660,7 +746,7 @@
             </div>
         </div>
 
-        <div class="sb-section" style="border-bottom:none">
+        <!-- <div class="sb-section" style="border-bottom:none">
             <label>Tiles</label>
             <div class="btn-row" style="margin-bottom: 8px;">
                 <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset
@@ -668,9 +754,42 @@
             </div>
             <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%"><i class="fas fa-compass"></i> Randomize
             angles</button>
-        </div>
+        </div> -->
 
     </aside>
+
+    <div class="export-overlay" id="exportOverlay">
+        <div class="export-backdrop" id="exportBackdrop"></div>
+        <div class="export-frame" id="exportFrame">
+            <div class="handle tl" data-h="tl"></div>
+            <div class="handle tr" data-h="tr"></div>
+            <div class="handle bl" data-h="bl"></div>
+            <div class="handle br" data-h="br"></div>
+        </div>
+        <div class="export-menu" id="exportMenu">
+            <label>Export Size</label>
+            <div class="size-row">
+                <div class="size-input">
+                    <span>Width (px)</span>
+                    <input type="number" id="exportW" value="800" min="50" max="8000" />
+                </div>
+                <div class="size-input">
+                    <span>Height (px)</span>
+                    <input type="number" id="exportH" value="600" min="50" max="8000" />
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-accent" id="exportPngBtn" style="flex:1"><i class="fas fa-image"></i> PNG</button>
+                <button class="btn btn-ghost" id="exportEmbedBtn" style="flex:1"><i class="fas fa-code"></i> Embed</button>
+            </div>
+            <div class="embed-code" id="embedCodeWrap">
+                <label>Embed Code</label>
+                <textarea id="embedCode" readonly></textarea>
+                <button class="btn btn-ghost" id="copyEmbedBtn" style="width:100%; margin-top:6px;"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <button class="btn btn-ghost close-export" id="closeExportBtn">Close</button>
+        </div>
+    </div>
 
     <div class="toast" id="toast"></div>
 
@@ -738,7 +857,16 @@
         //  APPLICATION
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         (() => {
-            // ──── Constants ────
+            // ──── Embed mode detection ────
+            const embedMatch = location.hash.match(/^#embed=(.+)$/);
+            const isEmbedMode = !!embedMatch;
+            let embedData = null;
+            if (isEmbedMode) {
+                try { embedData = JSON.parse(decodeURIComponent(escape(atob(embedMatch[1])))); }
+                catch(e) { console.error('Embed parse error', e); isEmbedMode = false; }
+            }
+            if (isEmbedMode) document.body.classList.add('embed-mode');
+
             const HEX_R = 62;
             const SQRT3 = Math.sqrt(3);
             const MIN_Z = 0.25;
@@ -844,9 +972,23 @@
                 addMarkerBtn: document.getElementById('addMarkerBtn'),
                 curveList: document.getElementById('curveList'),
                 addCurveBtn: document.getElementById('addCurveBtn'),
+
+                exportBtn: document.getElementById('exportBtn'),
+                exportOverlay: document.getElementById('exportOverlay'),
+                exportFrame: document.getElementById('exportFrame'),
+                exportMenu: document.getElementById('exportMenu'),
+                exportBackdrop: document.getElementById('exportBackdrop'),
+                exportW: document.getElementById('exportW'),
+                exportH: document.getElementById('exportH'),
+                exportPngBtn: document.getElementById('exportPngBtn'),
+                exportEmbedBtn: document.getElementById('exportEmbedBtn'),
+                embedCodeWrap: document.getElementById('embedCodeWrap'),
+                embedCode: document.getElementById('embedCode'),
+                copyEmbedBtn: document.getElementById('copyEmbedBtn'),
+                closeExportBtn: document.getElementById('closeExportBtn'),
             };
 
-            const ctx = dom.cvs.getContext('2d');
+            let ctx = dom.cvs.getContext('2d');
 
             // ──── helpers ────
             function hexKey(q, r) { return (q << 16) ^ r; }
@@ -1631,7 +1773,8 @@
                 ctx.restore();
             }
 
-            // ──── Check if all visible edges have the same color ────
+            // ──── Check if 95% of drawn segments are of the same color ────
+            let lastSolvedState = false;
             function checkIfSolved() {
                 // 1. Only check if there is more than 1 curve color in the menu
                 if (curveColors.length <= 1) return;
@@ -1650,32 +1793,53 @@
                 const hexes = visibleHexes(zoom, panX, panY, W, H);
                 if (hexes.length === 0) return;
                 
-                const colorSet = new Set();
-                let allCovered = true;
-                
+                // Use a Set to ensure each shared edge segment is only counted once
+                const visibleEdges = new Set();
                 for (const h of hexes) {
                     for (let e = 0; e < 6; e++) {
-                        const id = edgeID(h.q, h.r, e);
-                        if (curveMap.has(id)) {
-                            const curveID = curveMap.get(id);
-                            const curve = curves.get(curveID);
-                            if (curve) {
-                                // Resolve the actual color string (handles both index and hex string)
-                                let c = curve.color;
-                                if (typeof c === 'number') c = curveColors[c % curveColors.length];
-                                colorSet.add(c.toLowerCase());
-                            } else {
-                                allCovered = false;
+                        visibleEdges.add(edgeID(h.q, h.r, e));
+                    }
+                }
+                
+                let totalColored = 0;
+                const colorCounts = {};
+                let maxColorCount = 0;
+
+                for (const id of visibleEdges) {
+                    if (curveMap.has(id)) {
+                        const curveID = curveMap.get(id);
+                        const curve = curves.get(curveID);
+                        if (curve) {
+                            let c = curve.color;
+                            if (typeof c === 'number') c = curveColors[c % curveColors.length];
+                            c = c.toLowerCase();
+                            
+                            totalColored++;
+                            colorCounts[c] = (colorCounts[c] || 0) + 1;
+                            if (colorCounts[c] > maxColorCount) {
+                                maxColorCount = colorCounts[c];
                             }
-                        } else {
-                            allCovered = false;
                         }
                     }
                 }
                 
-                // 3. If every edge is covered and they all share the exact same color
-                if (allCovered && colorSet.size === 1) {
-                    console.log("Curve solved");
+                // 3. If at least 95% of the drawn segments share the same color
+                let isSolved = false;
+                if (totalColored > 0) {
+                    isSolved = (maxColorCount / totalColored) >= 0.95;
+                }
+                
+                if (isSolved) {
+                    console.log("Curve solved (95% threshold reached)");
+                }
+
+                // 4. Notify parent window if state changed and we are in embed mode
+                if (isEmbedMode && isSolved !== lastSolvedState) {
+                    lastSolvedState = isSolved;
+                    window.parent.postMessage({ 
+                        type: 'HEX_CURVE_SOLVED', 
+                        solved: isSolved 
+                    }, '*'); 
                 }
             }
 
@@ -1800,6 +1964,7 @@
             }
 
             dom.cvs.addEventListener('wheel', e => {
+                if (isEmbedMode) return;
                 e.preventDefault();
                 const r = dom.cvs.getBoundingClientRect();
                 setZoom(zoom * (e.deltaY > 0 ? 0.88 : 1.12), e.clientX - r.left, e.clientY - r.top);
@@ -1807,6 +1972,11 @@
             }, { passive: false });
 
             dom.cvs.addEventListener('mousedown', e => {
+                if (isEmbedMode) {
+                    isDrag = true; dragMoved = false;
+                    dragSX = e.clientX; dragSY = e.clientY;
+                    return;
+                }
                 const r = dom.cvs.getBoundingClientRect();
                 const mx = e.clientX - r.left;
                 const my = e.clientY - r.top;
@@ -1859,13 +2029,9 @@
                 updateHoverInfo();
 
                 if (isDrag) {
-                    const dx = e.clientX - dragSX,
-                        dy = e.clientY - dragSY;
-                    if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
-                        if (!dragMoved) dragMoved = true;
-                    }
-                    panX = dragPX + dx;
-                    panY = dragPY + dy;
+                    const dx = e.clientX - dragSX, dy = e.clientY - dragSY;
+                    if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
+                    if (!isEmbedMode) { panX = dragPX + dx; panY = dragPY + dy; }
                 }
             });
 
@@ -1918,11 +2084,11 @@
 
             dom.zoomIn.onclick = () => {
                 setZoom(zoom * 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
-                checkIfSolved();                          // ← ADD THIS
+                checkIfSolved();
             };
             dom.zoomOut.onclick = () => {
                 setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
-                checkIfSolved();                          // ← ADD THIS
+                checkIfSolved();
             };
             dom.resetView.onclick = () => {
                 zoom = 1;
@@ -1933,13 +2099,14 @@
             };
 
             window.addEventListener('keydown', e => {
+                if (isEmbedMode) return;
                 if (e.key === '=' || e.key === '+') {
                     setZoom(zoom * 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
-                    checkIfSolved();                      // ← ADD THIS
+                    checkIfSolved();
                 }
                 if (e.key === '-') {
                     setZoom(zoom / 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
-                    checkIfSolved();                      // ← ADD THIS
+                    checkIfSolved();
                 }
             });
 
@@ -2236,8 +2403,339 @@
                 checkIfSolved();
             };
 
-            resize();
-            render();
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  EXPORT & EMBED
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function decodeHexKey(k) {
+                const ku = k >>> 0, qu = ku >>> 16, ru = ku & 0xFFFF;
+                const r = (ru & 0x8000) ? (ru | 0xFFFF0000) | 0 : ru;
+                const qVal = (ru & 0x8000) ? ((qu ^ 0xFFFF) & 0xFFFF) : qu;
+                const q = (qVal & 0x8000) ? (qVal | 0xFFFF0000) | 0 : qVal;
+                return { q, r };
+            }
+
+            function serializeRotOverrides() {
+                const out = [];
+                for (const [k, rot] of rotOverrides.entries()) {
+                    const { q, r } = decodeHexKey(k);
+                    out.push([q, r, rot]);
+                }
+                return out;
+            }
+
+            function getTextureDataUrl() {
+                if (!texImg) return null;
+                try {
+                    const c = document.createElement('canvas');
+                    c.width = texImg.naturalWidth || texImg.width;
+                    c.height = texImg.naturalHeight || texImg.height;
+                    c.getContext('2d').drawImage(texImg, 0, 0);
+                    return c.toDataURL('image/png');
+                } catch (e) { return null; }
+            }
+
+            // ── Frame state ──
+            let efRect = { x: 0, y: 0, w: 0, h: 0 };
+            let efDrag = null;
+
+            function openExportOverlay() {
+                const cr = dom.cvs.getBoundingClientRect();
+                const fw = cr.width * 0.6, fh = cr.height * 0.6;
+                efRect = { x: cr.left + (cr.width - fw) / 2, y: cr.top + (cr.height - fh) / 2, w: fw, h: fh };
+                dom.exportOverlay.classList.add('active');
+                updateExportFrameDOM();
+                syncExportSizeFromFrame();
+            }
+
+            function closeExportOverlay() {
+                dom.exportOverlay.classList.remove('active');
+                dom.embedCodeWrap.classList.remove('visible');
+            }
+
+            function updateExportFrameDOM() {
+                const f = dom.exportFrame;
+                f.style.left = efRect.x + 'px';
+                f.style.top = efRect.y + 'px';
+                f.style.width = efRect.w + 'px';
+                f.style.height = efRect.h + 'px';
+                const cr = dom.cvs.getBoundingClientRect();
+                let mx = efRect.x + efRect.w + 16;
+                let my = efRect.y;
+                if (mx + 280 > window.innerWidth) mx = efRect.x - 296;
+                if (mx < 0) mx = efRect.x + 16;
+                if (my + 300 > window.innerHeight) my = window.innerHeight - 310;
+                if (my < 0) my = 16;
+                dom.exportMenu.style.left = mx + 'px';
+                dom.exportMenu.style.top = my + 'px';
+            }
+
+            function clampFrameToCanvas() {
+                const cr = dom.cvs.getBoundingClientRect();
+                efRect.x = Math.max(cr.left, Math.min(efRect.x, cr.left + cr.width - 80));
+                efRect.y = Math.max(cr.top, Math.min(efRect.y, cr.top + cr.height - 80));
+                efRect.w = Math.max(50, Math.min(efRect.w, cr.left + cr.width - efRect.x));
+                efRect.h = Math.max(50, Math.min(efRect.h, cr.top + cr.height - efRect.y));
+            }
+
+            function syncExportSizeFromFrame() {
+                const ratio = efRect.h / efRect.w;
+                const curW = parseInt(dom.exportW.value) || 800;
+                dom.exportH.value = Math.round(curW * ratio);
+            }
+
+            dom.exportBtn.onclick = openExportOverlay;
+            dom.closeExportBtn.onclick = closeExportOverlay;
+            dom.exportBackdrop.onclick = closeExportOverlay;
+
+            // ── Frame dragging ──
+            dom.exportFrame.addEventListener('mousedown', e => {
+                const h = e.target.dataset.h;
+                if (h) {
+                    efDrag = { mode: h, mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y, w: efRect.w, h: efRect.h };
+                } else {
+                    efDrag = { mode: 'move', mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y };
+                }
+                e.preventDefault();
+            });
+
+            window.addEventListener('mousemove', e => {
+                if (!efDrag) return;
+                const dx = e.clientX - efDrag.mx, dy = e.clientY - efDrag.my;
+                const cr = dom.cvs.getBoundingClientRect();
+                if (efDrag.mode === 'move') {
+                    efRect.x = efDrag.x + dx;
+                    efRect.y = efDrag.y + dy;
+                } else if (efDrag.mode === 'br') {
+                    efRect.w = Math.max(50, efDrag.w + dx);
+                    efRect.h = Math.max(50, efDrag.h + dy);
+                } else if (efDrag.mode === 'tr') {
+                    efRect.w = Math.max(50, efDrag.w + dx);
+                    efRect.y = efDrag.y + dy;
+                    efRect.h = Math.max(50, efDrag.h - dy);
+                } else if (efDrag.mode === 'bl') {
+                    efRect.x = efDrag.x + dx;
+                    efRect.w = Math.max(50, efDrag.w - dx);
+                    efRect.h = Math.max(50, efDrag.h + dy);
+                } else if (efDrag.mode === 'tl') {
+                    efRect.x = efDrag.x + dx;
+                    efRect.y = efDrag.y + dy;
+                    efRect.w = Math.max(50, efDrag.w - dx);
+                    efRect.h = Math.max(50, efDrag.h - dy);
+                }
+                clampFrameToCanvas();
+                updateExportFrameDOM();
+                syncExportSizeFromFrame();
+            });
+
+            window.addEventListener('mouseup', () => { efDrag = null; });
+
+            // ── Interlocked width/height ──
+            dom.exportW.addEventListener('input', () => {
+                const ratio = efRect.h / efRect.w;
+                const w = parseInt(dom.exportW.value) || 50;
+                dom.exportH.value = Math.round(w * ratio);
+            });
+            dom.exportH.addEventListener('input', () => {
+                const ratio = efRect.w / efRect.h;
+                const h = parseInt(dom.exportH.value) || 50;
+                dom.exportW.value = Math.round(h * ratio);
+            });
+
+            // ── Render to offscreen canvas ──
+            function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
+                offCanvas.width = eW;
+                offCanvas.height = eH;
+                const offCtx = offCanvas.getContext('2d');
+                const scale = eW / fw;
+                const eZoom = zoom * scale;
+                const ePanX = (panX - fx) * scale;
+                const ePanY = (panY - fy) * (eH / fh);
+
+                // Ensure all curves computed
+                if (curveColors.length > 1) {
+                    let safety = 2000;
+                    while (safety-- > 0) { processQueue(); if (queue.length === 0) { if (!findNextUncoloredTile()) break; } }
+                }
+
+                const oldCtx = ctx;
+                ctx = offCtx;
+
+                // Background
+                offCtx.fillStyle = COLORS.bg;
+                offCtx.fillRect(0, 0, eW, eH);
+
+                // IDW Gradient
+                drawIDWGradient(eW, eH);
+
+                // Dot pattern
+                offCtx.fillStyle = COLORS.dotPattern;
+                const ds = 40 * scale;
+                const oxm = ((ePanX % ds) + ds) % ds;
+                const oym = ((ePanY % ds) + ds) % ds;
+                for (let dx = oxm; dx < eW; dx += ds)
+                    for (let dy = oym; dy < eH; dy += ds)
+                        offCtx.fillRect(dx, dy, 1, 1);
+
+                // Hex tiles
+                const eSz = HEX_R * eZoom;
+                const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+                for (const h of hexes) {
+                    const rot = tileRot(h.q, h.r);
+                    drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r);
+                }
+
+                // Markers
+                if (markersVisible) {
+                    for (const m of gradientMarkers) {
+                        const mx = (m.x - fx) * scale;
+                        const my = (m.y - fy) * (eH / fh);
+                        const outline = getContrastColor(m.color);
+                        offCtx.save();
+                        offCtx.beginPath();
+                        const r = 30 * scale, hh = r * SQRT3 / 2;
+                        offCtx.moveTo(mx, my - r);
+                        offCtx.lineTo(mx + hh, my + r / 2);
+                        offCtx.lineTo(mx - hh, my + r / 2);
+                        offCtx.closePath();
+                        offCtx.fillStyle = m.color;
+                        offCtx.fill();
+                        offCtx.strokeStyle = outline;
+                        offCtx.lineWidth = 7 * scale;
+                        offCtx.stroke();
+                        offCtx.restore();
+                    }
+                }
+
+                ctx = oldCtx;
+                return offCanvas;
+            }
+
+            // ── PNG export ──
+            dom.exportPngBtn.onclick = () => {
+                const cr = dom.cvs.getBoundingClientRect();
+                const fx = efRect.x - cr.left;
+                const fy = efRect.y - cr.top;
+                const eW = parseInt(dom.exportW.value) || 800;
+                const eH = parseInt(dom.exportH.value) || 600;
+
+                const off = document.createElement('canvas');
+                renderToOffscreen(off, eW, eH, fx, fy, efRect.w, efRect.h);
+
+                off.toBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'hex-tiles-export.png';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast('PNG exported');
+                }, 'image/png');
+            };
+
+            // ── Embed code generation ──
+            dom.exportEmbedBtn.onclick = () => {
+                const cr = dom.cvs.getBoundingClientRect();
+                const fx = efRect.x - cr.left;
+                const fy = efRect.y - cr.top;
+                const eW = parseInt(dom.exportW.value) || 800;
+                const eH = parseInt(dom.exportH.value) || 600;
+                const scale = eW / efRect.w;
+                const eZoom = zoom * scale;
+                const ePanX = (panX - fx) * scale;
+                const ePanY = (panY - fy) * (eH / efRect.h);
+
+                const eMarkers = gradientMarkers.map(m => ({
+                    x: (m.x - fx) * scale,
+                    y: (m.y - fy) * (eH / efRect.h),
+                    color: m.color
+                }));
+
+                const data = {
+                    w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
+                    showGrid, showUnrenderedDotted, markersVisible,
+                    rotMode, randomSeed,
+                    texTf: { ...texTf },
+                    curveColors: [...curveColors],
+                    markers: eMarkers,
+                    rotOverrides: serializeRotOverrides(),
+                    texture: getTextureDataUrl()
+                };
+
+                let encoded;
+                try {
+                    encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+                } catch (e) {
+                    toast('Too much data to encode');
+                    return;
+                }
+
+                if (encoded.length > 1000000) {
+                    toast('Warning: embed data is very large (>1MB)');
+                }
+
+                const baseUrl = location.href.split('#')[0];
+                const iframe = `<iframe src="${baseUrl}#embed=${encoded}" width="${eW}" height="${eH}" frameborder="0" style="border:none;width:${eW}px;height:${eH}px;"></iframe>`;
+
+                dom.embedCode.value = iframe;
+                dom.embedCodeWrap.classList.add('visible');
+                toast('Embed code generated');
+            };
+
+            // ── Copy embed code ──
+            dom.copyEmbedBtn.onclick = () => {
+                dom.embedCode.select();
+                document.execCommand('copy');
+                toast('Copied to clipboard');
+            };
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  INITIALIZATION
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            if (isEmbedMode && embedData) {
+                // ── Embed mode: load state from data ──
+                zoom = embedData.zoom;
+                panX = embedData.panX;
+                panY = embedData.panY;
+                showGrid = embedData.showGrid;
+                showUnrenderedDotted = embedData.showUnrenderedDotted;
+                markersVisible = embedData.markersVisible;
+                rotMode = embedData.rotMode || 'hash';
+                randomSeed = embedData.randomSeed || 0;
+                texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+                curveColors = embedData.curveColors && embedData.curveColors.length > 0
+                    ? [...embedData.curveColors] : [COLORS.curves[0]];
+                gradientMarkers = (embedData.markers || []).map(m => ({ ...m }));
+
+                if (embedData.rotOverrides) {
+                    for (const [q, r, rot] of embedData.rotOverrides) {
+                        rotOverrides.set(hexKey(q, r), rot);
+                    }
+                }
+
+                function startEmbedRender() {
+                    dom.cvs.width = embedData.w;
+                    dom.cvs.height = embedData.h;
+                    isInitialized = true;
+                    curveMap.clear(); curves.clear(); queue = [];
+                    initializeCentralTile();
+                    render();
+                }
+
+                if (embedData.texture) {
+                    const img = new Image();
+                    img.onload = () => { texImg = img; startEmbedRender(); };
+                    img.onerror = () => { startEmbedRender(); };
+                    img.src = embedData.texture;
+                } else {
+                    startEmbedRender();
+                }
+            } else {
+                // ── Normal mode ──
+                resize();
+                render();
+            }
         })();
     </script>
 </body>
