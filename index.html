@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hexagonal Tiles</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet" />
+    rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <style>
         * {
@@ -598,7 +598,7 @@
                 <button class="icon-btn" id="addMarkerBtn" title="Add Marker"><i class="fas fa-plus"></i></button>
                 <label>Color Gradient</label>
                 <button class="icon-btn" id="randGradColorsBtn" title="Randomize Gradient Colors"><i
-                        class="fas fa-dice"></i></button>
+                    class="fas fa-dice"></i></button>
             </div>
             <div id="gradientList" class="grad-list"></div>
         </div>
@@ -608,7 +608,7 @@
                 <button class="icon-btn" id="addCurveBtn" title="Add Color"><i class="fas fa-plus"></i></button>
                 <label>Curve Colors</label>
                 <button class="icon-btn" id="randLineColorsBtn" title="Randomize Line Colors"><i
-                        class="fas fa-dice"></i></button>
+                    class="fas fa-dice"></i></button>
             </div>
             <div id="curveList" class="grad-list"></div>
         </div>
@@ -622,7 +622,7 @@
             </div>
             <input type="file" id="fileInput" accept="image/*" />
             <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i
-                    class="fas fa-image"></i> Reset Texture</button>
+                class="fas fa-image"></i> Reset Texture</button>
         </div>
 
         <div class="sb-section editor" id="editorPanel">
@@ -664,10 +664,10 @@
             <label>Tiles</label>
             <div class="btn-row" style="margin-bottom: 8px;">
                 <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset
-                    rotation</button>
+                rotation</button>
             </div>
             <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%"><i class="fas fa-compass"></i> Randomize
-                angles</button>
+            angles</button>
         </div>
 
     </aside>
@@ -693,7 +693,6 @@
                 '#3C3C3C', '#B8850A', '#006374'
             ],
 
-
             // ── Theme ──
             bg: '#13132a',
             fg: '#e6e6f0',
@@ -702,7 +701,7 @@
             accentDim: '#e07a5f26',
             card: '#13132a',
             card2: '#13132a',
-            border: '#13132a',
+            border: '#6e6e90',
             gridLine: '#6e6e90',
             shadowColor: '#e07a5f66',
             hoverStroke: '#13132a',
@@ -1095,7 +1094,7 @@
                     if (!curveMap.has(id)) continue;
                     let curveID = curveMap.get(id);
                     let curve = curves.get(curveID);
-                    if (!curve || curve.locked) continue;
+                    if (!curve) continue;
                     let k = (tileRot(item.q, item.r) / 60) % 6;
                     let pe = getOtherEdge(k, item.e);
                     let pid = edgeID(item.q, item.r, pe);
@@ -1487,7 +1486,7 @@
 
                 curveColors.forEach((m, i) => {
                     const item = document.createElement('div');
-                    item.className = 'grad-item' + (i === activeCurveIndex ? ' active' : '');
+                    item.className = 'grad-item';
 
                     const colorInput = document.createElement('input');
                     colorInput.type = 'color';
@@ -1571,7 +1570,7 @@
             }
 
             // ──── drawTile ────
-            function drawTile(cx, cy, sz, rot, isHover, grid, img, tf, hq, hr) {
+            function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr) {
                 const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
                 traceHexPath(ctx, cx, cy, rSz);
@@ -1611,20 +1610,72 @@
 
                 ctx.restore();
 
-                if (isHover) {
-                    ctx.save();
-                    ctx.shadowColor = COLORS.shadowColor;
-                    ctx.shadowBlur = 20;
-                    traceHexPath(ctx, cx, cy, rSz);
-                    ctx.strokeStyle = COLORS.hoverStroke;
-                    ctx.lineWidth = 4;
-                    ctx.stroke();
-                    ctx.restore();
-                } else if (grid) {
+                if (grid) {
                     traceHexPath(ctx, cx, cy, rSz);
                     ctx.strokeStyle = COLORS.gridLine;
                     ctx.lineWidth = 1;
                     ctx.stroke();
+                }
+            }
+
+            // ──── draw hover stroke on top ────
+            function drawHoverStroke(cx, cy, sz, grid) {
+                const rSz = grid ? sz * 0.95 : sz;
+                ctx.save();
+                ctx.shadowColor = COLORS.shadowColor;
+                ctx.shadowBlur = 20;
+                traceHexPath(ctx, cx, cy, rSz);
+                ctx.strokeStyle = COLORS.hoverStroke;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // ──── Check if all visible edges have the same color ────
+            function checkIfSolved() {
+                // 1. Only check if there is more than 1 curve color in the menu
+                if (curveColors.length <= 1) return;
+
+                // 2. Drain queue so all visible edges are assigned before checking
+                let safety = 1000;
+                while (safety-- > 0) {
+                    processQueue();
+                    if (queue.length === 0) {
+                        if (!findNextUncoloredTile()) break;
+                    }
+                }
+
+                const W = dom.cvs.width,
+                    H = dom.cvs.height;
+                const hexes = visibleHexes(zoom, panX, panY, W, H);
+                if (hexes.length === 0) return;
+                
+                const colorSet = new Set();
+                let allCovered = true;
+                
+                for (const h of hexes) {
+                    for (let e = 0; e < 6; e++) {
+                        const id = edgeID(h.q, h.r, e);
+                        if (curveMap.has(id)) {
+                            const curveID = curveMap.get(id);
+                            const curve = curves.get(curveID);
+                            if (curve) {
+                                // Resolve the actual color string (handles both index and hex string)
+                                let c = curve.color;
+                                if (typeof c === 'number') c = curveColors[c % curveColors.length];
+                                colorSet.add(c.toLowerCase());
+                            } else {
+                                allCovered = false;
+                            }
+                        } else {
+                            allCovered = false;
+                        }
+                    }
+                }
+                
+                // 3. If every edge is covered and they all share the exact same color
+                if (allCovered && colorSet.size === 1) {
+                    console.log("Curve solved");
                 }
             }
 
@@ -1667,10 +1718,20 @@
                     else if (findNextUncoloredTile()) processQueue();
                 }
 
+                // ── First pass: draw all tiles (no hover stroke) ──
                 for (const h of hexes) {
-                    const isHover = (h.q === hoveredQ && h.r === hoveredR);
                     const rot = displayRot(h.q, h.r, now);
-                    drawTile(h.x, h.y, sz, rot, isHover && lod >= 1, grid, img, tf, h.q, h.r);
+                    drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r);
+                }
+
+                // ── Second pass: draw hover stroke on top ──
+                if (lod >= 1 && hoveredQ !== null && hoveredR !== null) {
+                    for (const h of hexes) {
+                        if (h.q === hoveredQ && h.r === hoveredR) {
+                            drawHoverStroke(h.x, h.y, sz, grid);
+                            break;
+                        }
+                    }
                 }
 
                 if (markersVisible) {
@@ -1742,6 +1803,7 @@
                 e.preventDefault();
                 const r = dom.cvs.getBoundingClientRect();
                 setZoom(zoom * (e.deltaY > 0 ? 0.88 : 1.12), e.clientX - r.left, e.clientY - r.top);
+                checkIfSolved();
             }, { passive: false });
 
             dom.cvs.addEventListener('mousedown', e => {
@@ -1813,8 +1875,15 @@
                     draggedMarkerIndex = -1;
                     return;
                 }
-                if (isDrag && !dragMoved) handleClick(e);
-                isDrag = false;
+                if (isDrag) {
+                    if (!dragMoved) {
+                        handleClick(e);
+                    } else {
+                        // Pan release – check if we've solved the curve
+                        checkIfSolved();
+                    }
+                    isDrag = false;
+                }
             });
 
             function handleClick(e) {
@@ -1831,6 +1900,8 @@
                 const target = curDisplay + ROT_STEP;
                 animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
                 updateLocalCurves(h.q, h.r);
+                // After rotation, check if solved
+                checkIfSolved();
             }
 
             function updateHoverInfo() {
@@ -1845,23 +1916,36 @@
                 }
             }
 
-            dom.zoomIn.onclick = () => setZoom(zoom * 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
-            dom.zoomOut.onclick = () => setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
+            dom.zoomIn.onclick = () => {
+                setZoom(zoom * 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
+                checkIfSolved();                          // ← ADD THIS
+            };
+            dom.zoomOut.onclick = () => {
+                setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
+                checkIfSolved();                          // ← ADD THIS
+            };
             dom.resetView.onclick = () => {
                 zoom = 1;
                 panX = dom.cvs.width / 2;
                 panY = dom.cvs.height / 2;
                 dom.zoomLabel.textContent = '100%';
+                checkIfSolved();
             };
 
             window.addEventListener('keydown', e => {
-                if (e.key === '=' || e.key === '+') setZoom(zoom * 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
-                if (e.key === '-') setZoom(zoom / 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
+                if (e.key === '=' || e.key === '+') {
+                    setZoom(zoom * 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
+                    checkIfSolved();                      // ← ADD THIS
+                }
+                if (e.key === '-') {
+                    setZoom(zoom / 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
+                    checkIfSolved();                      // ← ADD THIS
+                }
             });
 
-            dom.gridToggle.addEventListener('change', function () { showGrid = this.checked; });
-            dom.unrenderedToggle.addEventListener('change', function () { showUnrenderedDotted = this.checked; });
-            dom.markersToggle.addEventListener('change', function () { markersVisible = this.checked; });
+            dom.gridToggle.addEventListener('change', function() { showGrid = this.checked; });
+            dom.unrenderedToggle.addEventListener('change', function() { showUnrenderedDotted = this.checked; });
+            dom.markersToggle.addEventListener('change', function() { markersVisible = this.checked; });
 
             function bulkAnimate(newMode, newSeed) {
                 const now = Date.now();
@@ -1886,6 +1970,8 @@
                 curves.clear();
                 queue = [];
                 initializeCentralTile();
+                // After randomization, check if solved
+                checkIfSolved();
             }
 
             dom.randAnglesBtn.onclick = () => {
@@ -1901,6 +1987,8 @@
                 }
                 renderCurveList();
                 toast('Line colors randomized');
+                // Changing colors doesn't alter the curve topology, but we can check anyway
+                checkIfSolved();
             };
 
             dom.randGradColorsBtn.onclick = () => {
@@ -1947,8 +2035,12 @@
 
             function readSliders() {
                 return {
-                    rot: +dom.sRot.value, scale: +dom.sScale.value, sx: +dom.sSX.value, sy: +dom.sSY.value,
-                    ox: +dom.sOX.value, oy: +dom.sOY.value
+                    rot: +dom.sRot.value,
+                    scale: +dom.sScale.value,
+                    sx: +dom.sSX.value,
+                    sy: +dom.sSY.value,
+                    ox: +dom.sOX.value,
+                    oy: +dom.sOY.value
                 };
             }
 
@@ -2140,6 +2232,8 @@
                 curves.clear();
                 queue = [];
                 initializeCentralTile();
+                // After adding a new color, the topology doesn't change, but we still check
+                checkIfSolved();
             };
 
             resize();
