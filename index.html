@@ -2,53 +2,41 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hexagonal Tiles</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+        rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <style>
-        :root {
-            --bg: #0b0b1a;
-            --fg: #e6e6f0;
-            --muted: #6e6e90;
-            --accent: #e07a5f;
-            --accent-dim: #e07a5f26;
-            --card: #13132a;
-            --card2: #1a1a38;
-            --border: #28284a;
-            --sidebar-w: 310px;
-        }
-
         * {
             margin: 0;
             padding: 0;
-            box-sizing: border-box
+            box-sizing: border-box;
         }
 
         body {
             font-family: 'Space Grotesk', sans-serif;
-            background: var(--bg);
-            color: var(--fg);
+            background: var(--col-bg);
+            color: var(--col-fg);
             overflow: hidden;
             height: 100vh;
-            display: flex
+            display: flex;
         }
 
         #canvas-wrap {
             flex: 1;
             position: relative;
-            overflow: hidden
+            overflow: hidden;
         }
 
         #hexCanvas {
             display: block;
-            cursor: grab
+            cursor: grab;
         }
 
         #hexCanvas:active {
-            cursor: grabbing
+            cursor: grabbing;
         }
 
         .zoom-bar {
@@ -59,12 +47,12 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            background: var(--card);
-            border: 1px solid var(--border);
+            background: var(--col-card);
+            border: 1px solid var(--col-border);
             border-radius: 14px;
             padding: 6px 14px;
             backdrop-filter: blur(8px);
-            z-index: 10
+            z-index: 10;
         }
 
         .zoom-bar button {
@@ -72,20 +60,20 @@
             height: 36px;
             border: none;
             border-radius: 10px;
-            background: var(--card2);
-            color: var(--fg);
+            background: var(--col-card2);
+            color: var(--col-fg);
             font-size: 16px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all .2s
+            transition: all .2s;
         }
 
         .zoom-bar button:hover {
-            background: var(--accent);
+            background: var(--col-accent);
             color: #fff;
-            transform: scale(1.08)
+            transform: scale(1.08);
         }
 
         .zoom-bar .zlabel {
@@ -93,58 +81,58 @@
             font-weight: 600;
             min-width: 52px;
             text-align: center;
-            user-select: none
+            user-select: none;
         }
 
         .sidebar {
-            width: var(--sidebar-w);
-            background: var(--card);
-            border-left: 1px solid var(--border);
+            width: 310px;
+            background: var(--col-card);
+            border-left: 1px solid var(--col-border);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            overflow-x: hidden
+            overflow-x: hidden;
         }
 
         .sidebar::-webkit-scrollbar {
-            width: 5px
+            width: 5px;
         }
 
         .sidebar::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 4px
+            background: var(--col-border);
+            border-radius: 4px;
         }
 
         .sb-header {
             padding: 22px 20px 14px;
-            border-bottom: 1px solid var(--border)
+            border-bottom: 1px solid var(--col-border);
         }
 
         .sb-header h2 {
             font-size: 20px;
             font-weight: 700;
-            letter-spacing: -.5px
+            letter-spacing: -.5px;
         }
 
         .sb-header p {
             font-size: 12px;
-            color: var(--muted);
-            margin-top: 4px
+            color: var(--col-muted);
+            margin-top: 4px;
         }
 
         .sb-section {
             padding: 16px 20px;
-            border-bottom: 1px solid var(--border)
+            border-bottom: 1px solid var(--col-border);
         }
 
         .sb-section label {
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            color: var(--muted);
+            color: var(--col-muted);
             font-weight: 600;
             display: block;
-            margin-bottom: 10px
+            margin-bottom: 10px;
         }
 
         .section-header {
@@ -165,8 +153,8 @@
             height: 26px;
             border: none;
             border-radius: 6px;
-            background: var(--card2);
-            color: var(--accent);
+            background: var(--col-card2);
+            color: var(--col-accent);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -177,67 +165,67 @@
         }
 
         .icon-btn:hover {
-            background: var(--accent);
+            background: var(--col-accent);
             color: #fff;
         }
 
         .upload-zone {
-            border: 2px dashed var(--border);
+            border: 2px dashed var(--col-border);
             border-radius: 12px;
             padding: 22px 12px;
             text-align: center;
             cursor: pointer;
-            transition: all .25s
+            transition: all .25s;
         }
 
         .upload-zone:hover {
-            border-color: var(--accent);
-            background: var(--accent-dim)
+            border-color: var(--col-accent);
+            background: var(--col-accent-dim);
         }
 
         .upload-zone i {
             font-size: 26px;
-            color: var(--muted);
+            color: var(--col-muted);
             display: block;
-            margin-bottom: 6px
+            margin-bottom: 6px;
         }
 
         .upload-zone p {
             font-size: 12px;
-            color: var(--muted)
+            color: var(--col-muted);
         }
 
         .upload-zone .filename {
             font-size: 11px;
-            color: var(--accent);
+            color: var(--col-accent);
             margin-top: 6px;
-            word-break: break-all
+            word-break: break-all;
         }
 
         #fileInput {
-            display: none
+            display: none;
         }
 
         .editor {
             display: none;
             flex-direction: column;
             gap: 10px;
-            animation: fadeSlide .3s ease
+            animation: fadeSlide .3s ease;
         }
 
         .editor.open {
-            display: flex
+            display: flex;
         }
 
         @keyframes fadeSlide {
             from {
                 opacity: 0;
-                transform: translateY(8px)
+                transform: translateY(8px);
             }
 
             to {
                 opacity: 1;
-                transform: translateY(0)
+                transform: translateY(0);
             }
         }
 
@@ -245,46 +233,46 @@
             display: flex;
             justify-content: center;
             padding: 14px;
-            background: var(--bg);
-            border-radius: 12px
+            background: var(--col-bg);
+            border-radius: 12px;
         }
 
         #previewCanvas {
-            border-radius: 8px
+            border-radius: 8px;
         }
 
         .slider-row {
             display: flex;
             flex-direction: column;
-            gap: 3px
+            gap: 3px;
         }
 
         .slider-row .s-top {
             display: flex;
             justify-content: space-between;
-            align-items: center
+            align-items: center;
         }
 
         .slider-row .s-top span {
             font-size: 12px;
-            color: var(--muted)
+            color: var(--col-muted);
         }
 
         .slider-row .s-top .s-val {
             font-size: 12px;
-            color: var(--accent);
+            color: var(--col-accent);
             font-weight: 600;
             min-width: 40px;
-            text-align: right
+            text-align: right;
         }
 
         input[type=range] {
             -webkit-appearance: none;
             width: 100%;
             height: 5px;
-            background: var(--border);
+            background: var(--col-border);
             border-radius: 3px;
-            outline: none
+            outline: none;
         }
 
         input[type=range]::-webkit-slider-thumb {
@@ -292,22 +280,22 @@
             width: 15px;
             height: 15px;
             border-radius: 50%;
-            background: var(--accent);
+            background: var(--col-accent);
             cursor: pointer;
-            transition: transform .12s
+            transition: transform .12s;
         }
 
         input[type=range]::-webkit-slider-thumb:hover {
-            transform: scale(1.25)
+            transform: scale(1.25);
         }
 
         input[type=range]::-moz-range-thumb {
             width: 15px;
             height: 15px;
             border-radius: 50%;
-            background: var(--accent);
+            background: var(--col-accent);
             cursor: pointer;
-            border: none
+            border: none;
         }
 
         .btn {
@@ -322,103 +310,103 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px
+            gap: 6px;
         }
 
         .btn-accent {
-            background: var(--accent);
-            color: #fff
+            background: var(--col-accent);
+            color: #fff;
         }
 
         .btn-accent:hover {
             filter: brightness(1.15);
-            transform: translateY(-1px)
+            transform: translateY(-1px);
         }
 
         .btn-ghost {
-            background: var(--card2);
-            color: var(--fg);
-            border: 1px solid var(--border)
+            background: var(--col-card2);
+            color: var(--col-fg);
+            border: 1px solid var(--col-border);
         }
 
         .btn-ghost:hover {
-            border-color: var(--muted)
+            border-color: var(--col-muted);
         }
 
         .btn-row {
             display: flex;
-            gap: 8px
+            gap: 8px;
         }
 
         .btn-row .btn {
-            flex: 1
+            flex: 1;
         }
 
         .tile-info {
             padding: 12px 14px;
-            background: var(--bg);
+            background: var(--col-bg);
             border-radius: 10px;
             font-size: 11px;
-            color: var(--muted);
-            line-height: 1.7
+            color: var(--col-muted);
+            line-height: 1.7;
         }
 
         .tile-info strong {
-            color: var(--fg);
-            font-weight: 600
+            color: var(--col-fg);
+            font-weight: 600;
         }
 
         .hover-info {
             padding: 10px 14px;
-            background: var(--accent-dim);
-            border: 1px solid #e07a5f33;
+            background: var(--col-accent-dim);
+            border: 1px solid var(--col-hover-border);
             border-radius: 10px;
             font-size: 12px;
             line-height: 1.6;
-            display: none
+            display: none;
         }
 
         .hover-info.visible {
-            display: block
+            display: block;
         }
 
         .hover-info .hi-coord {
-            color: var(--accent);
-            font-weight: 600
+            color: var(--col-accent);
+            font-weight: 600;
         }
 
         .toggle-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px
+            gap: 10px;
         }
 
         .toggle-row span {
             font-size: 13px;
-            color: var(--fg)
+            color: var(--col-fg);
         }
 
         .switch {
             position: relative;
             width: 44px;
             height: 24px;
-            flex-shrink: 0
+            flex-shrink: 0;
         }
 
         .switch input {
             opacity: 0;
             width: 0;
-            height: 0
+            height: 0;
         }
 
         .switch .track {
             position: absolute;
             inset: 0;
-            background: var(--border);
+            background: var(--col-border);
             border-radius: 12px;
             cursor: pointer;
-            transition: background .25s
+            transition: background .25s;
         }
 
         .switch .track::after {
@@ -430,22 +418,22 @@
             height: 18px;
             background: #fff;
             border-radius: 50%;
-            transition: transform .25s
+            transition: transform .25s;
         }
 
         .switch input:checked+.track {
-            background: var(--accent)
+            background: var(--col-accent);
         }
 
         .switch input:checked+.track::after {
-            transform: translateX(20px)
+            transform: translateX(20px);
         }
 
         .grad-list {
             display: flex;
             flex-direction: column;
             gap: 6px;
-            margin-bottom: 10px
+            margin-bottom: 10px;
         }
 
         .grad-item {
@@ -453,16 +441,16 @@
             align-items: center;
             gap: 8px;
             padding: 6px 8px;
-            background: var(--bg);
+            background: var(--col-bg);
             border-radius: 8px;
             cursor: pointer;
             border: 1px solid transparent;
-            transition: border-color 0.2s
+            transition: border-color 0.2s;
         }
 
         .grad-item:hover,
         .grad-item.active {
-            border-color: var(--accent)
+            border-color: var(--col-accent);
         }
 
         .grad-item input[type="color"] {
@@ -473,23 +461,23 @@
             border-radius: 4px;
             cursor: pointer;
             background: none;
-            padding: 0
+            padding: 0;
         }
 
         .grad-item input[type="color"]::-webkit-color-swatch-wrapper {
-            padding: 0
+            padding: 0;
         }
 
         .grad-item input[type="color"]::-webkit-color-swatch {
-            border: 1px solid var(--border);
-            border-radius: 4px
+            border: 1px solid var(--col-border);
+            border-radius: 4px;
         }
 
         .hex-input {
-            background: var(--card2);
-            border: 1px solid var(--border);
+            background: var(--col-card2);
+            border: 1px solid var(--col-border);
             border-radius: 4px;
-            color: var(--fg);
+            color: var(--col-fg);
             font-family: 'Space Grotesk', sans-serif;
             font-size: 12px;
             padding: 4px 6px;
@@ -500,7 +488,7 @@
 
         .hex-input:focus {
             outline: none;
-            border-color: var(--accent);
+            border-color: var(--col-accent);
         }
 
         .grad-remove-btn {
@@ -509,7 +497,7 @@
             border: none;
             border-radius: 6px;
             background: transparent;
-            color: var(--muted);
+            color: var(--col-muted);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -517,12 +505,12 @@
             font-size: 11px;
             transition: all .2s;
             flex-shrink: 0;
-            padding: 0
+            padding: 0;
         }
 
         .grad-remove-btn:hover {
-            background: #e07a5f33;
-            color: var(--accent)
+            background: var(--col-accent-dim);
+            color: var(--col-accent);
         }
 
         .toast {
@@ -530,9 +518,9 @@
             bottom: 24px;
             left: 50%;
             transform: translateX(-50%) translateY(80px);
-            background: var(--card2);
-            border: 1px solid var(--accent);
-            color: var(--fg);
+            background: var(--col-card2);
+            border: 1px solid var(--col-accent);
+            color: var(--col-fg);
             padding: 10px 22px;
             border-radius: 12px;
             font-size: 13px;
@@ -540,11 +528,11 @@
             z-index: 1000;
             transition: transform .35s cubic-bezier(.34, 1.56, .64, 1);
             pointer-events: none;
-            white-space: nowrap
+            white-space: nowrap;
         }
 
         .toast.show {
-            transform: translateX(-50%) translateY(0)
+            transform: translateX(-50%) translateY(0);
         }
     </style>
 </head>
@@ -570,35 +558,36 @@
         <div class="sb-section">
             <label>Hovered Tile</label>
             <div class="hover-info" id="hoverInfo">
-                <span class="hi-coord" id="hiCoord">—</span><br>
+                <span class="hi-coord" id="hiCoord">—</span><br />
                 Rotation: <strong id="hiRot">—</strong>
             </div>
             <div class="tile-info" id="defaultInfo">
-                <strong>Click</strong> a tile to rotate by 60 deg<br>
+                <strong>Click</strong> a tile to rotate by 60 deg<br />
                 <strong>Scroll</strong> to zoom &middot; <strong>Drag</strong> to pan
             </div>
         </div>
-        
+
         <div class="sb-section">
             <label>Display</label>
             <div class="toggle-row">
-                <span><i class="fas fa-border-all" style="margin-right:6px;color:var(--muted)"></i>Grid lines</span>
+                <span><i class="fas fa-border-all" style="margin-right:6px;color:var(--col-muted)"></i>Grid lines</span>
                 <label class="switch">
-                    <input type="checkbox" id="gridToggle" checked>
+                    <input type="checkbox" id="gridToggle" checked />
                     <span class="track"></span>
                 </label>
             </div>
             <div class="toggle-row" style="margin-top:10px">
-                <span><i class="fas fa-circle-dot" style="margin-right:6px;color:var(--muted)"></i>Unrendered dotted</span>
+                <span><i class="fas fa-circle-dot" style="margin-right:6px;color:var(--col-muted)"></i>Unrendered
+                    dotted</span>
                 <label class="switch">
-                    <input type="checkbox" id="unrenderedToggle" checked>
+                    <input type="checkbox" id="unrenderedToggle" checked />
                     <span class="track"></span>
                 </label>
             </div>
             <div class="toggle-row" style="margin-top:10px">
-                <span><i class="fas fa-map-pin" style="margin-right:6px;color:var(--muted)"></i>Markers</span>
+                <span><i class="fas fa-map-pin" style="margin-right:6px;color:var(--col-muted)"></i>Markers</span>
                 <label class="switch">
-                    <input type="checkbox" id="markersToggle" checked>
+                    <input type="checkbox" id="markersToggle" checked />
                     <span class="track"></span>
                 </label>
             </div>
@@ -608,7 +597,8 @@
             <div class="section-header">
                 <button class="icon-btn" id="addMarkerBtn" title="Add Marker"><i class="fas fa-plus"></i></button>
                 <label>Color Gradient</label>
-                <button class="icon-btn" id="randGradColorsBtn" title="Randomize Gradient Colors"><i class="fas fa-dice"></i></button>
+                <button class="icon-btn" id="randGradColorsBtn" title="Randomize Gradient Colors"><i
+                        class="fas fa-dice"></i></button>
             </div>
             <div id="gradientList" class="grad-list"></div>
         </div>
@@ -617,7 +607,8 @@
             <div class="section-header">
                 <button class="icon-btn" id="addCurveBtn" title="Add Color"><i class="fas fa-plus"></i></button>
                 <label>Curve Colors</label>
-                <button class="icon-btn" id="randLineColorsBtn" title="Randomize Line Colors"><i class="fas fa-dice"></i></button>
+                <button class="icon-btn" id="randLineColorsBtn" title="Randomize Line Colors"><i
+                        class="fas fa-dice"></i></button>
             </div>
             <div id="curveList" class="grad-list"></div>
         </div>
@@ -629,8 +620,9 @@
                 <p>Click or drop an image</p>
                 <div class="filename" id="fileName"></div>
             </div>
-            <input type="file" id="fileInput" accept="image/*">
-            <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i class="fas fa-image"></i> Reset Texture</button>
+            <input type="file" id="fileInput" accept="image/*" />
+            <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i
+                    class="fas fa-image"></i> Reset Texture</button>
         </div>
 
         <div class="sb-section editor" id="editorPanel">
@@ -640,27 +632,27 @@
             </div>
             <div class="slider-row">
                 <div class="s-top"><span>Rotation</span><span class="s-val" id="vRot">0°</span></div>
-                <input type="range" id="sRot" min="0" max="360" step="1" value="0">
+                <input type="range" id="sRot" min="0" max="360" step="1" value="0" />
             </div>
             <div class="slider-row">
                 <div class="s-top"><span>Scale</span><span class="s-val" id="vScale">1.00x</span></div>
-                <input type="range" id="sScale" min="0.1" max="4" step="0.05" value="1">
+                <input type="range" id="sScale" min="0.1" max="4" step="0.05" value="1" />
             </div>
             <div class="slider-row">
                 <div class="s-top"><span>Stretch X</span><span class="s-val" id="vSX">1.00x</span></div>
-                <input type="range" id="sSX" min="0.2" max="3" step="0.05" value="1">
+                <input type="range" id="sSX" min="0.2" max="3" step="0.05" value="1" />
             </div>
             <div class="slider-row">
                 <div class="s-top"><span>Stretch Y</span><span class="s-val" id="vSY">1.00x</span></div>
-                <input type="range" id="sSY" min="0.2" max="3" step="0.05" value="1">
+                <input type="range" id="sSY" min="0.2" max="3" step="0.05" value="1" />
             </div>
             <div class="slider-row">
                 <div class="s-top"><span>Offset X</span><span class="s-val" id="vOX">0</span></div>
-                <input type="range" id="sOX" min="-150" max="150" step="1" value="0">
+                <input type="range" id="sOX" min="-150" max="150" step="1" value="0" />
             </div>
             <div class="slider-row">
                 <div class="s-top"><span>Offset Y</span><span class="s-val" id="vOY">0</span></div>
-                <input type="range" id="sOY" min="-150" max="150" step="1" value="0">
+                <input type="range" id="sOY" min="-150" max="150" step="1" value="0" />
             </div>
             <div class="btn-row">
                 <button class="btn btn-ghost" id="cancelEd">Close</button>
@@ -671,9 +663,11 @@
         <div class="sb-section" style="border-bottom:none">
             <label>Tiles</label>
             <div class="btn-row" style="margin-bottom: 8px;">
-                <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset rotation</button>
+                <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset
+                    rotation</button>
             </div>
-            <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%"><i class="fas fa-compass"></i> Randomize angles</button>
+            <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%"><i class="fas fa-compass"></i> Randomize
+                angles</button>
         </div>
 
     </aside>
@@ -681,6 +675,69 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  ALL COLORS IN ONE PLACE — edit these to change the entire look
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const COLORS = {
+            // ── Marker palette (used for gradient control points) ──
+            markers: [
+                '#CCCCCC', '#4878D0', '#EE854A', '#6ACC64',
+                '#D65F5F', '#956CB4', '#8C613C', '#DC7EC0',
+                '#797979', '#D5BB67', '#82C6E2'
+            ],
+
+            // ── Curve palette (used for tile-edge line colors) ──
+            curves: [
+                '#444444', '#001C7F', '#B1400D', '#12711C',
+                '#8C0800', '#591E71', '#592F0D', '#A23582',
+                '#3C3C3C', '#B8850A', '#006374'
+            ],
+
+
+            // ── Theme ──
+            bg: '#13132a',
+            fg: '#e6e6f0',
+            muted: '#6e6e90',
+            accent: '#e07a5f',
+            accentDim: '#e07a5f26',
+            card: '#13132a',
+            card2: '#13132a',
+            border: '#13132a',
+            gridLine: '#6e6e90',
+            shadowColor: '#e07a5f66',
+            hoverStroke: '#13132a',
+            unrenderedDotted: '#6e6e908c',
+            previewPlaceholder: '#e6e6f0',
+            previewStroke: '#e07a5f99',
+            previewDot: '#e07a5f',
+            hoverBorder: '#e07a5f33',
+            dotPattern: '#6e6e90',
+            white: '#ffffff',
+            black: '#000000',
+        };
+
+        // ─── inject CSS custom properties from COLORS ───
+        (function injectColors() {
+            const r = document.documentElement.style;
+            const map = {
+                '--col-bg': COLORS.bg,
+                '--col-fg': COLORS.fg,
+                '--col-muted': COLORS.muted,
+                '--col-accent': COLORS.accent,
+                '--col-accent-dim': COLORS.accentDim,
+                '--col-card': COLORS.card,
+                '--col-card2': COLORS.card2,
+                '--col-border': COLORS.border,
+                '--col-hover-border': COLORS.hoverBorder,
+            };
+            for (const [key, val] of Object.entries(map)) {
+                r.setProperty(key, val);
+            }
+        })();
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  APPLICATION
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         (() => {
             // ──── Constants ────
             const HEX_R = 62;
@@ -703,10 +760,19 @@
             const VISIBLE_BOUND_MULT = 3;
 
             // ──── State ────
-            let zoom = 1, panX = 0, panY = 0;
-            let isDrag = false, dragSX = 0, dragSY = 0, dragPX = 0, dragPY = 0, dragMoved = false;
-            let mouseScreenX = -9999, mouseScreenY = -9999;
-            let hoveredQ = null, hoveredR = null;
+            let zoom = 1,
+                panX = 0,
+                panY = 0;
+            let isDrag = false,
+                dragSX = 0,
+                dragSY = 0,
+                dragPX = 0,
+                dragPY = 0,
+                dragMoved = false;
+            let mouseScreenX = -9999,
+                mouseScreenY = -9999;
+            let hoveredQ = null,
+                hoveredR = null;
             let showGrid = true;
             let showUnrenderedDotted = true;
             let isInitialized = false;
@@ -718,6 +784,7 @@
             const rotOverrides = new Map();
             const animMap = new Map();
 
+            // ── use COLORS.markers and COLORS.curves directly ──
             let gradientMarkers = [];
             let draggedMarkerIndex = -1;
             let isDragMarker = false;
@@ -727,16 +794,12 @@
             let markersVisible = true;
             let activeMarkerIndex = 0;
 
-            const markerPalette = ['#cccccc', '#4878D0', '#EE854A', '#6ACC64', '#D65F5F', '#956CB4', '#8C613C', '#DC7EC0', '#797979', '#D5BB67', '#82C6E2'];
-            const curvePalette = ['#444444', '#001C7F', '#B1400D', '#12711C', '#8C0800', '#591E71', '#592F0D', '#A23582', '#3C3C3C', '#B8850A', '#006374'];
-            
-            let curveColors = [curvePalette[0]]; 
+            let curveColors = [COLORS.curves[0]];
             let activeCurveIndex = 0;
             let nextCurveID = 0;
             const curveMap = new Map();
             const curves = new Map();
             let queue = [];
-
 
             // ──── DOM Cache ────
             const dom = {
@@ -781,11 +844,12 @@
                 gradientList: document.getElementById('gradientList'),
                 addMarkerBtn: document.getElementById('addMarkerBtn'),
                 curveList: document.getElementById('curveList'),
-                addCurveBtn: document.getElementById('addCurveBtn')
+                addCurveBtn: document.getElementById('addCurveBtn'),
             };
 
             const ctx = dom.cvs.getContext('2d');
 
+            // ──── helpers ────
             function hexKey(q, r) { return (q << 16) ^ r; }
 
             function hashQR(q, r) {
@@ -837,8 +901,12 @@
 
             function hexRound(fq, fr) {
                 const fs = -fq - fr;
-                let rq = Math.round(fq), rr = Math.round(fr), rs = Math.round(fs);
-                const dq = Math.abs(rq - fq), dr = Math.abs(rr - fr), ds = Math.abs(rs - fs);
+                let rq = Math.round(fq),
+                    rr = Math.round(fr),
+                    rs = Math.round(fs);
+                const dq = Math.abs(rq - fq),
+                    dr = Math.abs(rr - fr),
+                    ds = Math.abs(rs - fs);
                 if (dq > dr && dq > ds) rq = -rr - rs;
                 else if (dr > ds) rr = -rq - rs;
                 return { q: rq, r: rr };
@@ -906,23 +974,37 @@
                     const m = ms[0];
                     for (let i = 0; i < lowW * lowH; i++) {
                         const idx = i * 4;
-                        data[idx] = m.r; data[idx + 1] = m.g; data[idx + 2] = m.b; data[idx + 3] = 255;
+                        data[idx] = m.r;
+                        data[idx + 1] = m.g;
+                        data[idx + 2] = m.b;
+                        data[idx + 3] = 255;
                     }
                 } else {
                     for (let py = 0; py < lowH; py++) {
                         for (let px = 0; px < lowW; px++) {
-                            let totalWeight = 0, r = 0, g = 0, b = 0;
+                            let totalWeight = 0,
+                                r = 0,
+                                g = 0,
+                                b = 0;
                             for (let i = 0; i < n; i++) {
                                 const m = ms[i];
-                                const dx = px - m.x, dy = py - m.y;
+                                const dx = px - m.x,
+                                    dy = py - m.y;
                                 const distSq = dx * dx + dy * dy + 0.5;
                                 const weight = 1 / (distSq * distSq);
                                 totalWeight += weight;
-                                r += m.r * weight; g += m.g * weight; b += m.b * weight;
+                                r += m.r * weight;
+                                g += m.g * weight;
+                                b += m.b * weight;
                             }
-                            r /= totalWeight; g /= totalWeight; b /= totalWeight;
+                            r /= totalWeight;
+                            g /= totalWeight;
+                            b /= totalWeight;
                             const idx = (py * lowW + px) * 4;
-                            data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 255;
+                            data[idx] = r;
+                            data[idx + 1] = g;
+                            data[idx + 2] = b;
+                            data[idx + 3] = 255;
                         }
                     }
                 }
@@ -937,10 +1019,10 @@
                 const g = parseInt(hex.slice(3, 5), 16);
                 const b = parseInt(hex.slice(5, 7), 16);
                 const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-                return lum > 140 ? '#000000' : '#ffffff';
+                return lum > 140 ? COLORS.black : COLORS.white;
             }
 
-            // ──── Curve Deduction Engine ────
+            // ──── Curve Engine ────
             function getNeighbor(q, r, e) {
                 if (e === 0) return { q: q + 1, r: r, edge: 3 };
                 if (e === 1) return { q: q, r: r + 1, edge: 4 };
@@ -975,10 +1057,25 @@
                 let curve2 = curves.get(c2);
                 if (!curve1 || !curve2) return;
                 let target, source;
-                if (curve1.size > curve2.size) { target = curve1; source = curve2; } 
-                else if (curve2.size > curve1.size) { target = curve2; source = curve1; } 
-                else { if (Math.random() < 0.5) { target = curve1; source = curve2; } else { target = curve2; source = curve1; } }
-                for (let id of source.edges) { curveMap.set(id, target.id); target.edges.add(id); }
+                if (curve1.size > curve2.size) {
+                    target = curve1;
+                    source = curve2;
+                } else if (curve2.size > curve1.size) {
+                    target = curve2;
+                    source = curve1;
+                } else {
+                    if (Math.random() < 0.5) {
+                        target = curve1;
+                        source = curve2;
+                    } else {
+                        target = curve2;
+                        source = curve1;
+                    }
+                }
+                for (let id of source.edges) {
+                    curveMap.set(id, target.id);
+                    target.edges.add(id);
+                }
                 target.size = target.edges.size;
                 if (source.locked) target.locked = true;
                 curves.delete(source.id);
@@ -992,7 +1089,8 @@
                 while (queue.length > 0 && processed < maxPerFrame) {
                     let item = queue.pop();
                     processed++;
-                    if (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin || item.r < bounds.minR - margin || item.r > bounds.maxR + margin) continue;
+                    if (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin ||
+                        item.r < bounds.minR - margin || item.r > bounds.maxR + margin) continue;
                     let id = edgeID(item.q, item.r, item.e);
                     if (!curveMap.has(id)) continue;
                     let curveID = curveMap.get(id);
@@ -1023,11 +1121,15 @@
                 let center = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, zoom, panX, panY);
                 for (let q = bounds.minQ - margin; q <= bounds.maxQ + margin; q++) {
                     for (let r = bounds.minR - margin; r <= bounds.maxR + margin; r++) {
-                        let dq = q - center.q, dr = r - center.r;
+                        let dq = q - center.q,
+                            dr = r - center.r;
                         let dist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(-dq - dr));
                         if (dist < bestDist) {
                             for (let i = 0; i < 6; i++) {
-                                if (!curveMap.has(edgeID(q, r, i))) { bestDist = dist; bestTile = { q, r }; break; }
+                                if (!curveMap.has(edgeID(q, r, i))) {
+                                    bestDist = dist;
+                                    bestTile = { q, r }; break;
+                                }
                             }
                         }
                     }
@@ -1037,8 +1139,11 @@
             }
 
             function getVisibleBounds() {
-                let W = dom.cvs.width, H = dom.cvs.height;
-                let z = zoom, px = panX, py = panY;
+                let W = dom.cvs.width,
+                    H = dom.cvs.height;
+                let z = zoom,
+                    px = panX,
+                    py = panY;
                 let margin = HEX_R * z * VISIBLE_BOUND_MULT;
                 let tl = pixToHex(-margin, -margin, z, px, py);
                 let tr = pixToHex(W + margin, -margin, z, px, py);
@@ -1072,17 +1177,27 @@
                         let curr = q.pop();
                         comp.push(curr);
                         let parts = curr.split(',');
-                        let q1 = parseInt(parts[0]), r1 = parseInt(parts[1]), e1 = parseInt(parts[2]);
+                        let q1 = parseInt(parts[0]),
+                            r1 = parseInt(parts[1]),
+                            e1 = parseInt(parts[2]);
                         let n1 = getNeighbor(q1, r1, e1);
                         let k1 = (tileRot(q1, r1) / 60) % 6;
                         let pe1 = getOtherEdge(k1, e1);
                         let pid1 = edgeID(q1, r1, pe1);
-                        if (curve.edges.has(pid1) && !visited.has(pid1)) { visited.add(pid1); q.push(pid1); }
-                        let q2 = n1.q, r2 = n1.r, e2 = n1.edge;
+                        if (curve.edges.has(pid1) && !visited.has(pid1)) {
+                            visited.add(pid1);
+                            q.push(pid1);
+                        }
+                        let q2 = n1.q,
+                            r2 = n1.r,
+                            e2 = n1.edge;
                         let k2 = (tileRot(q2, r2) / 60) % 6;
                         let pe2 = getOtherEdge(k2, e2);
                         let pid2 = edgeID(q2, r2, pe2);
-                        if (curve.edges.has(pid2) && !visited.has(pid2)) { visited.add(pid2); q.push(pid2); }
+                        if (curve.edges.has(pid2) && !visited.has(pid2)) {
+                            visited.add(pid2);
+                            q.push(pid2);
+                        }
                     }
                     components.push(comp);
                 }
@@ -1092,7 +1207,10 @@
                     curve.size = curve.edges.size;
                     for (let i = 1; i < components.length; i++) {
                         let newID = nextCurveID++;
-                        let newCurve = { id: newID, color: curve.color, size: components[i].length, locked: false, edges: new Set(components[i]) };
+                        let newCurve = {
+                            id: newID, color: curve.color, size: components[i].length, locked: false,
+                            edges: new Set(components[i])
+                        };
                         curves.set(newID, newCurve);
                         for (let id of newCurve.edges) curveMap.set(id, newID);
                     }
@@ -1122,14 +1240,20 @@
                     if (allEdgesSame) return;
                 }
                 let availableColors = [];
-                for (let cid of affectedCurves) { let curve = curves.get(cid); if (curve) availableColors.push(curve.color); }
+                for (let cid of affectedCurves) {
+                    let curve = curves.get(cid); if (curve) availableColors.push(curve
+                        .color);
+                }
                 if (availableColors.length === 0) availableColors.push(Math.floor(Math.random() * curveColors.length));
                 for (let i = 0; i < 6; i++) {
                     let id = ids[i];
                     if (curveMap.has(id)) {
                         let cid = curveMap.get(id);
                         let curve = curves.get(cid);
-                        if (curve) { curve.edges.delete(id); curve.size = curve.edges.size; }
+                        if (curve) {
+                            curve.edges.delete(id);
+                            curve.size = curve.edges.size;
+                        }
                         curveMap.delete(id);
                     }
                 }
@@ -1149,8 +1273,10 @@
                     [(1 + k) % 6, (5 + k) % 6]
                 ];
                 for (let pair of pairs) {
-                    let e1 = pair[0], e2 = pair[1];
-                    let id1 = ids[e1], id2 = ids[e2];
+                    let e1 = pair[0],
+                        e2 = pair[1];
+                    let id1 = ids[e1],
+                        id2 = ids[e2];
                     let n1 = getNeighbor(q, r, e1);
                     let k1 = (tileRot(n1.q, n1.r) / 60) % 6;
                     let n1_other = getOtherEdge(k1, n1.edge);
@@ -1206,7 +1332,8 @@
                     [(1 + k) % 6, (5 + k) % 6]
                 ];
                 for (let pair of pairs) {
-                    let e1 = pair[0], e2 = pair[1];
+                    let e1 = pair[0],
+                        e2 = pair[1];
                     let id1 = edgeID(q, r, e1);
                     let id2 = edgeID(q, r, e2);
                     let c1 = curveMap.has(id1) ? curveMap.get(id1) : -1;
@@ -1262,7 +1389,7 @@
                     }
                 }
                 if (showUnrenderedDotted) {
-                    ctx.strokeStyle = '#a0a0af8c';
+                    ctx.strokeStyle = COLORS.unrenderedDotted;
                     ctx.lineWidth = Math.max(1, sz / 10);
                     const dash = Math.max(2, sz / 8);
                     ctx.setLineDash([dash, dash]);
@@ -1287,7 +1414,6 @@
                     let originalColor = m.color;
                     colorInput.addEventListener('input', (e) => {
                         gradientMarkers[i].color = e.target.value;
-                        // Sync text box
                         hexInput.value = e.target.value.toUpperCase();
                     });
                     colorInput.addEventListener('change', (e) => {
@@ -1444,6 +1570,7 @@
                 });
             }
 
+            // ──── drawTile ────
             function drawTile(cx, cy, sz, rot, isHover, grid, img, tf, hq, hr) {
                 const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
@@ -1486,16 +1613,16 @@
 
                 if (isHover) {
                     ctx.save();
-                    ctx.shadowColor = '#e07a5f66';
-                    ctx.shadowBlur = 18;
+                    ctx.shadowColor = COLORS.shadowColor;
+                    ctx.shadowBlur = 20;
                     traceHexPath(ctx, cx, cy, rSz);
-                    ctx.strokeStyle = '#e07a5fb3';
-                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = COLORS.hoverStroke;
+                    ctx.lineWidth = 4;
                     ctx.stroke();
                     ctx.restore();
                 } else if (grid) {
                     traceHexPath(ctx, cx, cy, rSz);
-                    ctx.strokeStyle = '#0a0a1959';
+                    ctx.strokeStyle = COLORS.gridLine;
                     ctx.lineWidth = 1;
                     ctx.stroke();
                 }
@@ -1503,20 +1630,25 @@
 
             // ──── Main render loop ────
             function render() {
-                const W = dom.cvs.width, H = dom.cvs.height;
+                const W = dom.cvs.width,
+                    H = dom.cvs.height;
                 const now = Date.now();
-                const z = zoom, px = panX, py = panY;
-                const grid = showGrid, img = texImg, tf = texTf;
+                const z = zoom,
+                    px = panX,
+                    py = panY;
+                const grid = showGrid,
+                    img = texImg,
+                    tf = texTf;
 
                 for (const [k, a] of animMap) {
                     if (now - a.start >= a.duration) animMap.delete(k);
                 }
 
-                ctx.fillStyle = '#0b0b1a';
+                ctx.fillStyle = COLORS.bg;
                 ctx.fillRect(0, 0, W, H);
                 drawIDWGradient(W, H);
 
-                ctx.fillStyle = '#ffffff06';
+                ctx.fillStyle = COLORS.dotPattern;
                 const dotSpacing = 40;
                 const offXMod = ((px % dotSpacing) + dotSpacing) % dotSpacing;
                 const offYMod = ((py % dotSpacing) + dotSpacing) % dotSpacing;
@@ -1548,18 +1680,17 @@
 
                         ctx.save();
                         ctx.beginPath();
-                        // Draw an equilateral triangle centered at m.x, m.y
                         const r = 30;
-                        const h = r * SQRT3 / 2; // SQRT3 is already defined at the top of your script
+                        const h = r * SQRT3 / 2;
                         ctx.moveTo(m.x, m.y - r);
                         ctx.lineTo(m.x + h, m.y + r / 2);
                         ctx.lineTo(m.x - h, m.y + r / 2);
                         ctx.closePath();
-                        
+
                         ctx.fillStyle = m.color;
                         ctx.fill();
                         ctx.strokeStyle = outline;
-                        ctx.lineWidth = 7; // Thicker stroke for all markers
+                        ctx.lineWidth = 7;
                         ctx.stroke();
                         ctx.restore();
                     }
@@ -1581,12 +1712,11 @@
                         panY = h / 2;
                         isInitialized = true;
 
-                        // Use the random placement function for the first marker
                         const pos = getRandomMarkerPosition();
                         gradientMarkers.push({
                             x: pos.x,
                             y: pos.y,
-                            color: markerPalette[0]
+                            color: COLORS.markers[0]
                         });
                         activeMarkerIndex = 0;
                         renderGradientList();
@@ -1640,9 +1770,12 @@
                     }
                 }
 
-                isDrag = true; dragMoved = false;
-                dragSX = e.clientX; dragSY = e.clientY;
-                dragPX = panX; dragPY = panY;
+                isDrag = true;
+                dragMoved = false;
+                dragSX = e.clientX;
+                dragSY = e.clientY;
+                dragPX = panX;
+                dragPY = panY;
             });
 
             window.addEventListener('mousemove', e => {
@@ -1659,11 +1792,13 @@
                 mouseScreenX = mx;
                 mouseScreenY = my;
                 const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
-                hoveredQ = h.q; hoveredR = h.r;
+                hoveredQ = h.q;
+                hoveredR = h.r;
                 updateHoverInfo();
 
                 if (isDrag) {
-                    const dx = e.clientX - dragSX, dy = e.clientY - dragSY;
+                    const dx = e.clientX - dragSX,
+                        dy = e.clientY - dragSY;
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
                         if (!dragMoved) dragMoved = true;
                     }
@@ -1681,8 +1816,6 @@
                 if (isDrag && !dragMoved) handleClick(e);
                 isDrag = false;
             });
-
-            // Double click behavior entirely removed
 
             function handleClick(e) {
                 const r = dom.cvs.getBoundingClientRect();
@@ -1715,7 +1848,9 @@
             dom.zoomIn.onclick = () => setZoom(zoom * 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
             dom.zoomOut.onclick = () => setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
             dom.resetView.onclick = () => {
-                zoom = 1; panX = dom.cvs.width / 2; panY = dom.cvs.height / 2;
+                zoom = 1;
+                panX = dom.cvs.width / 2;
+                panY = dom.cvs.height / 2;
                 dom.zoomLabel.textContent = '100%';
             };
 
@@ -1760,21 +1895,17 @@
 
             dom.randLineColorsBtn.onclick = () => {
                 if (curveColors.length === 0) return;
-                // Combine picked colors and built-in curve palette
-                const allColors = [...new Set([...curveColors, ...curvePalette])];
-                
-                // Randomize the actual curveColors array so the list UI updates
+                const allColors = [...new Set([...curveColors, ...COLORS.curves])];
                 for (let i = 0; i < curveColors.length; i++) {
                     curveColors[i] = allColors[Math.floor(Math.random() * allColors.length)];
                 }
-                
-                renderCurveList(); // Refresh hex inputs visually
+                renderCurveList();
                 toast('Line colors randomized');
             };
 
             dom.randGradColorsBtn.onclick = () => {
                 if (gradientMarkers.length === 0) return;
-                const allColors = [...new Set([...gradientMarkers.map(m => m.color), ...markerPalette])];
+                const allColors = [...new Set([...gradientMarkers.map(m => m.color), ...COLORS.markers])];
                 for (let m of gradientMarkers) {
                     m.color = allColors[Math.floor(Math.random() * allColors.length)];
                 }
@@ -1788,10 +1919,14 @@
             };
 
             dom.uploadZone.onclick = () => dom.fileInput.click();
-            dom.uploadZone.ondragover = e => { e.preventDefault(); dom.uploadZone.style.borderColor = 'var(--accent)'; };
+            dom.uploadZone.ondragover = e => {
+                e.preventDefault();
+                dom.uploadZone.style.borderColor = 'var(--col-accent)';
+            };
             dom.uploadZone.ondragleave = () => { dom.uploadZone.style.borderColor = ''; };
             dom.uploadZone.ondrop = e => {
-                e.preventDefault(); dom.uploadZone.style.borderColor = '';
+                e.preventDefault();
+                dom.uploadZone.style.borderColor = '';
                 if (e.dataTransfer.files[0]?.type.startsWith('image/')) loadFile(e.dataTransfer.files[0]);
             };
             dom.fileInput.onchange = () => { if (dom.fileInput.files[0]) loadFile(dom.fileInput.files[0]); };
@@ -1801,25 +1936,43 @@
                 const reader = new FileReader();
                 reader.onload = ev => {
                     const img = new Image();
-                    img.onload = () => { pendImg = img; openEditor(); };
+                    img.onload = () => {
+                        pendImg = img;
+                        openEditor();
+                    };
                     img.src = ev.target.result;
                 };
                 reader.readAsDataURL(file);
             }
 
             function readSliders() {
-                return { rot: +dom.sRot.value, scale: +dom.sScale.value, sx: +dom.sSX.value, sy: +dom.sSY.value, ox: +dom.sOX.value, oy: +dom.sOY.value };
+                return {
+                    rot: +dom.sRot.value, scale: +dom.sScale.value, sx: +dom.sSX.value, sy: +dom.sSY.value,
+                    ox: +dom.sOX.value, oy: +dom.sOY.value
+                };
             }
 
             function writeSliders(tf) {
-                dom.sRot.value = tf.rot; dom.sScale.value = tf.scale;
-                dom.sSX.value = tf.sx; dom.sSY.value = tf.sy;
-                dom.sOX.value = tf.ox; dom.sOY.value = tf.oy;
+                dom.sRot.value = tf.rot;
+                dom.sScale.value = tf.scale;
+                dom.sSX.value = tf.sx;
+                dom.sSY.value = tf.sy;
+                dom.sOX.value = tf.ox;
+                dom.sOY.value = tf.oy;
                 syncSliderLabels();
             }
 
-            function openEditor() { dom.editorPanel.classList.add('open'); writeSliders(texTf); drawPreview(); }
-            function closeEditor() { dom.editorPanel.classList.remove('open'); pendImg = null; }
+            function openEditor() {
+                dom.editorPanel.classList.add('open');
+                writeSliders(texTf);
+                drawPreview();
+            }
+
+            function closeEditor() {
+                dom.editorPanel.classList.remove('open');
+                pendImg = null;
+            }
+
             function applyTexture() {
                 if (pendImg) texImg = pendImg;
                 texTf = readSliders();
@@ -1831,14 +1984,21 @@
             dom.resetTexBtn.onclick = () => {
                 texImg = null;
                 texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
-                if (dom.editorPanel.classList.contains('open')) { writeSliders(texTf); drawPreview(); }
-                pendImg = null; closeEditor();
+                if (dom.editorPanel.classList.contains('open')) {
+                    writeSliders(texTf);
+                    drawPreview();
+                }
+                pendImg = null;
+                closeEditor();
                 dom.fileName.textContent = '';
                 toast('Texture reset to default');
             };
 
             [dom.sRot, dom.sScale, dom.sSX, dom.sSY, dom.sOX, dom.sOY].forEach(el => {
-                el.addEventListener('input', () => { syncSliderLabels(); drawPreview(); });
+                el.addEventListener('input', () => {
+                    syncSliderLabels();
+                    drawPreview();
+                });
             });
 
             function syncSliderLabels() {
@@ -1853,9 +2013,11 @@
             function drawPreview() {
                 const pc = dom.previewCanvas;
                 const pctx = pc.getContext('2d');
-                const cX = 110, cY = 110, rSz = 85;
+                const cX = 110,
+                    cY = 110,
+                    rSz = 85;
                 pctx.clearRect(0, 0, 220, 220);
-                pctx.fillStyle = '#0b0b1a';
+                pctx.fillStyle = COLORS.bg;
                 pctx.fillRect(0, 0, 220, 220);
                 pctx.save();
                 traceHexPath(pctx, cX, cY, rSz);
@@ -1870,24 +2032,25 @@
                     const iSz = rSz * 2.6;
                     pctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
                 } else {
-                    pctx.fillStyle = '#f0f0f5';
+                    pctx.fillStyle = COLORS.previewPlaceholder;
                     pctx.fillRect(-rSz, -rSz, rSz * 2, rSz * 2);
                 }
                 pctx.restore();
                 traceHexPath(pctx, cX, cY, rSz);
-                pctx.strokeStyle = '#e07a5f99';
+                pctx.strokeStyle = COLORS.previewStroke;
                 pctx.lineWidth = 2;
                 pctx.stroke();
                 for (let i = 0; i < 6; i++) {
                     const a = PI_DIV_3 * i;
                     pctx.beginPath();
                     pctx.arc(cX + rSz * Math.cos(a), cY + rSz * Math.sin(a), 3, 0, Math.PI * 2);
-                    pctx.fillStyle = '#e07a5f';
+                    pctx.fillStyle = COLORS.previewDot;
                     pctx.fill();
                 }
             }
 
             let toastTimer = null;
+
             function toast(msg) {
                 dom.toast.textContent = msg;
                 dom.toast.classList.add('show');
@@ -1897,7 +2060,7 @@
 
             function pickNewMarkerColor() {
                 const existing = new Set(gradientMarkers.map(m => m.color.toLowerCase()));
-                const available = markerPalette.filter(c => !existing.has(c.toLowerCase()));
+                const available = COLORS.markers.filter(c => !existing.has(c.toLowerCase()));
                 if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
                 for (let attempts = 0; attempts < 200; attempts++) {
                     const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
@@ -1908,7 +2071,7 @@
 
             function pickNewCurveColor() {
                 const existing = new Set(curveColors.map(c => c.toLowerCase()));
-                const available = curvePalette.filter(c => !existing.has(c.toLowerCase()));
+                const available = COLORS.curves.filter(c => !existing.has(c.toLowerCase()));
                 if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
                 for (let attempts = 0; attempts < 200; attempts++) {
                     const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
@@ -1920,8 +2083,6 @@
             function getRandomMarkerPosition() {
                 const W = dom.cvs.width;
                 const H = dom.cvs.height;
-                
-                // Keep markers within the central 60% of the screen (20% border margin)
                 const minX = W * 0.2;
                 const maxX = W * 0.8;
                 const minY = H * 0.2;
@@ -1932,21 +2093,17 @@
 
                 if (gradientMarkers.length > 0) {
                     let maxMinDist = -1;
-                    const candidates = 100; // Number of random points to sample
-
+                    const candidates = 100;
                     for (let i = 0; i < candidates; i++) {
                         const cx = minX + Math.random() * (maxX - minX);
                         const cy = minY + Math.random() * (maxY - minY);
-                        
                         let minDist = Infinity;
                         for (const m of gradientMarkers) {
                             const dx = cx - m.x;
                             const dy = cy - m.y;
-                            const dist = dx * dx + dy * dy; // squared distance
+                            const dist = dx * dx + dy * dy;
                             if (dist < minDist) minDist = dist;
                         }
-                        
-                        // Pick the candidate that is furthest away from its nearest neighbor
                         if (minDist > maxMinDist) {
                             maxMinDist = minDist;
                             bestX = cx;
@@ -1954,7 +2111,6 @@
                         }
                     }
                 }
-                
                 return { x: bestX, y: bestY };
             }
 
@@ -1964,14 +2120,10 @@
                     toast('All colors are already in use');
                     return;
                 }
-                
                 const pos = getRandomMarkerPosition();
                 gradientMarkers.push({ x: pos.x, y: pos.y, color: color });
-                
-                // Force markers to be visible if user just added one
                 markersVisible = true;
                 dom.markersToggle.checked = true;
-                
                 renderGradientList();
             };
 
@@ -1984,8 +2136,6 @@
                 curveColors.push(color);
                 activeCurveIndex = curveColors.length - 1;
                 renderCurveList();
-
-                // Clear existing curves and recalculate so the new color is utilized
                 curveMap.clear();
                 curves.clear();
                 queue = [];
