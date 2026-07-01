@@ -2426,6 +2426,46 @@
                 requestRender();
             });
 
+            // ──── Double click to remove marker ────
+            dom.cvs.addEventListener('dblclick', e => {
+                if (isEmbedMode) return;
+                const r = dom.cvs.getBoundingClientRect();
+                const mx = e.clientX - r.left;
+                const my = e.clientY - r.top;
+
+                if (!markersVisible) return;
+
+                let clickedMarkerIdx = -1;
+                for (let i = 0; i < gradientMarkers.length; i++) {
+                    const m = gradientMarkers[i];
+                    const dx = mx - m.x;
+                    const dy = my - m.y;
+                    const hitR = 26; // Match the active marker hit radius
+                    if (dx * dx + dy * dy < hitR * hitR) {
+                        clickedMarkerIdx = i;
+                        break;
+                    }
+                }
+
+                if (clickedMarkerIdx !== -1) {
+                    if (gradientMarkers.length > 1) {
+                        gradientMarkers.splice(clickedMarkerIdx, 1);
+                        if (activeMarkerIndex >= gradientMarkers.length) {
+                            activeMarkerIndex = gradientMarkers.length - 1;
+                        }
+                        // Cancel any drag state initiated by the first click of the double-click
+                        isDragMarker = false;
+                        draggedMarkerIndex = -1;
+                        
+                        renderGradientList();
+                        requestRender();
+                        toast('Marker and color removed');
+                    } else {
+                        toast('At least one marker is required');
+                    }
+                }
+            });
+
             function rotateTile(q, r) {
                 const k = hexKey(q, r);
                 const now = Date.now();
