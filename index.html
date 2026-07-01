@@ -1887,30 +1887,23 @@
                 }
             }
 
-            // ──── draw hover stroke on top ────
             function drawHoverStroke(cx, cy, sz, grid) {
                 const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
                 
-                // Sample center pixel to determine background lightness
-                let strokeColor = COLORS.white; // fallback
-                try {
-                    const px = Math.max(0, Math.min(dom.cvs.width - 1, Math.floor(cx)));
-                    const py = Math.max(0, Math.min(dom.cvs.height - 1, Math.floor(cy)));
-                    const pixel = ctx.getImageData(px, py, 1, 1).data;
-                    const lum = 0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2];
-                    strokeColor = lum > 140 ? COLORS.black : COLORS.white;
-                } catch (e) { 
-                    // Fallback to white if canvas is tainted by cross-origin texture
-                    strokeColor = COLORS.white; 
-                }
-                
                 ctx.shadowColor = COLORS.shadowColor;
                 ctx.shadowBlur = 20;
                 traceHexPath(ctx, cx, cy, rSz);
-                ctx.strokeStyle = strokeColor;
-                ctx.lineWidth = 4;
+                
+                // Draw a dual stroke for contrast instead of using getImageData
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = COLORS.black;
                 ctx.stroke();
+                
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = COLORS.white;
+                ctx.stroke();
+                
                 ctx.restore();
             }
 
@@ -1998,7 +1991,19 @@
                 }
             }
 
+
             // ──── Main render loop ────
+            let isRenderScheduled = false;
+            function requestRender() {
+                if (!isRenderScheduled) {
+                    isRenderScheduled = true;
+                    requestAnimationFrame(() => {
+                        isRenderScheduled = false;
+                        render();
+                    });
+                }
+            }
+            
             function render() {
                 const W = dom.cvs.width,
                     H = dom.cvs.height;
@@ -2032,9 +2037,16 @@
                 const sz = HEX_R * z;
                 const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
 
+                let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
+
                 if (curveColors.length > 1) {
-                    if (queue.length > 0) processQueue();
-                    else if (findNextUncoloredTile()) processQueue();
+                    if (queue.length > 0) {
+                        processQueue();
+                        keepRendering = true;
+                    } else if (findNextUncoloredTile()) {
+                        processQueue();
+                        keepRendering = true;
+                    }
                 }
 
                 // ── First pass: draw all tiles (no hover stroke) ──
@@ -2098,7 +2110,9 @@
                 dom.statCurves.textContent = visCurveIDs.size;
                 dom.statColors.textContent = visColors.size;
 
-                requestAnimationFrame(render);
+                if (keepRendering) {
+                    requestRender();
+                }
             }
 
             // ──── Resize ────
@@ -2146,6 +2160,7 @@
                 const r = dom.cvs.getBoundingClientRect();
                 setZoom(zoom * (e.deltaY > 0 ? 0.88 : 1.12), e.clientX - r.left, e.clientY - r.top);
                 checkIfSolved();
+                requestRender();
             }, { passive: false });
 
             dom.cvs.addEventListener('mouseleave', () => {
@@ -2191,6 +2206,7 @@
                 dragSY = e.clientY;
                 dragPX = panX;
                 dragPY = panY;
+                requestRender();
             });
 
             window.addEventListener('mousemove', e => {
@@ -2201,6 +2217,7 @@
                 if (isDragMarker && draggedMarkerIndex !== -1) {
                     gradientMarkers[draggedMarkerIndex].x = mx - dragMarkerOffsetX;
                     gradientMarkers[draggedMarkerIndex].y = my - dragMarkerOffsetY;
+                    requestRender(); 
                     return;
                 }
 
@@ -2216,12 +2233,14 @@
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
                     if (!isEmbedMode) { panX = dragPX + dx; panY = dragPY + dy; }
                 }
+                requestRender();
             });
 
             window.addEventListener('mouseup', e => {
                 if (isDragMarker) {
                     isDragMarker = false;
                     draggedMarkerIndex = -1;
+                    requestRender();
                     return;
                 }
                 if (isDrag) {
@@ -2233,6 +2252,7 @@
                     }
                     isDrag = false;
                 }
+                requestRender();
             });
 
             function handleClick(e) {
@@ -2251,6 +2271,7 @@
                 updateLocalCurves(h.q, h.r);
                 // After rotation, check if solved
                 checkIfSolved();
+                requestRender();
             }
 
             function updateHoverInfo() {
@@ -2268,10 +2289,12 @@
             dom.zoomIn.onclick = () => {
                 setZoom(zoom * 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
                 checkIfSolved();
+                requestRender();
             };
             dom.zoomOut.onclick = () => {
                 setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
                 checkIfSolved();
+                requestRender();
             };
             dom.resetView.onclick = () => {
                 zoom = 1;
@@ -2279,6 +2302,7 @@
                 panY = dom.cvs.height / 2;
                 dom.zoomLabel.textContent = '100%';
                 checkIfSolved();
+                requestRender();
             };
 
             window.addEventListener('keydown', e => {
@@ -2291,14 +2315,16 @@
                     setZoom(zoom / 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
                     checkIfSolved();
                 }
+                requestRender();
             });
 
-            dom.gridToggle.addEventListener('change', function() { showGrid = this.checked; });
-            dom.unrenderedToggle.addEventListener('change', function() { showUnrenderedDotted = this.checked; });
-            dom.markersToggle.addEventListener('change', function() { markersVisible = this.checked; });
+            dom.gridToggle.addEventListener('change', function() { showGrid = this.checked; requestRender();});
+            dom.unrenderedToggle.addEventListener('change', function() { showUnrenderedDotted = this.checked; requestRender();});
+            dom.markersToggle.addEventListener('change', function() { markersVisible = this.checked; requestRender();});
             dom.sCurveW.addEventListener('input', function() {
                 curveLineWidth = +dom.sCurveW.value;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
+                requestRender();
             });
 
             function bulkAnimate(newMode, newSeed) {
@@ -2715,7 +2741,7 @@
                 syncExportSizeFromFrame();
             });
 
-            window.addEventListener('mouseup', () => { efDrag = null; });
+            window.addEventListener('mouseup', () => { efDrag = null; requestRender(); });
 
             // ── Interlocked width/height ──
             dom.exportW.addEventListener('input', () => {
