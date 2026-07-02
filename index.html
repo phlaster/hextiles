@@ -677,8 +677,8 @@
         </div>
         <div class="stats-bar">
             <a id="ghLink" href="https://github.com/phlaster/hextiles" target="_blank" title="GitHub"><i class="fab fa-github"></i></a>
-            <span>Curves: <strong id="statCurves">0</strong></span>
-            <span>Colors: <strong id="statColors">0</strong></span>
+            <span id="statCurvesWrap" style="display:none">Curves: <strong id="statCurves">0</strong></span>
+            <span id="statColorsWrap" style="display:none">Colors: <strong id="statColors">0</strong></span>
         </div>
     </div>
 
@@ -689,18 +689,6 @@
                 <p>Infinite tiled canvas with per-tile rotation</p>
             </div>
             <button class="export-btn" id="exportBtn" title="Export"><i class="fas fa-share-from-square"></i></button>
-        </div>
-
-        <div class="sb-section">
-            <label>Hovered Tile</label>
-            <div class="hover-info" id="hoverInfo">
-                <span class="hi-coord" id="hiCoord">—</span><br />
-                Rotation: <strong id="hiRot">—</strong>
-            </div>
-            <div class="tile-info" id="defaultInfo">
-                <strong>Click</strong> a tile to rotate by 60 deg<br />
-                <strong>Scroll</strong> to zoom &middot; <strong>Drag</strong> to pan
-            </div>
         </div>
 
         <div class="sb-section">
@@ -1058,6 +1046,9 @@
                 mouseScreenY = -9999;
             let hoveredQ = null,
                 hoveredR = null;
+            let prevHoverX = null,
+                prevHoverY = null;
+            let hoverAnim = null;
             let showGrid = true;
             let curveLineWidth = 1;
             let alterTilesRatio = 0;
@@ -1093,10 +1084,7 @@
             const dom = {
                 cvs: document.getElementById('hexCanvas'),
                 wrap: document.getElementById('canvas-wrap'),
-                hoverInfo: document.getElementById('hoverInfo'),
-                defaultInfo: document.getElementById('defaultInfo'),
-                hiCoord: document.getElementById('hiCoord'),
-                hiRot: document.getElementById('hiRot'),
+
                 zoomLabel: document.getElementById('zoomLabel'),
                 zoomIn: document.getElementById('zoomIn'),
                 zoomOut: document.getElementById('zoomOut'),
@@ -1150,6 +1138,8 @@
 
                 statCurves: document.getElementById('statCurves'),
                 statColors: document.getElementById('statColors'),
+                statCurvesWrap: document.getElementById('statCurvesWrap'),
+                statColorsWrap: document.getElementById('statColorsWrap'),
                 ghLink: document.getElementById('ghLink'),
 
                 sCurveW: document.getElementById('sCurveW'),
@@ -2175,11 +2165,8 @@
                 const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
                 
-                ctx.shadowColor = COLORS.shadowColor;
-                ctx.shadowBlur = 20;
                 traceHexPath(ctx, cx, cy, rSz);
                 
-                // Draw a dual stroke for contrast instead of using getImageData
                 ctx.lineWidth = 6;
                 ctx.strokeStyle = COLORS.black;
                 ctx.stroke();
@@ -2348,11 +2335,36 @@
 
                 // ── Second pass: draw hover stroke on top ──
                 if (lod >= 1 && hoveredQ !== null && hoveredR !== null) {
-                    for (const h of hexes) {
-                        if (h.q === hoveredQ && h.r === hoveredR) {
-                            drawHoverStroke(h.x, h.y, sz, grid);
-                            break;
+                    let hx, hy;
+                    
+                    if (hoverAnim) {
+                        const elapsed = now - hoverAnim.start;
+                        if (elapsed >= hoverAnim.duration) {
+                            // Animation complete
+                            hx = hoverAnim.toX;
+                            hy = hoverAnim.toY;
+                            hoverAnim = null;
+                        } else {
+                            // Interpolate with easing
+                            const t = elapsed / hoverAnim.duration;
+                            const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+                            hx = hoverAnim.fromX + (hoverAnim.toX - hoverAnim.fromX) * ease;
+                            hy = hoverAnim.fromY + (hoverAnim.toY - hoverAnim.fromY) * ease;
+                            keepRendering = true; // Keep animating
                         }
+                    } else {
+                        // No animation, use target position
+                        for (const h of hexes) {
+                            if (h.q === hoveredQ && h.r === hoveredR) {
+                                hx = h.x;
+                                hy = h.y;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (hx !== undefined && hy !== undefined) {
+                        drawHoverStroke(hx, hy, sz, grid);
                     }
                 }
 
@@ -2365,26 +2377,34 @@
                 }
 
                 // ── Quick Stats Update ──
-                let visCurveIDs = new Set();
-                for (const h of hexes) {
-                    if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
-                        for (let e = 0; e < 6; e++) {
-                            const id = edgeID(h.q, h.r, e);
-                            if (curveMap.has(id)) visCurveIDs.add(curveMap.get(id));
+                if (curveColors.length <= 1) {
+                    dom.statCurvesWrap.style.display = 'none';
+                    dom.statColorsWrap.style.display = 'none';
+                } else {
+                    dom.statCurvesWrap.style.display = '';
+                    dom.statColorsWrap.style.display = '';
+                    
+                    let visCurveIDs = new Set();
+                    for (const h of hexes) {
+                        if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
+                            for (let e = 0; e < 6; e++) {
+                                const id = edgeID(h.q, h.r, e);
+                                if (curveMap.has(id)) visCurveIDs.add(curveMap.get(id));
+                            }
                         }
                     }
-                }
-                let visColors = new Set();
-                for (const cid of visCurveIDs) {
-                    const c = curves.get(cid);
-                    if (c) {
-                        let col = c.color;
-                        if (typeof col === 'number') col = curveColors[col % curveColors.length];
-                        visColors.add(col.toLowerCase());
+                    let visColors = new Set();
+                    for (const cid of visCurveIDs) {
+                        const c = curves.get(cid);
+                        if (c) {
+                            let col = c.color;
+                            if (typeof col === 'number') col = curveColors[col % curveColors.length];
+                            visColors.add(col.toLowerCase());
+                        }
                     }
+                    dom.statCurves.textContent = visCurveIDs.size;
+                    dom.statColors.textContent = visColors.size;
                 }
-                dom.statCurves.textContent = visCurveIDs.size;
-                dom.statColors.textContent = visColors.size;
 
                 if (keepRendering) {
                     requestRender();
@@ -2442,7 +2462,9 @@
             dom.cvs.addEventListener('mouseleave', () => {
                 hoveredQ = null;
                 hoveredR = null;
-                updateHoverInfo();
+                hoverAnim = null;
+                prevHoverX = null;
+                prevHoverY = null;
             });
 
             dom.cvs.addEventListener('mousedown', e => {
@@ -2501,28 +2523,35 @@
                 mouseScreenX = mx;
                 mouseScreenY = my;
                 const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
-                hoveredQ = h.q;
-                hoveredR = h.r;
-                updateHoverInfo();
+                
+                // Check if hovered tile changed
+                if (h.q !== hoveredQ || h.r !== hoveredR) {
+                    const now = Date.now();
+                    const newPos = hexToPix(h.q, h.r, zoom, panX, panY);
+                    
+                    // Start animation from previous position (or current mouse if first hover)
+                    const fromX = prevHoverX !== null ? prevHoverX : mx;
+                    const fromY = prevHoverY !== null ? prevHoverY : my;
+                    
+                    hoverAnim = {
+                        fromX,
+                        fromY,
+                        toX: newPos.x,
+                        toY: newPos.y,
+                        start: now,
+                        duration: 120 // milliseconds
+                    };
+                    
+                    prevHoverX = newPos.x;
+                    prevHoverY = newPos.y;
+                    hoveredQ = h.q;
+                    hoveredR = h.r;
+                }
 
                 if (isDrag) {
                     const dx = e.clientX - dragSX, dy = e.clientY - dragSY;
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
-                    
-                    if (isEmbedMode) {
-                        // In embed mode, if we are dragging, rotate hovered tiles exactly once
-                        if (dragMoved) {
-                            const hk = hexKey(h.q, h.r);
-                            if (hk !== embedDragLastTile) {
-                                embedDragLastTile = hk;
-                                rotateTile(h.q, h.r);
-                            }
-                        }
-                    } else {
-                        // Normal mode: pan the camera
-                        panX = dragPX + dx; 
-                        panY = dragPY + dy;
-                    }
+                    if (!isEmbedMode) { panX = dragPX + dx; panY = dragPY + dy; }
                 }
                 requestRender();
             });
@@ -2609,18 +2638,6 @@
                 const r = dom.cvs.getBoundingClientRect();
                 const h = pixToHex(e.clientX - r.left, e.clientY - r.top, zoom, panX, panY);
                 rotateTile(h.q, h.r);
-            }
-
-            function updateHoverInfo() {
-                if (hoveredQ !== null) {
-                    dom.hoverInfo.classList.add('visible');
-                    dom.defaultInfo.style.display = 'none';
-                    dom.hiCoord.textContent = `(${hoveredQ}, ${hoveredR})`;
-                    dom.hiRot.textContent = ((tileRot(hoveredQ, hoveredR) % 360) + 360) % 360 + '°';
-                } else {
-                    dom.hoverInfo.classList.remove('visible');
-                    dom.defaultInfo.style.display = '';
-                }
             }
 
             dom.zoomIn.onclick = () => {
