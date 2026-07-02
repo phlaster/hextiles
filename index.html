@@ -761,6 +761,10 @@
                 <div class="s-top"><span>Curve Line Width</span><span class="s-val" id="vCurveW">1.0x</span></div>
                 <input type="range" id="sCurveW" min="0.1" max="2" step="0.05" value="1.0" />
             </div>
+            <div class="slider-row" style="margin-bottom: 16px;">
+                <div class="s-top"><span>Special Tiles</span><span class="s-val" id="vSpecialTiles">0.00</span></div>
+                <input type="range" id="sSpecialTiles" min="0" max="1.0" step="0.01" value="0" />
+            </div>
             <div class="upload-zone" id="uploadZone">
                 <i class="fas fa-cloud-upload-alt"></i>
                 <p>Click or drop an image</p>
@@ -1056,6 +1060,7 @@
                 hoveredR = null;
             let showGrid = true;
             let curveLineWidth = 1;
+            let specialTilesRatio = 0;
             let showUnrenderedDotted = true;
             let showBgDots = true;
             let isInitialized = false;
@@ -1150,6 +1155,9 @@
                 sCurveW: document.getElementById('sCurveW'),
                 vCurveW: document.getElementById('vCurveW'),
 
+                sSpecialTiles: document.getElementById('sSpecialTiles'),
+                vSpecialTiles: document.getElementById('vSpecialTiles'),
+
                 unrenderedToggle: document.getElementById('unrenderedToggle'),
                 bgDotsToggle: document.getElementById('bgDotsToggle'),
                 markersToggle: document.getElementById('markersToggle'),
@@ -1164,6 +1172,11 @@
                 let h = (q * 374761393 + r * 668265263 + randomSeed * 1013904223 + 2654435761) | 0;
                 h = Math.imul(h ^ (h >>> 13), 1274126177);
                 return Math.abs(h ^ (h >>> 16));
+            }
+
+            function isTileSpecial(q, r) {
+                if (specialTilesRatio <= 0) return false;
+                return (hashQR(q, r) % 10000) / 10000 < specialTilesRatio;
             }
 
             function baseRot(q, r) {
@@ -1397,15 +1410,20 @@
                 return [q, r, e];
             }
 
-            function getOtherEdge(k, e) {
+            function getOtherEdge(k, e, isSpecial = false) {
                 const eb = (e - k + 6) % 6;
                 let ob;
-                if (eb === 2) ob = 3;
-                else if (eb === 3) ob = 2;
-                else if (eb === 4) ob = 0;
-                else if (eb === 0) ob = 4;
-                else if (eb === 1) ob = 5;
-                else if (eb === 5) ob = 1;
+                if (!isSpecial) {
+                    if (eb === 2) ob = 3;
+                    else if (eb === 3) ob = 2;
+                    else if (eb === 4) ob = 0;
+                    else if (eb === 0) ob = 4;
+                    else if (eb === 1) ob = 5;
+                    else if (eb === 5) ob = 1;
+                } else {
+                    // Special pairs: (0,1), (2,3), (4,5)
+                    ob = eb ^ 1; // 0<->1, 2<->3, 4<->5
+                }
                 return (ob + k) % 6;
             }
 
@@ -1455,7 +1473,7 @@
                     let curve = curves.get(curveID);
                     if (!curve) continue;
                     let k = (tileRot(item.q, item.r) / 60) % 6;
-                    let pe = getOtherEdge(k, item.e);
+                    let pe = getOtherEdge(k, item.e, isTileSpecial(item.q, item.r));
                     let pid = edgeID(item.q, item.r, pe);
                     if (curveMap.has(pid)) {
                         let existingCurve = curveMap.get(pid);
@@ -1653,7 +1671,7 @@
                         let [q1, r1, e1] = decodeEdgeID(curr);
                         let n1 = getNeighbor(q1, r1, e1);
                         let k1 = (tileRot(q1, r1) / 60) % 6;
-                        let pe1 = getOtherEdge(k1, e1);
+                        let pe1 = getOtherEdge(k1, e1, isTileSpecial(q1, r1));
                         let pid1 = edgeID(q1, r1, pe1);
                         if (curve.edges.has(pid1) && !visited.has(pid1)) {
                             visited.add(pid1);
@@ -1661,7 +1679,7 @@
                         }
                         let q2 = n1.q, r2 = n1.r, e2 = n1.edge;
                         let k2 = (tileRot(q2, r2) / 60) % 6;
-                        let pe2 = getOtherEdge(k2, e2);
+                        let pe2 = getOtherEdge(k2, e2, isTileSpecial(q2, r2));
                         let pid2 = edgeID(q2, r2, pe2);
                         if (curve.edges.has(pid2) && !visited.has(pid2)) {
                             visited.add(pid2);
@@ -1746,7 +1764,12 @@
                 }
                 for (let cid of validAffected) splitCurve(cid);
                 let k = (tileRot(q, r) / 60) % 6;
-                let pairs = [
+                let special = isTileSpecial(q, r);
+                let pairs = special ? [
+                    [(0 + k) % 6, (1 + k) % 6],
+                    [(2 + k) % 6, (3 + k) % 6],
+                    [(4 + k) % 6, (5 + k) % 6]
+                ] : [
                     [(2 + k) % 6, (3 + k) % 6],
                     [(4 + k) % 6, (0 + k) % 6],
                     [(1 + k) % 6, (5 + k) % 6]
@@ -1758,12 +1781,12 @@
                         id2 = ids[e2];
                     let n1 = getNeighbor(q, r, e1);
                     let k1 = (tileRot(n1.q, n1.r) / 60) % 6;
-                    let n1_other = getOtherEdge(k1, n1.edge);
+                    let n1_other = getOtherEdge(k1, n1.edge, isTileSpecial(n1.q, n1.r));
                     let n1_other_id = edgeID(n1.q, n1.r, n1_other);
                     let c1 = curveMap.has(n1_other_id) ? curveMap.get(n1_other_id) : -1;
                     let n2 = getNeighbor(q, r, e2);
                     let k2 = (tileRot(n2.q, n2.r) / 60) % 6;
-                    let n2_other = getOtherEdge(k2, n2.edge);
+                    let n2_other = getOtherEdge(k2, n2.edge, isTileSpecial(n2.q, n2.r));
                     let n2_other_id = edgeID(n2.q, n2.r, n2_other);
                     let c2 = curveMap.has(n2_other_id) ? curveMap.get(n2_other_id) : -1;
                     if (c1 !== -1 && c2 !== -1) {
@@ -1819,7 +1842,12 @@
 
             function recalculateTile(q, r) {
                 let k = (tileRot(q, r) / 60) % 6;
-                let pairs = [
+                let special = isTileSpecial(q, r);
+                let pairs = special ? [
+                    [(0 + k) % 6, (1 + k) % 6],
+                    [(2 + k) % 6, (3 + k) % 6],
+                    [(4 + k) % 6, (5 + k) % 6]
+                ] : [
                     [(2 + k) % 6, (3 + k) % 6],
                     [(4 + k) % 6, (0 + k) % 6],
                     [(1 + k) % 6, (5 + k) % 6]
@@ -2096,20 +2124,39 @@
                     const logicalRot = tileRot(hq, hr);
                     const k = (logicalRot / 60) % 6;
 
-                    if (applyCurveStyle(hq, hr, (2 + k) % 6, sz)) {
-                        ctx.beginPath();
-                        ctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
-                        ctx.stroke();
-                    }
-                    if (applyCurveStyle(hq, hr, (4 + k) % 6, sz)) {
-                        ctx.beginPath();
-                        ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
-                        ctx.stroke();
-                    }
-                    if (applyCurveStyle(hq, hr, (1 + k) % 6, sz)) {
-                        ctx.beginPath();
-                        ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
-                        ctx.stroke();
+                    const special = isTileSpecial(hq, hr);
+                    if (special) {
+                        if (applyCurveStyle(hq, hr, (0 + k) % 6, sz)) {
+                            ctx.beginPath();
+                            ctx.arc(sz/2, a, sz/2, Math.PI, 5 * PI_DIV_3, false);
+                            ctx.stroke();
+                        }
+                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz)) {
+                            ctx.beginPath();
+                            ctx.arc(-sz, 0, sz/2, -PI_DIV_3, PI_DIV_3, false);
+                            ctx.stroke();
+                        }
+                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz)) {
+                            ctx.beginPath();
+                            ctx.arc(sz/2, -a, sz/2, PI_DIV_3, Math.PI, false);
+                            ctx.stroke();
+                        }
+                    } else {
+                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz)) {
+                            ctx.beginPath();
+                            ctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
+                            ctx.stroke();
+                        }
+                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz)) {
+                            ctx.beginPath();
+                            ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
+                            ctx.stroke();
+                        }
+                        if (applyCurveStyle(hq, hr, (1 + k) % 6, sz)) {
+                            ctx.beginPath();
+                            ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
+                            ctx.stroke();
+                        }
                     }
                     ctx.setLineDash([]);
                 }
@@ -2615,6 +2662,20 @@
             dom.sCurveW.addEventListener('input', function() {
                 curveLineWidth = +dom.sCurveW.value;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
+                requestRender();
+            });
+            let lastSpecialRatio = 0;
+            dom.sSpecialTiles.addEventListener('input', function() {
+                specialTilesRatio = +dom.sSpecialTiles.value;
+                dom.vSpecialTiles.textContent = specialTilesRatio.toFixed(2);
+                // Rebuild topology if ratio changed to avoid visual disconnects
+                if (Math.abs(specialTilesRatio - lastSpecialRatio) > 0.001) {
+                    lastSpecialRatio = specialTilesRatio;
+                    curveMap.clear();
+                    curves.clear();
+                    queue = [];
+                    initializeCentralTile();
+                }
                 requestRender();
             });
 
@@ -3231,7 +3292,7 @@
                 const data = {
                     w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
                     showGrid, showUnrenderedDotted, markersVisible, showBgDots,
-                    rotMode, randomSeed, curveLineWidth,
+                    rotMode, randomSeed, curveLineWidth, specialTilesRatio,
                     texTf: { ...texTf },
                     curveColors: [...curveColors],
                     markers: eMarkers,
@@ -3297,11 +3358,22 @@
                 showBgDots = embedData.showBgDots !== undefined ? embedData.showBgDots : true;
                 rotMode = embedData.rotMode || 'hash';
                 randomSeed = embedData.randomSeed || 0;
-                curveLineWidth = embedData.curveLineWidth || 1; // Load line width state
+                curveLineWidth = embedData.curveLineWidth || 1;
+                specialTilesRatio = embedData.specialTilesRatio || 0;
                 texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
                 curveColors = embedData.curveColors && embedData.curveColors.length > 0
                     ? [...embedData.curveColors].slice(0, 10) : [COLORS.curves[0]];
                 gradientMarkers = (embedData.markers || []).slice(0, 10).map(m => ({ ...m }));
+
+                // Sync DOM toggles to match loaded embed state
+                dom.gridToggle.checked = showGrid;
+                dom.unrenderedToggle.checked = showUnrenderedDotted;
+                dom.bgDotsToggle.checked = showBgDots;
+                dom.markersToggle.checked = markersVisible;
+                dom.sCurveW.value = curveLineWidth;
+                dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
+                dom.sSpecialTiles.value = specialTilesRatio;
+                dom.vSpecialTiles.textContent = specialTilesRatio.toFixed(2);
 
                 if (embedData.rotOverrides) {
                     for (const [q, r, rot] of embedData.rotOverrides) {
@@ -3335,6 +3407,8 @@
                 markersVisible = dom.markersToggle.checked;
                 curveLineWidth = +dom.sCurveW.value || 1;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
+                specialTilesRatio = +dom.sSpecialTiles.value || 0;
+                dom.vSpecialTiles.textContent = specialTilesRatio.toFixed(2);
 
                 resize();
                 render();
