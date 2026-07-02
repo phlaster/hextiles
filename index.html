@@ -2800,6 +2800,82 @@
                 }
             }
 
+            function generateFavicon() {
+                const favCanvas = document.createElement('canvas');
+                favCanvas.width = 64;
+                favCanvas.height = 64;
+                const fctx = favCanvas.getContext('2d');
+
+                const sz = 32;
+                const cx = 32;
+                const cy = 32;
+                const rSz = sz * 0.95;
+                const PI_DIV_3 = Math.PI / 3;
+                const TWO_PI_DIV_3 = 2 * Math.PI / 3;
+                const FOUR_PI_DIV_3 = 4 * Math.PI / 3;
+                const SQRT3 = Math.sqrt(3);
+                const a = sz * SQRT3 / 2;
+
+                // Random rotation: 0, 60, 120, 180, 240, or 300 degrees
+                const randomAngle = Math.floor(Math.random() * 6) * PI_DIV_3;
+
+                // Everything is drawn relative to the centre, then rotated as a whole
+                fctx.save();
+                fctx.translate(cx, cy);
+                fctx.rotate(randomAngle);
+
+                // ----- Draw hexagon (fill + outline) -----
+                fctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = PI_DIV_3 * i;
+                    const vx = rSz * Math.cos(angle);
+                    const vy = rSz * Math.sin(angle);
+                    i === 0 ? fctx.moveTo(vx, vy) : fctx.lineTo(vx, vy);
+                }
+                fctx.closePath();
+
+                fctx.fillStyle = '#CCCCCC';
+                fctx.fill();
+
+                fctx.strokeStyle = '#444444';
+                fctx.lineWidth = 2;
+                fctx.stroke();
+
+                // ----- Clip to the hexagon and draw the three arcs -----
+                fctx.clip();
+
+                fctx.lineCap = 'round';
+                const lineWidth = sz / 3.5;
+                fctx.strokeStyle = '#444444';
+                fctx.lineWidth = lineWidth;
+
+                // Curve 1 (Edge 2)
+                fctx.beginPath();
+                fctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
+                fctx.stroke();
+
+                // Curve 2 (Edge 4)
+                fctx.beginPath();
+                fctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
+                fctx.stroke();
+
+                // Curve 3 (Edge 1)
+                fctx.beginPath();
+                fctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
+                fctx.stroke();
+
+                fctx.restore();
+
+                // ----- Set as favicon -----
+                let link = document.querySelector("link[rel~='icon']");
+                if (!link) {
+                    link = document.createElement('link');
+                    link.rel = 'icon';
+                    document.head.appendChild(link);
+                }
+                link.href = favCanvas.toDataURL('image/png');
+            }
+
             let toastTimer = null;
 
             function toast(msg) {
@@ -3243,6 +3319,9 @@
                 resize();
                 render();
             }
+
+            // Generate default tile favicon
+            generateFavicon();
         })();
     </script>
 </body>
