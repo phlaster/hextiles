@@ -2244,15 +2244,13 @@
                 ctx.fillRect(0, 0, W, H);
                 drawIDWGradient(W, H);
 
-                // Replace the old 1x1 dot drawing code with this:
                 if (showBgDots) {
                     ctx.fillStyle = COLORS.dotPattern;
-                    const dotSpacing = 35; // Tighter spacing
-                    const offXMod = ((px % dotSpacing) + dotSpacing) % dotSpacing;
-                    const offYMod = ((py % dotSpacing) + dotSpacing) % dotSpacing;
-                    for (let dx = offXMod; dx < W; dx += dotSpacing) {
-                        for (let dy = offYMod; dy < H; dy += dotSpacing) {
-                            ctx.fillRect(dx, dy, 2, 2); // 2x2 size for visibility
+                    const dotSpacing = 70; // Half as dense
+                    // Fixed to screen, ignoring panX/panY
+                    for (let dx = 0; dx < W; dx += dotSpacing) {
+                        for (let dy = 0; dy < H; dy += dotSpacing) {
+                            ctx.fillRect(dx, dy, 3.5, 3.5); // 3.5x3.5 size for visibility
                         }
                     }
                 }
@@ -3146,12 +3144,10 @@
 
                 if (showBgDots) {
                     offCtx.fillStyle = COLORS.dotPattern;
-                    const ds = 35 * scale; // Tighter spacing
-                    const oxm = ((ePanX % ds) + ds) % ds;
-                    const oym = ((ePanY % ds) + ds) % ds;
-                    for (let dx = oxm; dx < eW; dx += ds)
-                        for (let dy = oym; dy < eH; dy += ds)
-                            offCtx.fillRect(dx, dy, 2 * scale, 2 * scale); // 2x2 size scaled up
+                    const ds = 70 * scale;
+                    for (let dx = 0; dx < eW; dx += ds)
+                        for (let dy = 0; dy < eH; dy += ds)
+                            offCtx.fillRect(dx, dy, 3.5 * scale, 3.5 * scale); // 3.5x3.5 size scaled up
                 }
 
                 // Hex tiles
@@ -3316,6 +3312,14 @@
                 }
             } else {
                 // ── Normal mode ──
+                // Sync toggle states from persisted DOM state on page load
+                showGrid = dom.gridToggle.checked;
+                showUnrenderedDotted = dom.unrenderedToggle.checked;
+                showBgDots = dom.bgDotsToggle.checked;
+                markersVisible = dom.markersToggle.checked;
+                curveLineWidth = +dom.sCurveW.value || 1;
+                dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
+
                 resize();
                 render();
             }
