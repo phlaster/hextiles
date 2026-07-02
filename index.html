@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hexagonal Tiles</title>
+    <title>Hextiles</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
@@ -672,7 +672,7 @@
                 <h2>Hex Tiles</h2>
                 <p>Infinite tiled canvas with per-tile rotation</p>
             </div>
-            <button class="export-btn" id="exportBtn" title="Export"><i class="fas fa-share"></i></button>
+            <button class="export-btn" id="exportBtn" title="Export"><i class="fas fa-share-from-square"></i></button>
         </div>
 
         <div class="sb-section">
@@ -687,24 +687,24 @@
             </div>
         </div>
 
-                <div class="sb-section">
+        <div class="sb-section">
             <label>Display</label>
             <div class="toggle-row">
-                <span><i class="fas fa-border-all" style="margin-right:6px;color:var(--col-muted)"></i>Grid lines</span>
+                <span><i class="fas fa-cubes" style="margin-right:6px;color:var(--col-muted)"></i>Grid lines</span>
                 <label class="switch">
                     <input type="checkbox" id="gridToggle" checked />
                     <span class="track"></span>
                 </label>
             </div>
             <div class="toggle-row" style="margin-top:10px">
-                <span><i class="fas fa-circle-dot" style="margin-right:6px;color:var(--col-muted)"></i>Dashes for unrendered</span>
+                <span><i class="fas fa-ellipsis" style="margin-right:6px;color:var(--col-muted)"></i>Dashes for unrendered</span>
                 <label class="switch">
                     <input type="checkbox" id="unrenderedToggle" checked />
                     <span class="track"></span>
                 </label>
             </div>
             <div class="toggle-row" style="margin-top:10px">
-                <span><i class="fas fa-braille" style="margin-right:6px;color:var(--col-muted)"></i>Background dots</span>
+                <span><i class="fas fa-grip" style="margin-right:6px;color:var(--col-muted)"></i>Background dots</span>
                 <label class="switch">
                     <input type="checkbox" id="bgDotsToggle" checked />
                     <span class="track"></span>
@@ -2834,10 +2834,10 @@
             function getRandomMarkerPosition() {
                 const W = dom.cvs.width;
                 const H = dom.cvs.height;
-                const minX = W * 0.2;
-                const maxX = W * 0.8;
-                const minY = H * 0.2;
-                const maxY = H * 0.8;
+                const minX = W * 0.1;
+                const maxX = W * 0.9;
+                const minY = H * 0.1;
+                const maxY = H * 0.9;
 
                 let bestX = minX + Math.random() * (maxX - minX);
                 let bestY = minY + Math.random() * (maxY - minY);
@@ -2866,6 +2866,10 @@
             }
 
             dom.addMarkerBtn.onclick = () => {
+                if (gradientMarkers.length >= 10) {
+                    toast('Maximum of 10 gradient markers reached');
+                    return;
+                }
                 const color = pickNewMarkerColor();
                 if (!color) {
                     toast('All colors are already in use');
@@ -2879,6 +2883,10 @@
             };
 
             dom.addCurveBtn.onclick = () => {
+                if (curveColors.length >= 10) {
+                    toast('Maximum of 10 curve colors reached');
+                    return;
+                }
                 const color = pickNewCurveColor();
                 if (!color) {
                     toast('All colors are already in use');
@@ -3204,8 +3212,8 @@
                 curveLineWidth = embedData.curveLineWidth || 1; // Load line width state
                 texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
                 curveColors = embedData.curveColors && embedData.curveColors.length > 0
-                    ? [...embedData.curveColors] : [COLORS.curves[0]];
-                gradientMarkers = (embedData.markers || []).map(m => ({ ...m }));
+                    ? [...embedData.curveColors].slice(0, 10) : [COLORS.curves[0]];
+                gradientMarkers = (embedData.markers || []).slice(0, 10).map(m => ({ ...m }));
 
                 if (embedData.rotOverrides) {
                     for (const [q, r, rot] of embedData.rotOverrides) {
