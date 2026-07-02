@@ -762,8 +762,8 @@
                 <input type="range" id="sCurveW" min="0.1" max="2" step="0.05" value="1.0" />
             </div>
             <div class="slider-row" style="margin-bottom: 16px;">
-                <div class="s-top"><span>Special Tiles</span><span class="s-val" id="vSpecialTiles">0.00</span></div>
-                <input type="range" id="sSpecialTiles" min="0" max="1.0" step="0.01" value="0" />
+                <div class="s-top"><span>Alternative Tiles</span><span class="s-val" id="vAlterTiles">0.00</span></div>
+                <input type="range" id="sAlterTiles" min="0" max="1.0" step="0.01" value="0" />
             </div>
             <div class="upload-zone" id="uploadZone">
                 <i class="fas fa-cloud-upload-alt"></i>
@@ -1060,7 +1060,7 @@
                 hoveredR = null;
             let showGrid = true;
             let curveLineWidth = 1;
-            let specialTilesRatio = 0;
+            let alterTilesRatio = 0;
             let showUnrenderedDotted = true;
             let showBgDots = true;
             let isInitialized = false;
@@ -1155,8 +1155,8 @@
                 sCurveW: document.getElementById('sCurveW'),
                 vCurveW: document.getElementById('vCurveW'),
 
-                sSpecialTiles: document.getElementById('sSpecialTiles'),
-                vSpecialTiles: document.getElementById('vSpecialTiles'),
+                sAlterTiles: document.getElementById('sAlterTiles'),
+                vAlterTiles: document.getElementById('vAlterTiles'),
 
                 unrenderedToggle: document.getElementById('unrenderedToggle'),
                 bgDotsToggle: document.getElementById('bgDotsToggle'),
@@ -1174,9 +1174,9 @@
                 return Math.abs(h ^ (h >>> 16));
             }
 
-            function isTileSpecial(q, r) {
-                if (specialTilesRatio <= 0) return false;
-                return (hashQR(q, r) % 10000) / 10000 < specialTilesRatio;
+            function isTileAlter(q, r) {
+                if (alterTilesRatio <= 0) return false;
+                return (hashQR(q, r) % 10000) / 10000 < alterTilesRatio;
             }
 
             function baseRot(q, r) {
@@ -1410,10 +1410,10 @@
                 return [q, r, e];
             }
 
-            function getOtherEdge(k, e, isSpecial = false) {
+            function getOtherEdge(k, e, isAlter = false) {
                 const eb = (e - k + 6) % 6;
                 let ob;
-                if (!isSpecial) {
+                if (!isAlter) {
                     if (eb === 2) ob = 3;
                     else if (eb === 3) ob = 2;
                     else if (eb === 4) ob = 0;
@@ -1421,7 +1421,7 @@
                     else if (eb === 1) ob = 5;
                     else if (eb === 5) ob = 1;
                 } else {
-                    // Special pairs: (0,1), (2,3), (4,5)
+                    // Alter pairs: (0,1), (2,3), (4,5)
                     ob = eb ^ 1; // 0<->1, 2<->3, 4<->5
                 }
                 return (ob + k) % 6;
@@ -1473,7 +1473,7 @@
                     let curve = curves.get(curveID);
                     if (!curve) continue;
                     let k = (tileRot(item.q, item.r) / 60) % 6;
-                    let pe = getOtherEdge(k, item.e, isTileSpecial(item.q, item.r));
+                    let pe = getOtherEdge(k, item.e, isTileAlter(item.q, item.r));
                     let pid = edgeID(item.q, item.r, pe);
                     if (curveMap.has(pid)) {
                         let existingCurve = curveMap.get(pid);
@@ -1671,7 +1671,7 @@
                         let [q1, r1, e1] = decodeEdgeID(curr);
                         let n1 = getNeighbor(q1, r1, e1);
                         let k1 = (tileRot(q1, r1) / 60) % 6;
-                        let pe1 = getOtherEdge(k1, e1, isTileSpecial(q1, r1));
+                        let pe1 = getOtherEdge(k1, e1, isTileAlter(q1, r1));
                         let pid1 = edgeID(q1, r1, pe1);
                         if (curve.edges.has(pid1) && !visited.has(pid1)) {
                             visited.add(pid1);
@@ -1679,7 +1679,7 @@
                         }
                         let q2 = n1.q, r2 = n1.r, e2 = n1.edge;
                         let k2 = (tileRot(q2, r2) / 60) % 6;
-                        let pe2 = getOtherEdge(k2, e2, isTileSpecial(q2, r2));
+                        let pe2 = getOtherEdge(k2, e2, isTileAlter(q2, r2));
                         let pid2 = edgeID(q2, r2, pe2);
                         if (curve.edges.has(pid2) && !visited.has(pid2)) {
                             visited.add(pid2);
@@ -1764,8 +1764,8 @@
                 }
                 for (let cid of validAffected) splitCurve(cid);
                 let k = (tileRot(q, r) / 60) % 6;
-                let special = isTileSpecial(q, r);
-                let pairs = special ? [
+                let alter = isTileAlter(q, r);
+                let pairs = alter ? [
                     [(0 + k) % 6, (1 + k) % 6],
                     [(2 + k) % 6, (3 + k) % 6],
                     [(4 + k) % 6, (5 + k) % 6]
@@ -1781,12 +1781,12 @@
                         id2 = ids[e2];
                     let n1 = getNeighbor(q, r, e1);
                     let k1 = (tileRot(n1.q, n1.r) / 60) % 6;
-                    let n1_other = getOtherEdge(k1, n1.edge, isTileSpecial(n1.q, n1.r));
+                    let n1_other = getOtherEdge(k1, n1.edge, isTileAlter(n1.q, n1.r));
                     let n1_other_id = edgeID(n1.q, n1.r, n1_other);
                     let c1 = curveMap.has(n1_other_id) ? curveMap.get(n1_other_id) : -1;
                     let n2 = getNeighbor(q, r, e2);
                     let k2 = (tileRot(n2.q, n2.r) / 60) % 6;
-                    let n2_other = getOtherEdge(k2, n2.edge, isTileSpecial(n2.q, n2.r));
+                    let n2_other = getOtherEdge(k2, n2.edge, isTileAlter(n2.q, n2.r));
                     let n2_other_id = edgeID(n2.q, n2.r, n2_other);
                     let c2 = curveMap.has(n2_other_id) ? curveMap.get(n2_other_id) : -1;
                     if (c1 !== -1 && c2 !== -1) {
@@ -1842,8 +1842,8 @@
 
             function recalculateTile(q, r) {
                 let k = (tileRot(q, r) / 60) % 6;
-                let special = isTileSpecial(q, r);
-                let pairs = special ? [
+                let alter = isTileAlter(q, r);
+                let pairs = alter ? [
                     [(0 + k) % 6, (1 + k) % 6],
                     [(2 + k) % 6, (3 + k) % 6],
                     [(4 + k) % 6, (5 + k) % 6]
@@ -2124,8 +2124,8 @@
                     const logicalRot = tileRot(hq, hr);
                     const k = (logicalRot / 60) % 6;
 
-                    const special = isTileSpecial(hq, hr);
-                    if (special) {
+                    const alter = isTileAlter(hq, hr);
+                    if (alter) {
                         if (applyCurveStyle(hq, hr, (0 + k) % 6, sz)) {
                             ctx.beginPath();
                             ctx.arc(sz/2, a, sz/2, Math.PI, 5 * PI_DIV_3, false);
@@ -2664,13 +2664,13 @@
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
                 requestRender();
             });
-            let lastSpecialRatio = 0;
-            dom.sSpecialTiles.addEventListener('input', function() {
-                specialTilesRatio = +dom.sSpecialTiles.value;
-                dom.vSpecialTiles.textContent = specialTilesRatio.toFixed(2);
+            let lastAlterRatio = 0;
+            dom.sAlterTiles.addEventListener('input', function() {
+                alterTilesRatio = +dom.sAlterTiles.value;
+                dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
                 // Rebuild topology if ratio changed to avoid visual disconnects
-                if (Math.abs(specialTilesRatio - lastSpecialRatio) > 0.001) {
-                    lastSpecialRatio = specialTilesRatio;
+                if (Math.abs(alterTilesRatio - lastAlterRatio) > 0.001) {
+                    lastAlterRatio = alterTilesRatio;
                     curveMap.clear();
                     curves.clear();
                     queue = [];
@@ -3292,7 +3292,7 @@
                 const data = {
                     w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
                     showGrid, showUnrenderedDotted, markersVisible, showBgDots,
-                    rotMode, randomSeed, curveLineWidth, specialTilesRatio,
+                    rotMode, randomSeed, curveLineWidth, alterTilesRatio,
                     texTf: { ...texTf },
                     curveColors: [...curveColors],
                     markers: eMarkers,
@@ -3359,7 +3359,7 @@
                 rotMode = embedData.rotMode || 'hash';
                 randomSeed = embedData.randomSeed || 0;
                 curveLineWidth = embedData.curveLineWidth || 1;
-                specialTilesRatio = embedData.specialTilesRatio || 0;
+                alterTilesRatio = embedData.alterTilesRatio || 0;
                 texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
                 curveColors = embedData.curveColors && embedData.curveColors.length > 0
                     ? [...embedData.curveColors].slice(0, 10) : [COLORS.curves[0]];
@@ -3372,8 +3372,8 @@
                 dom.markersToggle.checked = markersVisible;
                 dom.sCurveW.value = curveLineWidth;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
-                dom.sSpecialTiles.value = specialTilesRatio;
-                dom.vSpecialTiles.textContent = specialTilesRatio.toFixed(2);
+                dom.sAlterTiles.value = alterTilesRatio;
+                dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
 
                 if (embedData.rotOverrides) {
                     for (const [q, r, rot] of embedData.rotOverrides) {
@@ -3407,8 +3407,8 @@
                 markersVisible = dom.markersToggle.checked;
                 curveLineWidth = +dom.sCurveW.value || 1;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
-                specialTilesRatio = +dom.sSpecialTiles.value || 0;
-                dom.vSpecialTiles.textContent = specialTilesRatio.toFixed(2);
+                alterTilesRatio = +dom.sAlterTiles.value || 0;
+                dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
 
                 resize();
                 render();
