@@ -3275,13 +3275,16 @@
                 fctx.restore();
 
                 // ----- Set as favicon -----
+                const url = favCanvas.toDataURL('image/png');
                 let link = document.querySelector("link[rel~='icon']");
                 if (!link) {
                     link = document.createElement('link');
                     link.rel = 'icon';
                     document.head.appendChild(link);
                 }
-                link.href = favCanvas.toDataURL('image/png');
+                link.href = url;
+                
+                return url; // Return the URL for reuse
             }
 
             let toastTimer = null;
@@ -3647,15 +3650,14 @@
 
                 const data = {
                     w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
-                    showGrid, showUnrenderedDotted, markersVisible, showBgDots, flowEnabled, inertiaEnabled,
+                    showGrid, showUnrenderedDotted, markersVisible: false, showBgDots, flowEnabled, inertiaEnabled,
                     rotMode, randomSeed, curveLineWidth, alterTilesRatio,
                     texTf: { ...texTf },
                     curveColors: [...curveColors],
-                    markers: eMarkers,
+                    markers: eMarkers, // Keep marker data so the gradient works!
                     rotOverrides: serializeRotOverrides(),
                     texture: getTextureDataUrl()
                 };
-
                 let encoded;
                 try {
                     encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
@@ -3727,6 +3729,7 @@
                 curveColors = embedData.curveColors && embedData.curveColors.length > 0
                     ? [...embedData.curveColors].slice(0, 10) : ['#444444']; 
                 gradientMarkers = (embedData.markers || []).slice(0, 10).map(m => ({ ...m }));
+                markersVisible = false; // Hide the sun icons, but keep the gradient
 
                 updateCurveColorsCache();
                 updateGradientMarkersCache();
@@ -3788,8 +3791,23 @@
                 render();
             }
 
-            // Generate default tile favicon
-            generateFavicon();
+            // Generate default tile favicon and replace GH icon in embed mode
+            const generatedFaviconUrl = generateFavicon();
+            if (isEmbedMode) {
+                // Link to the full hosted interface (base URL without the embed hash)
+                dom.ghLink.href = location.href.split('#')[0];
+                dom.ghLink.title = 'Open Full Interface';
+                
+                const img = document.createElement('img');
+                img.src = generatedFaviconUrl;
+                img.style.width = '14px';
+                img.style.height = '14px';
+                img.style.verticalAlign = 'middle';
+                img.style.position = 'relative';
+                img.style.top = '-1px'; 
+                dom.ghLink.innerHTML = ''; // Clear the FA icon
+                dom.ghLink.appendChild(img);
+            }
         })();
     </script>
 </body>
