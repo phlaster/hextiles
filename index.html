@@ -1052,6 +1052,7 @@
 
             // ── use COLORS.markers and COLORS.curves directly ──
             let gradientMarkers = [];
+            let gradientMarkersRGB = []; // Cached RGB values for gradient markers
             let draggedMarkerIndex = -1;
             let isDragMarker = false;
             let dragMarkerOffsetX = 0;
@@ -1061,6 +1062,49 @@
             let activeMarkerIndex = 0;
 
             let curveColors = ['#444444']; // Target colors
+            let curveColorsRGB = []; // Cached RGB arrays for curve colors
+
+            // Pre-parse and cache RGB values to avoid repeated string parsing in render loop
+            function updateCurveColorsCache() {
+                while (curveColorsRGB.length < curveColors.length) {
+                    const rgb = hexToRgb(curveColors[curveColorsRGB.length]);
+                    curveColorsRGB.push({ r: rgb[0], g: rgb[1], b: rgb[2], tr: rgb[0], tg: rgb[1], tb: rgb[2] });
+                }
+                if (curveColorsRGB.length > curveColors.length) {
+                    curveColorsRGB.length = curveColors.length;
+                }
+                for (let i = 0; i < curveColors.length; i++) {
+                    const rgb = hexToRgb(curveColors[i]);
+                    curveColorsRGB[i].tr = rgb[0];
+                    curveColorsRGB[i].tg = rgb[1];
+                    curveColorsRGB[i].tb = rgb[2];
+                }
+            }
+
+            function updateGradientMarkersCache() {
+                while (gradientMarkersRGB.length < gradientMarkers.length) {
+                    const m = gradientMarkers[gradientMarkersRGB.length];
+                    const rgb = hexToRgb(m.color);
+                    gradientMarkersRGB.push({ 
+                        x: m.x, y: m.y, 
+                        r: rgb[0], g: rgb[1], b: rgb[2], 
+                        tr: rgb[0], tg: rgb[1], tb: rgb[2] 
+                    });
+                }
+                if (gradientMarkersRGB.length > gradientMarkers.length) {
+                    gradientMarkersRGB.length = gradientMarkers.length;
+                }
+                for (let i = 0; i < gradientMarkers.length; i++) {
+                    const m = gradientMarkers[i];
+                    gradientMarkersRGB[i].x = m.x;
+                    gradientMarkersRGB[i].y = m.y;
+                    const rgb = hexToRgb(m.color);
+                    gradientMarkersRGB[i].tr = rgb[0];
+                    gradientMarkersRGB[i].tg = rgb[1];
+                    gradientMarkersRGB[i].tb = rgb[2];
+                }
+            }
+
             let edgeRgbMap = new Map(); // Tracks current animated RGB for each individual edge
             let edgeColorAnimating = false; // Flag to keep rendering
             let lastRipple = { q: 0, r: 0, time: 0 }; // Epicenter for color wave
@@ -1257,7 +1301,7 @@
 
             // ──── IDW Gradient ────
             function drawIDWGradient(W, H) {
-                if (gradientMarkers.length === 0) return;
+                if (gradientMarkersRGB.length === 0) return;
                 const scale = 0.2;
                 const lowW = Math.max(2, Math.ceil(W * scale));
                 const lowH = Math.max(2, Math.ceil(H * scale));
@@ -1271,15 +1315,9 @@
                 const imgData = gctx.createImageData(lowW, lowH);
                 const data = imgData.data;
 
-                const ms = gradientMarkers.map(m => ({
-                    x: m.x * scale,
-                    y: m.y * scale,
-                    r: parseInt(m.color.slice(1, 3), 16),
-                    g: parseInt(m.color.slice(3, 5), 16),
-                    b: parseInt(m.color.slice(5, 7), 16)
-                }));
-
+                const ms = gradientMarkersRGB;
                 const n = ms.length;
+                
                 if (n === 1) {
                     const m = ms[0];
                     for (let i = 0; i < lowW * lowH; i++) {
@@ -1292,14 +1330,11 @@
                 } else {
                     for (let py = 0; py < lowH; py++) {
                         for (let px = 0; px < lowW; px++) {
-                            let totalWeight = 0,
-                                r = 0,
-                                g = 0,
-                                b = 0;
+                            let totalWeight = 0, r = 0, g = 0, b = 0;
                             for (let i = 0; i < n; i++) {
                                 const m = ms[i];
-                                const dx = px - m.x,
-                                    dy = py - m.y;
+                                const dx = px - (m.x * scale);
+                                const dy = py - (m.y * scale);
                                 const distSq = dx * dx + dy * dy + 0.5;
                                 const weight = 1 / (distSq * distSq);
                                 totalWeight += weight;
@@ -1571,20 +1606,20 @@
             }
 
             function getBackgroundColorAt(x, y) {
-                if (gradientMarkers.length === 0) return null;
+                if (gradientMarkersRGB.length === 0) return null;
                 let totalWeight = 0, r = 0, g = 0, b = 0;
                 
-                for (let i = 0; i < gradientMarkers.length; i++) {
-                    const m = gradientMarkers[i];
+                for (let i = 0; i < gradientMarkersRGB.length; i++) {
+                    const m = gradientMarkersRGB[i];
                     const dx = x - m.x;
                     const dy = y - m.y;
                     const distSq = dx * dx + dy * dy + 0.5;
                     const weight = 1 / (distSq * distSq);
                     
                     totalWeight += weight;
-                    r += parseInt(m.color.slice(1, 3), 16) * weight;
-                    g += parseInt(m.color.slice(3, 5), 16) * weight;
-                    b += parseInt(m.color.slice(5, 7), 16) * weight;
+                    r += m.r * weight;
+                    g += m.g * weight;
+                    b += m.b * weight;
                 }
                 return [r / totalWeight, g / totalWeight, b / totalWeight];
             }
@@ -1891,27 +1926,31 @@
                 ctx.setLineDash([]);
                 const id = edgeID(q, r, e);
                 
-                let targetHex = null;
+                let targetRgb = null;
                 let targetCurveID = -1;
-                if (curveColors.length === 1) {
-                    targetHex = curveColors[0];
+                if (curveColorsRGB.length === 1) {
+                    targetRgb = curveColorsRGB[0];
                     targetCurveID = -2; // Special ID for single color mode
                 } else if (curveMap.has(id)) {
                     targetCurveID = curveMap.get(id);
                     let curve = curves.get(targetCurveID);
                     if (curve) {
                         let c = curve.color;
-                        targetHex = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
+                        if (typeof c === 'number') {
+                            targetRgb = curveColorsRGB[c % curveColorsRGB.length];
+                        } else {
+                            // Fallback for hex strings if they somehow exist
+                            const rgb = hexToRgb(c); 
+                            targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
+                        }
                     }
                 }
 
-                if (targetHex) {
-                    const targetRgb = hexToRgb(targetHex);
+                if (targetRgb) {
                     let edgeData = edgeRgbMap.get(id);
-                    
                     if (!edgeData) {
                         edgeData = { 
-                            rgb: [...targetRgb], 
+                            rgb: [targetRgb.r, targetRgb.g, targetRgb.b], 
                             targetCurveID: targetCurveID, 
                             rippleTime: 0, 
                             rippleQ: 0, 
@@ -1942,9 +1981,10 @@
                     
                     if (canTransition) {
                         let diff = false;
+                        const targets = [targetRgb.r, targetRgb.g, targetRgb.b];
                         for (let i = 0; i < 3; i++) {
-                            const newVal = edgeData.rgb[i] + (targetRgb[i] - edgeData.rgb[i]) * 0.08;
-                            if (Math.abs(targetRgb[i] - newVal) > 0.5) diff = true;
+                            const newVal = edgeData.rgb[i] + (targets[i] - edgeData.rgb[i]) * 0.08;
+                            if (Math.abs(targets[i] - newVal) > 0.5) diff = true;
                             edgeData.rgb[i] = newVal;
                         }
                         if (diff) edgeColorAnimating = true;
@@ -1981,6 +2021,7 @@
                     let originalColor = m.color;
                     colorInput.addEventListener('input', (e) => {
                         gradientMarkers[i].color = e.target.value;
+                        updateGradientMarkersCache();
                         hexInput.value = e.target.value.toUpperCase();
                     });
                     colorInput.addEventListener('change', (e) => {
@@ -1994,6 +2035,7 @@
                             toast('Color already exists in gradient');
                         } else {
                             originalColor = e.target.value;
+                            updateGradientMarkersCache();
                         }
                     });
                     colorInput.addEventListener('click', (e) => e.stopPropagation());
@@ -2016,6 +2058,7 @@
                             } else {
                                 gradientMarkers[i].color = newColor;
                                 originalColor = newColor;
+                                updateGradientMarkersCache();
                                 colorInput.value = newColor;
                                 e.target.value = newColor.toUpperCase();
                             }
@@ -2037,6 +2080,7 @@
                         removeBtn.addEventListener('click', (e) => {
                             e.stopPropagation();
                             gradientMarkers.splice(i, 1);
+                            updateGradientMarkersCache();
                             renderGradientList();
                         });
                         item.appendChild(removeBtn);
@@ -2363,7 +2407,32 @@
 
                 // Reset edge animation flag for this frame
                 edgeColorAnimating = false;
-                // (The interpolation logic was moved into applyCurveStyle for per-edge delay)
+                let gradColorAnimating = false;
+                let curveColorAnimating = false;
+
+                // Interpolate Gradient Marker Colors
+                for (let i = 0; i < gradientMarkersRGB.length; i++) {
+                    const m = gradientMarkersRGB[i];
+                    let diff = false;
+                    const nr = m.r + (m.tr - m.r) * 0.1;
+                    const ng = m.g + (m.tg - m.g) * 0.1;
+                    const nb = m.b + (m.tb - m.b) * 0.1;
+                    if (Math.abs(m.r - nr) > 0.5 || Math.abs(m.g - ng) > 0.5 || Math.abs(m.b - nb) > 0.5) diff = true;
+                    m.r = nr; m.g = ng; m.b = nb;
+                    if (diff) gradColorAnimating = true;
+                }
+
+                // Interpolate Curve Colors
+                for (let i = 0; i < curveColorsRGB.length; i++) {
+                    const c = curveColorsRGB[i];
+                    let diff = false;
+                    const nr = c.r + (c.tr - c.r) * 0.1;
+                    const ng = c.g + (c.tg - c.g) * 0.1;
+                    const nb = c.b + (c.tb - c.b) * 0.1;
+                    if (Math.abs(c.r - nr) > 0.5 || Math.abs(c.g - ng) > 0.5 || Math.abs(c.b - nb) > 0.5) diff = true;
+                    c.r = nr; c.g = ng; c.b = nb;
+                    if (diff) curveColorAnimating = true;
+                }
 
                 // Flow physics: inertia and drift
                 let driftX = 0, driftY = 0;
@@ -2518,7 +2587,7 @@
                     dom.statColors.textContent = visColors.size;
                 }
 
-                if (keepRendering || edgeColorAnimating) {
+                if (keepRendering || edgeColorAnimating || gradColorAnimating || curveColorAnimating) {
                     requestRender();
                 }
             }
@@ -2544,6 +2613,7 @@
                                 color: '#cccccc' // Force initial color
                             });
                             activeMarkerIndex = 0;
+                            updateGradientMarkersCache();
                             renderGradientList();
                             renderCurveList();
                         }
@@ -2640,6 +2710,10 @@
                 if (isDragMarker && draggedMarkerIndex !== -1) {
                     gradientMarkers[draggedMarkerIndex].x = mx - dragMarkerOffsetX;
                     gradientMarkers[draggedMarkerIndex].y = my - dragMarkerOffsetY;
+                    if (gradientMarkersRGB[draggedMarkerIndex]) {
+                        gradientMarkersRGB[draggedMarkerIndex].x = gradientMarkers[draggedMarkerIndex].x;
+                        gradientMarkersRGB[draggedMarkerIndex].y = gradientMarkers[draggedMarkerIndex].y;
+                    }
                     requestRender(); 
                     return;
                 }
@@ -2728,6 +2802,7 @@
                 if (clickedMarkerIdx !== -1) {
                     if (gradientMarkers.length > 1) {
                         gradientMarkers.splice(clickedMarkerIdx, 1);
+                        updateGradientMarkersCache();
                         if (activeMarkerIndex >= gradientMarkers.length) {
                             activeMarkerIndex = gradientMarkers.length - 1;
                         }
@@ -2879,6 +2954,7 @@
                 curveColorPool = generateDistinctThemePool();
                 for (let i = 0; i < curveColors.length; i++) {
                     curveColors[i] = curveColorPool.pool[i] || curveColors[i];
+                    updateCurveColorsCache();
                 }
                 renderCurveList();
                 toast(`Theme "${curveColorPool.name}" applied to curves`);
@@ -2891,6 +2967,7 @@
                 gradientColorPool = generateDistinctThemePool();
                 for (let i = 0; i < gradientMarkers.length; i++) {
                     gradientMarkers[i].color = gradientColorPool.pool[i] || gradientMarkers[i].color;
+                    updateGradientMarkersCache();
                 }
                 renderGradientList();
                 toast(`Theme "${gradientColorPool.name}" applied to gradient`);
@@ -3204,6 +3281,7 @@
                 }
                 const pos = getRandomMarkerPosition();
                 gradientMarkers.push({ x: pos.x, y: pos.y, color: color });
+                updateGradientMarkersCache();
                 markersVisible = true;
                 dom.markersToggle.checked = true;
                 renderGradientList();
@@ -3220,10 +3298,11 @@
                     return;
                 }
                 curveColors.push(color);
+                updateCurveColorsCache();
                 activeCurveIndex = curveColors.length - 1;
                 renderCurveList();
                 curveMap.clear();
-                edgeRgbMap.clear();
+                // Intentionally NOT clearing edgeRgbMap to allow smooth color transitions
                 curves.clear();
                 queue = [];
                 initializeCentralTile();
@@ -3549,6 +3628,9 @@
                     ? [...embedData.curveColors].slice(0, 10) : ['#444444']; 
                 gradientMarkers = (embedData.markers || []).slice(0, 10).map(m => ({ ...m }));
 
+                updateCurveColorsCache();
+                updateGradientMarkersCache();
+
                 // Sync DOM toggles to match loaded embed state
                 dom.gridToggle.checked = showGrid;
                 dom.unrenderedToggle.checked = showUnrenderedDotted;
@@ -3600,6 +3682,7 @@
 
                 // Initialize with the hardcoded default color
                 curveColors = ['#444444']; // Force initial color
+                updateCurveColorsCache();
 
                 resize();
                 render();
