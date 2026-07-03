@@ -2510,7 +2510,7 @@
                 let driftX = 0, driftY = 0;
                 if (flowEnabled) {
                     if (hoveredQ !== null && hoveredR !== null) {
-                        // Nudge flow towards the mouse, strength based on distance from center
+                        // Nudge flow AWAY from the mouse, strength based on distance from center
                         const cx = W / 2;
                         const cy = H / 2;
                         const dx = mouseScreenX - cx;
@@ -2521,7 +2521,7 @@
                         const maxDist = Math.min(W, H) / 2;
                         const strength = Math.min(1, dist / maxDist);
                         
-                        driftTargetAngle = Math.atan2(dy, dx);
+                        driftTargetAngle = Math.atan2(dy, dx) + Math.PI; // Add 180° to reverse direction
                         driftTargetSpeed = strength * 0.35; // Up to 0.35 speed
                         driftTimer = 0; // Pause the random timer while hovering
                     } else {
