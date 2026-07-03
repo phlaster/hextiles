@@ -1026,9 +1026,8 @@
                 mouseScreenY = -9999;
             let hoveredQ = null,
                 hoveredR = null;
-            let prevHoverX = null,
-                prevHoverY = null;
-            let hoverAnim = null;
+            let visHoverX = null,
+                visHoverY = null;
             let showGrid = true;
             let curveLineWidth = 1;
             let alterTilesRatio = 0;
@@ -1062,6 +1061,9 @@
             let activeMarkerIndex = 0;
 
             let curveColors = ['#444444']; // Target colors
+            let edgeRgbMap = new Map(); // Tracks current animated RGB for each individual edge
+            let edgeColorAnimating = false; // Flag to keep rendering
+            let lastRipple = { q: 0, r: 0, time: 0 }; // Epicenter for color wave
             let activeCurveIndex = 0;
             let nextCurveID = 0;
             const curveMap = new Map();
@@ -1149,6 +1151,10 @@
             let ctx = dom.cvs.getContext('2d');
 
             // ──── helpers ────
+            function hexDistance(q1, r1, q2, r2) {
+                return (Math.abs(q1 - q2) + Math.abs(q1 + r1 - q2 - r2) + Math.abs(r1 - r2)) / 2;
+            }
+
             function hexKey(q, r) { return (q << 16) ^ r; }
 
             function hashQR(q, r) {
@@ -1689,8 +1695,7 @@
                         
                         let newCurve = {
                             id: newID, color: newColor, size: components[i].length, locked: false,
-                            edges: compSet,
-                            rgb: [...curve.rgb] // Inherit parent's current color for smooth transition!
+                            edges: compSet
                         };
                         curves.set(newID, newCurve);
                         for (let id of newCurve.edges) curveMap.set(id, newID);
@@ -1727,8 +1732,6 @@
                 }
                 if (availableColors.length === 0) availableColors.push(0);
                 
-                // Capture the current rendered color of the edges before we detach them
-                let prevRgbs = [null, null, null, null, null, null];
                 for (let i = 0; i < 6; i++) {
                     let id = ids[i];
                     if (curveMap.has(id)) {
@@ -1737,7 +1740,6 @@
                         if (curve) {
                             curve.edges.delete(id);
                             curve.size = curve.edges.size;
-                            prevRgbs[i] = curve.rgb ? [...curve.rgb] : hexToRgb(curveColors[curve.color % curveColors.length]);
                         }
                         curveMap.delete(id);
                     }
@@ -1816,10 +1818,7 @@
                         
                         // console.log(`%c  [NEW] Created brand new curve ${curveID} with color index ${color}`, 'color: #D65F5F; font-weight: bold;');
                         
-                        // Inherit the previous color of the edge so it fades smoothly instead of snapping
-                        let startRgb = prevRgbs[e1] || prevRgbs[e2] || hexToRgb(curveColors[color % curveColors.length]);
-                        
-                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set(), rgb: startRgb });
+                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
                         curveMap.set(id1, curveID);
                         curveMap.set(id2, curveID);
                         curves.get(curveID).edges.add(id1);
@@ -1872,7 +1871,7 @@
                         const bgColor = getBackgroundColorAt(p.x, p.y);
                         let color = pickColorForNewCurve(adjColors, -1, q, r * 6 + e1, bgColor);
                         
-                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set(), rgb: hexToRgb(curveColors[color % curveColors.length]) });
+                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
                         curveMap.set(id1, curveID);
                         curves.get(curveID).edges.add(id1);
                         curves.get(curveID).size++;
@@ -1890,28 +1889,72 @@
 
             function applyCurveStyle(q, r, e, sz) {
                 ctx.setLineDash([]);
+                const id = edgeID(q, r, e);
+                
+                let targetHex = null;
+                let targetCurveID = -1;
                 if (curveColors.length === 1) {
-                    const rgb = curves.size > 0 ? curves.values().next().value.rgb : hexToRgb(curveColors[0]);
-                    ctx.strokeStyle = `rgb(${Math.round(rgb[0])},${Math.round(rgb[1])},${Math.round(rgb[2])})`;
+                    targetHex = curveColors[0];
+                    targetCurveID = -2; // Special ID for single color mode
+                } else if (curveMap.has(id)) {
+                    targetCurveID = curveMap.get(id);
+                    let curve = curves.get(targetCurveID);
+                    if (curve) {
+                        let c = curve.color;
+                        targetHex = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
+                    }
+                }
+
+                if (targetHex) {
+                    const targetRgb = hexToRgb(targetHex);
+                    let edgeData = edgeRgbMap.get(id);
+                    
+                    if (!edgeData) {
+                        edgeData = { 
+                            rgb: [...targetRgb], 
+                            targetCurveID: targetCurveID, 
+                            rippleTime: 0, 
+                            rippleQ: 0, 
+                            rippleR: 0 
+                        };
+                        edgeRgbMap.set(id, edgeData);
+                    }
+                    
+                    // Detect if the curve assignment changed
+                    if (edgeData.targetCurveID !== targetCurveID) {
+                        edgeData.targetCurveID = targetCurveID;
+                        edgeData.rippleTime = lastRipple.time;
+                        edgeData.rippleQ = lastRipple.q;
+                        edgeData.rippleR = lastRipple.r;
+                    }
+                    
+                    // Calculate delay based on spatial distance from the rotation epicenter
+                    let canTransition = true;
+                    if (edgeData.rippleTime > 0) {
+                        const [eq, er] = decodeEdgeID(id);
+                        const dist = hexDistance(eq, er, edgeData.rippleQ, edgeData.rippleR);
+                        const delay = dist * 35; // 35ms delay per tile
+                        if (Date.now() - edgeData.rippleTime < delay) {
+                            canTransition = false;
+                            edgeColorAnimating = true; // Keep rendering while waiting
+                        }
+                    }
+                    
+                    if (canTransition) {
+                        let diff = false;
+                        for (let i = 0; i < 3; i++) {
+                            const newVal = edgeData.rgb[i] + (targetRgb[i] - edgeData.rgb[i]) * 0.08;
+                            if (Math.abs(targetRgb[i] - newVal) > 0.5) diff = true;
+                            edgeData.rgb[i] = newVal;
+                        }
+                        if (diff) edgeColorAnimating = true;
+                    }
+                    
+                    ctx.strokeStyle = `rgb(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])})`;
                     ctx.lineWidth = sz / 3 * curveLineWidth;
                     return true;
                 }
-                let id = edgeID(q, r, e);
-                if (curveMap.has(id)) {
-                    let curveID = curveMap.get(id);
-                    let curve = curves.get(curveID);
-                    if (curve) {
-                        if (curve.rgb) {
-                            const rgb = curve.rgb;
-                            ctx.strokeStyle = `rgb(${Math.round(rgb[0])},${Math.round(rgb[1])},${Math.round(rgb[2])})`;
-                        } else {
-                            let c = curve.color;
-                            ctx.strokeStyle = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
-                        }
-                        ctx.lineWidth = sz / 3 * curveLineWidth;
-                        return true;
-                    }
-                }
+
                 if (showUnrenderedDotted) {
                     ctx.strokeStyle = COLORS.unrenderedDotted;
                     ctx.lineWidth = Math.max(1, (sz / 10) * curveLineWidth);
@@ -2318,43 +2361,46 @@
 
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
 
-                // Smoothly interpolate curve colors (handles palette changes AND curve index changes)
-                let colorAnimating = false;
-                for (const curve of curves.values()) {
-                    const c = curve.color;
-                    const targetHex = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
-                    const targetRgb = hexToRgb(targetHex);
-                    if (!curve.rgb) curve.rgb = [...targetRgb]; // Fallback init
-                    
-                    let diff = false;
-                    for (let i = 0; i < 3; i++) {
-                        const newVal = curve.rgb[i] + (targetRgb[i] - curve.rgb[i]) * 0.08;
-                        if (Math.abs(targetRgb[i] - newVal) > 0.5) diff = true;
-                        curve.rgb[i] = newVal;
-                    }
-                    if (diff) colorAnimating = true;
-                }
-                if (colorAnimating) keepRendering = true;
+                // Reset edge animation flag for this frame
+                edgeColorAnimating = false;
+                // (The interpolation logic was moved into applyCurveStyle for per-edge delay)
 
                 // Flow physics: inertia and drift
                 let driftX = 0, driftY = 0;
                 if (flowEnabled) {
-                    driftTimer++;
-                    // Pick a new random angle AND speed every 2-5 seconds
-                    if (driftTimer > 120 + Math.random() * 180) { 
-                        driftTargetAngle = Math.random() * Math.PI * 2;
-                        driftTargetSpeed = 0.01 + Math.random() * 0.49; // Speed between 0.05 and 0.20
-                        driftTimer = 0;
+                    if (hoveredQ !== null && hoveredR !== null) {
+                        // Nudge flow towards the mouse, strength based on distance from center
+                        const cx = W / 2;
+                        const cy = H / 2;
+                        const dx = mouseScreenX - cx;
+                        const dy = mouseScreenY - cy;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Max distance is half the smaller screen dimension
+                        const maxDist = Math.min(W, H) / 2;
+                        const strength = Math.min(1, dist / maxDist);
+                        
+                        driftTargetAngle = Math.atan2(dy, dx);
+                        driftTargetSpeed = strength * 0.35; // Up to 0.35 speed
+                        driftTimer = 0; // Pause the random timer while hovering
+                    } else {
+                        // Random drift variations when not hovering
+                        driftTimer++;
+                        if (driftTimer > 120 + Math.random() * 180) { 
+                            driftTargetAngle = Math.random() * Math.PI * 2;
+                            driftTargetSpeed = 0.05 + Math.random() * 0.15; 
+                            driftTimer = 0;
+                        }
                     }
                     
-                    // Smoothly interpolate angle (slow transition)
+                    // Smoothly interpolate angle (faster transition for mouse responsiveness)
                     let angleDiff = driftTargetAngle - driftAngle;
                     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                    driftAngle += angleDiff * 0.002;
+                    driftAngle += angleDiff * 0.02;
 
-                    // Smoothly interpolate speed (slow transition)
-                    driftSpeed += (driftTargetSpeed - driftSpeed) * 0.005;
+                    // Smoothly interpolate speed
+                    driftSpeed += (driftTargetSpeed - driftSpeed) * 0.02;
 
                     driftX = Math.cos(driftAngle) * driftSpeed;
                     driftY = Math.sin(driftAngle) * driftSpeed;
@@ -2403,36 +2449,34 @@
 
                 // ── Second pass: draw hover stroke on top ──
                 if (lod >= 1 && hoveredQ !== null && hoveredR !== null) {
-                    let hx, hy;
-                    
-                    if (hoverAnim) {
-                        const elapsed = now - hoverAnim.start;
-                        if (elapsed >= hoverAnim.duration) {
-                            // Animation complete
-                            hx = hoverAnim.toX;
-                            hy = hoverAnim.toY;
-                            hoverAnim = null;
-                        } else {
-                            // Interpolate with easing
-                            const t = elapsed / hoverAnim.duration;
-                            const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
-                            hx = hoverAnim.fromX + (hoverAnim.toX - hoverAnim.fromX) * ease;
-                            hy = hoverAnim.fromY + (hoverAnim.toY - hoverAnim.fromY) * ease;
-                            keepRendering = true; // Keep animating
-                        }
-                    } else {
-                        // No animation, use target position
-                        for (const h of hexes) {
-                            if (h.q === hoveredQ && h.r === hoveredR) {
-                                hx = h.x;
-                                hy = h.y;
-                                break;
-                            }
+                    let targetHX = null, targetHY = null;
+                    for (const h of hexes) {
+                        if (h.q === hoveredQ && h.r === hoveredR) {
+                            targetHX = h.x;
+                            targetHY = h.y;
+                            break;
                         }
                     }
                     
-                    if (hx !== undefined && hy !== undefined) {
-                        drawHoverStroke(hx, hy, sz, grid);
+                    if (targetHX !== null) {
+                        // Initialize visual position if null
+                        if (visHoverX === null) {
+                            visHoverX = targetHX;
+                            visHoverY = targetHY;
+                        } else {
+                            // Smoothly glide towards the target tile
+                            visHoverX += (targetHX - visHoverX) * 0.40; // 0.40 = glide speed
+                            visHoverY += (targetHY - visHoverY) * 0.40;
+                            
+                            // Keep rendering until we are perfectly centered
+                            if (Math.abs(targetHX - visHoverX) > 0.5 || Math.abs(targetHY - visHoverY) > 0.5) {
+                                keepRendering = true;
+                            } else {
+                                visHoverX = targetHX;
+                                visHoverY = targetHY;
+                            }
+                        }
+                        drawHoverStroke(visHoverX, visHoverY, sz, grid);
                     }
                 }
 
@@ -2474,7 +2518,7 @@
                     dom.statColors.textContent = visColors.size;
                 }
 
-                if (keepRendering) {
+                if (keepRendering || edgeColorAnimating) {
                     requestRender();
                 }
             }
@@ -2516,6 +2560,14 @@
                 if (cx !== undefined) {
                     panX = cx - (cx - panX) * (zoom / oz);
                     panY = cy - (cy - panY) * (zoom / oz);
+                    
+                    // Prevent jump when zooming while panning
+                    if (isDrag) {
+                        const dx = mouseScreenX - dragSX;
+                        const dy = mouseScreenY - dragSY;
+                        dragPX = panX - dx;
+                        dragPY = panY - dy;
+                    }
                 }
                 dom.zoomLabel.textContent = Math.round(zoom * 100) + '%';
             }
@@ -2532,21 +2584,21 @@
             dom.cvs.addEventListener('mouseleave', () => {
                 hoveredQ = null;
                 hoveredR = null;
-                hoverAnim = null;
-                prevHoverX = null;
-                prevHoverY = null;
+                visHoverX = null;
+                visHoverY = null;
             });
-
+            
             dom.cvs.addEventListener('mousedown', e => {
-                if (isEmbedMode) {
-                    isDrag = true; dragMoved = false;
-                    dragSX = e.clientX; dragSY = e.clientY;
-                    embedDragLastTile = null;
-                    return;
-                }
                 const r = dom.cvs.getBoundingClientRect();
                 const mx = e.clientX - r.left;
                 const my = e.clientY - r.top;
+                
+                if (isEmbedMode) {
+                    isDrag = true; dragMoved = false;
+                    dragSX = mx; dragSY = my;
+                    embedDragLastTile = null;
+                    return;
+                }
 
                 if (markersVisible) {
                     let clickedMarkerIdx = -1;
@@ -2599,7 +2651,7 @@
                 hoveredR = h.r;
 
                 if (isDrag) {
-                    const dx = e.clientX - dragSX, dy = e.clientY - dragSY;
+                    const dx = mx - dragSX, dy = my - dragSY;
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
                     
                     if (isEmbedMode) {
@@ -2695,6 +2747,9 @@
             function rotateTile(q, r) {
                 const k = hexKey(q, r);
                 const now = Date.now();
+                
+                // Record epicenter for color wave
+                lastRipple = { q, r, time: now };
 
                 const curDisplay = displayRot(q, r, now);
                 const curLogical = tileRot(q, r);
@@ -2704,7 +2759,7 @@
                 const target = curDisplay + ROT_STEP;
                 animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
                 updateLocalCurves(q, r);
-                console.log(`%c[CLICK] Rotated tile (${q}, ${r}) to ${nextLogical}°`, 'color: #e07a5f; font-weight: bold;');
+                // console.log(`%c[CLICK] Rotated tile (${q}, ${r}) to ${nextLogical}°`, 'color: #e07a5f; font-weight: bold;');
 
                 // After rotation, check if solved
                 checkIfSolved();
@@ -2778,6 +2833,7 @@
                 if (Math.abs(alterTilesRatio - lastAlterRatio) > 0.001) {
                     lastAlterRatio = alterTilesRatio;
                     curveMap.clear();
+                    edgeRgbMap.clear();
                     curves.clear();
                     queue = [];
                     initializeCentralTile();
@@ -2805,6 +2861,7 @@
                     }
                 }
                 curveMap.clear();
+                edgeRgbMap.clear();
                 curves.clear();
                 queue = [];
                 initializeCentralTile();
@@ -3166,6 +3223,7 @@
                 activeCurveIndex = curveColors.length - 1;
                 renderCurveList();
                 curveMap.clear();
+                edgeRgbMap.clear();
                 curves.clear();
                 queue = [];
                 initializeCentralTile();
@@ -3512,7 +3570,8 @@
                     dom.cvs.width = embedData.w;
                     dom.cvs.height = embedData.h;
                     isInitialized = true;
-                    curveMap.clear(); curves.clear(); queue = [];
+                    curveMap.clear(); edgeRgbMap.clear();
+                    curves.clear(); queue = [];
                     initializeCentralTile();
                     render();
                 }
