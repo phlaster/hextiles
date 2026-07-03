@@ -1311,8 +1311,64 @@
                 return visibleHexesArray;
             }
 
+            function hash2D(x, y) {
+                let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+                h = Math.imul(h ^ (h >>> 13), 1274126177);
+                return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+            }
+
+            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY) {
+                if (spacing < 5) return; // Prevent infinite loops at extreme zoom outs
+                
+                const kMin = Math.floor((0 - panX) / spacing) - 2;
+                const kMax = Math.ceil((W - panX) / spacing) + 2;
+                const jMin = Math.floor((0 - panY) / spacing) - 2;
+                const jMax = Math.ceil((H - panY) / spacing) + 2;
+                
+                for (let k = kMin; k <= kMax; k++) {
+                    for (let j = jMin; j <= jMax; j++) {
+                        const gx = panX + k * spacing;
+                        const gy = panY + j * spacing;
+                        
+                        const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
+                        const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
+                        
+                        const x = gx + rx;
+                        const y = gy + ry;
+                        
+                        if (x < -spacing || x > W + spacing || y < -spacing || y > H + spacing) continue;
+                        
+                        const bg = getBackgroundColorAt(x, y, coordScale);
+                        if (!bg) continue;
+                        
+                        const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
+                        ctx.fillStyle = lum > 140 ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)';
+                        
+                        ctx.beginPath();
+                        ctx.arc(x, y, (size * coordScale) / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            function drawBackgroundDots(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2) {
+                if (!showBgDots) return;
+                
+                ctx.save();
+                
+                // Large dots (Size 5)
+                const spacing5 = 90 * dotZoom5 * coordScale;
+                drawDotLayer(W, H, spacing5, 4, 1, coordScale, dPanX5, dPanY5);
+                
+                // Small dots (Size 2)
+                const spacing2 = 60 * dotZoom2 * coordScale;
+                drawDotLayer(W, H, spacing2, 2, 2, coordScale, dPanX2, dPanY2);
+                
+                ctx.restore();
+            }
+
             // ──── IDW Gradient ────
-            function updateIDWGradientCanvas(W, H) {
+            function updateIDWGradientCanvas(W, H, coordScale = 1) {
                 if (gradientMarkersRGB.length === 0) return;
                 const scale = 0.2;
                 const lowW = Math.max(2, Math.ceil(W * scale));
@@ -1345,8 +1401,8 @@
                             let totalWeight = 0, r = 0, g = 0, b = 0;
                             for (let i = 0; i < n; i++) {
                                 const m = ms[i];
-                                const dx = px - (m.x * scale);
-                                const dy = py - (m.y * scale);
+                                const dx = px - (m.x * scale * coordScale);
+                                const dy = py - (m.y * scale * coordScale);
                                 const distSq = dx * dx + dy * dy + 0.5;
                                 const weight = 1 / (distSq * distSq);
                                 totalWeight += weight;
@@ -1368,14 +1424,14 @@
                 gctx.putImageData(imgData, 0, 0);
             }
 
-            function drawIDWGradient(W, H) {
+            function drawIDWGradient(W, H, coordScale = 1) {
                 if (gradientMarkersRGB.length === 0) return;
                 
-                // Recalculate only if dirty or if the main canvas size changed
                 const targetLowW = Math.max(2, Math.ceil(W * 0.2));
                 const targetLowH = Math.max(2, Math.ceil(H * 0.2));
-                if (isGradientDirty || !gradientCanvas || gradientCanvas.width !== targetLowW || gradientCanvas.height !== targetLowH) {
-                    updateIDWGradientCanvas(W, H);
+                // Force recalculate if dirty, or if exporting (coordScale !== 1)
+                if (isGradientDirty || coordScale !== 1 || !gradientCanvas || gradientCanvas.width !== targetLowW || gradientCanvas.height !== targetLowH) {
+                    updateIDWGradientCanvas(W, H, coordScale);
                     isGradientDirty = false;
                 }
                 
@@ -1642,14 +1698,14 @@
                 return adjColors;
             }
 
-            function getBackgroundColorAt(x, y) {
+            function getBackgroundColorAt(x, y, coordScale = 1) {
                 if (gradientMarkersRGB.length === 0) return null;
                 let totalWeight = 0, r = 0, g = 0, b = 0;
                 
                 for (let i = 0; i < gradientMarkersRGB.length; i++) {
                     const m = gradientMarkersRGB[i];
-                    const dx = x - m.x;
-                    const dy = y - m.y;
+                    const dx = x - (m.x * coordScale);
+                    const dy = y - (m.y * coordScale);
                     const distSq = dx * dx + dy * dy + 0.5;
                     const weight = 1 / (distSq * distSq);
                     
@@ -2429,6 +2485,12 @@
             let isRenderScheduled = false;
             let lastStatsUpdate = 0; // Throttle for stats and solved check
             let isGradientDirty = true; // Cache flag for IDW gradient
+            let dotPanX5 = 0;
+            let dotPanY5 = 0;
+            let dotZoom5 = 1; // Zoom state for large dots
+            let dotPanX2 = 0;
+            let dotPanY2 = 0;
+            let dotZoom2 = 1; // Zoom state for small dots
             const visibleHexesArray = []; // Pre-allocated array to avoid per-frame GC pauses
             let currentUnassignedEdges = new Set();
             let previousUnassignedEdges = new Set();
@@ -2460,17 +2522,7 @@
                 ctx.fillStyle = COLORS.bg;
                 ctx.fillRect(0, 0, W, H);
                 drawIDWGradient(W, H);
-
-                if (showBgDots) {
-                    ctx.fillStyle = COLORS.dotPattern;
-                    const dotSpacing = 70; // Half as dense
-                    // Fixed to screen, ignoring panX/panY
-                    for (let dx = 0; dx < W; dx += dotSpacing) {
-                        for (let dy = 0; dy < H; dy += dotSpacing) {
-                            ctx.fillRect(dx, dy, 3.5, 3.5); // 3.5x3.5 size for visibility
-                        }
-                    }
-                }
+                drawBackgroundDots(W, H, 1, dotPanX5, dotPanY5, dotPanX2, dotPanY2);
 
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
 
@@ -2551,6 +2603,10 @@
                 if (!isEmbedMode && inertiaEnabled && !isDrag) {
                     panX += panVX;
                     panY += panVY;
+                    dotPanX5 += panVX * 0.08; // Inertia parallax
+                    dotPanY5 += panVY * 0.08;
+                    dotPanX2 += panVX * 0.04;
+                    dotPanY2 += panVY * 0.04;
                     panVX *= 0.95; // Smooth decay
                     panVY *= 0.95;
                     if (Math.abs(panVX) < 0.01) panVX = 0;
@@ -2559,10 +2615,13 @@
                 }
                 
                 // Apply flow drift in BOTH normal and embed modes (when enabled)
-                // Keep flowing during drag ONLY in embed mode
                 if (flowEnabled && (!isDrag || isEmbedMode)) {
                     panX += driftX;
                     panY += driftY;
+                    dotPanX5 += driftX * 0.08; // Flow parallax
+                    dotPanY5 += driftY * 0.08;
+                    dotPanX2 += driftX * 0.04;
+                    dotPanY2 += driftY * 0.04;
                     keepRendering = true; 
                 }
 
@@ -2699,8 +2758,13 @@
                     if (w > 0 && h > 0) {
                         panX = w / 2;
                         panY = h / 2;
+                        dotPanX5 = w / 2;
+                        dotPanY5 = h / 2;
+                        dotPanX2 = w / 2;
+                        dotPanY2 = h / 2;
+                        dotZoom5 = Math.pow(zoom, 0.4 / 1.5);
+                        dotZoom2 = Math.pow(zoom, 0.15 / 1.5);
                         isInitialized = true;
-
                         if (gradientMarkers.length === 0) {
                             const pos = getRandomMarkerPosition();
                             gradientMarkers.push({
@@ -2721,10 +2785,28 @@
 
             function setZoom(nz, cx, cy) {
                 const oz = zoom;
+                const oPanX = panX;
+                const oPanY = panY;
                 zoom = Math.max(MIN_Z, Math.min(MAX_Z, nz));
                 if (cx !== undefined) {
-                    panX = cx - (cx - panX) * (zoom / oz);
-                    panY = cy - (cy - panY) * (zoom / oz);
+                    panX = cx - (cx - oPanX) * (zoom / oz);
+                    panY = cy - (cy - oPanY) * (zoom / oz);
+                    
+                    // Only update dot cameras if zoom actually changed
+                    if (zoom !== oz) {
+                        const odz5 = dotZoom5;
+                        const odz2 = dotZoom2;
+                        
+                        dotZoom5 = Math.pow(zoom, 0.4 / 1.7); // 1.7x slower zoom rate
+                        dotZoom2 = Math.pow(zoom, 0.15 / 1.7); // 1.7x slower zoom rate
+                        
+                        // Scale both dot layers from the zoom center to prevent jumping
+                        dotPanX5 = cx - (cx - dotPanX5) * (dotZoom5 / odz5);
+                        dotPanY5 = cy - (cy - dotPanY5) * (dotZoom5 / odz5);
+                        
+                        dotPanX2 = cx - (cx - dotPanX2) * (dotZoom2 / odz2);
+                        dotPanY2 = cy - (cy - dotPanY2) * (dotZoom2 / odz2);
+                    }
                     
                     // Prevent jump when zooming while panning
                     if (isDrag) {
@@ -2838,18 +2920,25 @@
                         let targetPanX = dragPX + dx;
                         let targetPanY = dragPY + dy;
                         
+                        const dPanX = targetPanX - panX;
+                        const dPanY = targetPanY - panY;
+                        
                         if (inertiaEnabled) {
-                            // Store the movement delta as velocity for release
-                            panVX = targetPanX - panX;
-                            panVY = targetPanY - panY;
+                            panVX = dPanX;
+                            panVY = dPanY;
                         } else {
                             panVX = 0;
                             panVY = 0;
                         }
                         
-                        // ALWAYS update panX/panY instantly for smooth 1:1 dragging
                         panX = targetPanX;
                         panY = targetPanY;
+                        
+                        // Apply parallax: 0.3x for large dots, 0.15x for small dots
+                        dotPanX5 += dPanX * 0.08;
+                        dotPanY5 += dPanY * 0.08;
+                        dotPanX2 += dPanX * 0.04;
+                        dotPanY2 += dPanY * 0.04;
                     }
                 }
                 requestRender();
@@ -2955,6 +3044,12 @@
                 zoom = 1;
                 panX = dom.cvs.width / 2;
                 panY = dom.cvs.height / 2;
+                dotPanX5 = dom.cvs.width / 2;
+                dotPanY5 = dom.cvs.height / 2;
+                dotPanX2 = dom.cvs.width / 2;
+                dotPanY2 = dom.cvs.height / 2;
+                dotZoom5 = 1;
+                dotZoom2 = 1;
                 dom.zoomLabel.textContent = '100%';
                 checkIfSolved();
                 requestRender();
@@ -3577,15 +3672,12 @@
                 offCtx.fillRect(0, 0, eW, eH);
 
                 // IDW Gradient
-                drawIDWGradient(eW, eH);
-
-                if (showBgDots) {
-                    offCtx.fillStyle = COLORS.dotPattern;
-                    const ds = 70 * scale;
-                    for (let dx = 0; dx < eW; dx += ds)
-                        for (let dy = 0; dy < eH; dy += ds)
-                            offCtx.fillRect(dx, dy, 3.5 * scale, 3.5 * scale); // 3.5x3.5 size scaled up
-                }
+                drawIDWGradient(eW, eH, scale);
+                const expDotPanX5 = (dotPanX5 - fx) * scale;
+                const expDotPanY5 = (dotPanY5 - fy) * scale;
+                const expDotPanX2 = (dotPanX2 - fx) * scale;
+                const expDotPanY2 = (dotPanY2 - fy) * scale;
+                drawBackgroundDots(eW, eH, scale, expDotPanX5, expDotPanY5, expDotPanX2, expDotPanY2);
 
                 // Hex tiles
                 const eSz = HEX_R * eZoom;
