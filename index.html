@@ -1513,6 +1513,18 @@
                 }
             }
 
+            function findUncoloredTileInHexes(hexes) {
+                for (const h of hexes) {
+                    for (let i = 0; i < 6; i++) {
+                        if (!curveMap.has(edgeID(h.q, h.r, i))) {
+                            recalculateTile(h.q, h.r);
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
             function findNextUncoloredTile() {
                 let bounds = getVisibleBounds();
                 let margin = TRACE_SEARCH_MARGIN;
@@ -1922,7 +1934,7 @@
                 }
             }
 
-            function applyCurveStyle(q, r, e, sz) {
+            function applyCurveStyle(q, r, e, sz, now) {
                 ctx.setLineDash([]);
                 const id = edgeID(q, r, e);
                 
@@ -1954,7 +1966,8 @@
                             targetCurveID: targetCurveID, 
                             rippleTime: 0, 
                             rippleQ: 0, 
-                            rippleR: 0 
+                            rippleR: 0,
+                            rippleActive: false
                         };
                         edgeRgbMap.set(id, edgeData);
                     }
@@ -1965,29 +1978,40 @@
                         edgeData.rippleTime = lastRipple.time;
                         edgeData.rippleQ = lastRipple.q;
                         edgeData.rippleR = lastRipple.r;
+                        edgeData.rippleActive = true;
                     }
                     
-                    // Calculate delay based on spatial distance from the rotation epicenter
-                    let canTransition = true;
-                    if (edgeData.rippleTime > 0) {
-                        const [eq, er] = decodeEdgeID(id);
-                        const dist = hexDistance(eq, er, edgeData.rippleQ, edgeData.rippleR);
-                        const delay = dist * 35; // 35ms delay per tile
-                        if (Date.now() - edgeData.rippleTime < delay) {
-                            canTransition = false;
-                            edgeColorAnimating = true; // Keep rendering while waiting
+                    if (edgeData.rippleActive) {
+                        let canTransition = true;
+                        if (edgeData.rippleTime > 0) {
+                            const [eq, er] = decodeEdgeID(id);
+                            const dist = hexDistance(eq, er, edgeData.rippleQ, edgeData.rippleR);
+                            const delay = dist * 35; // 35ms delay per tile
+                            if (now - edgeData.rippleTime < delay) {
+                                canTransition = false;
+                                edgeColorAnimating = true; // Keep rendering while waiting
+                            }
                         }
-                    }
-                    
-                    if (canTransition) {
-                        let diff = false;
-                        const targets = [targetRgb.r, targetRgb.g, targetRgb.b];
-                        for (let i = 0; i < 3; i++) {
-                            const newVal = edgeData.rgb[i] + (targets[i] - edgeData.rgb[i]) * 0.08;
-                            if (Math.abs(targets[i] - newVal) > 0.5) diff = true;
-                            edgeData.rgb[i] = newVal;
+                        
+                        if (canTransition) {
+                            let diff = false;
+                            const targets = [targetRgb.r, targetRgb.g, targetRgb.b];
+                            for (let i = 0; i < 3; i++) {
+                                const newVal = edgeData.rgb[i] + (targets[i] - edgeData.rgb[i]) * 0.08;
+                                if (Math.abs(targets[i] - newVal) > 0.5) diff = true;
+                                edgeData.rgb[i] = newVal;
+                            }
+                            if (diff) {
+                                edgeColorAnimating = true;
+                            } else {
+                                edgeData.rippleActive = false; // Lerp finished
+                            }
                         }
-                        if (diff) edgeColorAnimating = true;
+                    } else {
+                        // Synchronize with global curve color to prevent sharp color changes when zooming/panning
+                        edgeData.rgb[0] = targetRgb.r;
+                        edgeData.rgb[1] = targetRgb.g;
+                        edgeData.rgb[2] = targetRgb.b;
                     }
                     
                     ctx.strokeStyle = `rgb(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])})`;
@@ -2182,11 +2206,10 @@
             }
 
             // ──── drawTile ────
-            function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr) {
+            function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now) {
                 const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
                 
-                // Only clip if there's an image to constrain OR if grid is on (to cut off curves in the gap)
                 if (img || grid) {
                     traceHexPath(ctx, cx, cy, rSz);
                     ctx.clip();
@@ -2203,40 +2226,39 @@
                     ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
                 } else {
                     const a = sz * SQRT3 / 2;
-                    // Use round caps so segments overlap perfectly with neighbors when grid is off
                     ctx.lineCap = 'round';
                     const logicalRot = tileRot(hq, hr);
                     const k = (logicalRot / 60) % 6;
 
                     const alter = isTileAlter(hq, hr);
                     if (alter) {
-                        if (applyCurveStyle(hq, hr, (0 + k) % 6, sz)) {
+                        if (applyCurveStyle(hq, hr, (0 + k) % 6, sz, now)) {
                             ctx.beginPath();
                             ctx.arc(sz/2, a, sz/2, Math.PI, 5 * PI_DIV_3, false);
                             ctx.stroke();
                         }
-                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz)) {
+                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
                             ctx.beginPath();
                             ctx.arc(-sz, 0, sz/2, -PI_DIV_3, PI_DIV_3, false);
                             ctx.stroke();
                         }
-                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz)) {
+                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
                             ctx.beginPath();
                             ctx.arc(sz/2, -a, sz/2, PI_DIV_3, Math.PI, false);
                             ctx.stroke();
                         }
                     } else {
-                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz)) {
+                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
                             ctx.beginPath();
                             ctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
                             ctx.stroke();
                         }
-                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz)) {
+                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
                             ctx.beginPath();
                             ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
                             ctx.stroke();
                         }
-                        if (applyCurveStyle(hq, hr, (1 + k) % 6, sz)) {
+                        if (applyCurveStyle(hq, hr, (1 + k) % 6, sz, now)) {
                             ctx.beginPath();
                             ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
                             ctx.stroke();
@@ -2399,10 +2421,6 @@
                     }
                 }
 
-                let hexes = visibleHexes(z, px, py, W, H);
-                const sz = HEX_R * z;
-                const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
-
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
 
                 // Reset edge animation flag for this frame
@@ -2494,6 +2512,8 @@
                     keepRendering = true; 
                 }
 
+                let hexes = visibleHexes(z, px, py, W, H); // Moved up
+
                 if (curveColors.length > 1) {
                     let startTime = performance.now();
                     let didWork = true;
@@ -2501,7 +2521,7 @@
                     while (didWork && performance.now() - startTime < 16) {
                         if (queue.length > 0) {
                             processQueue();
-                        } else if (findNextUncoloredTile()) {
+                        } else if (findUncoloredTileInHexes(hexes)) {
                             processQueue();
                         } else {
                             didWork = false;
@@ -2510,10 +2530,13 @@
                     if (didWork) keepRendering = true;
                 }
 
+                const sz = HEX_R * z;
+                const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
+
                 // ── First pass: draw all tiles (no hover stroke) ──
                 for (const h of hexes) {
                     const rot = displayRot(h.q, h.r, now);
-                    drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r);
+                    drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r, now);
                 }
 
                 // ── Second pass: draw hover stroke on top ──
@@ -3462,11 +3485,18 @@
                 // Ensure all curves computed
                 if (curveColors.length > 1) {
                     let safety = 2000;
-                    while (safety-- > 0) { processQueue(); if (queue.length === 0) { if (!findNextUncoloredTile()) break; } }
+                    const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+                    while (safety-- > 0) { 
+                        processQueue(); 
+                        if (queue.length === 0) { 
+                            if (!findUncoloredTileInHexes(exportHexes)) break; 
+                        } 
+                    }
                 }
 
                 const oldCtx = ctx;
                 ctx = offCtx;
+                const now = Date.now(); // Add timestamp
 
                 // Background
                 offCtx.fillStyle = COLORS.bg;
@@ -3488,7 +3518,7 @@
                 const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
                 for (const h of hexes) {
                     const rot = tileRot(h.q, h.r);
-                    drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r);
+                    drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r, now);
                 }
 
                 // Markers
