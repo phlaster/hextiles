@@ -2253,7 +2253,9 @@
                 const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
                 
-                if (img || grid) {
+                // Only clip if there's an image to constrain. 
+                // We no longer clip for grid lines so curves can overlap smoothly under the grid border.
+                if (img) {
                     traceHexPath(ctx, cx, cy, rSz);
                     ctx.clip();
                 }
@@ -2269,7 +2271,9 @@
                     ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
                 } else {
                     const a = sz * SQRT3 / 2;
-                    ctx.lineCap = 'round';
+                    ctx.lineCap = 'butt'; // Remove bulging round caps
+                    const ext = 0.012; // Small angle extension (radians) to overlap adjacent tiles perfectly
+                    
                     const logicalRot = tileRot(hq, hr);
                     const k = (logicalRot / 60) % 6;
 
@@ -2277,33 +2281,33 @@
                     if (alter) {
                         if (applyCurveStyle(hq, hr, (0 + k) % 6, sz, now)) {
                             ctx.beginPath();
-                            ctx.arc(sz/2, a, sz/2, Math.PI, 5 * PI_DIV_3, false);
+                            ctx.arc(sz/2, a, sz/2, Math.PI - ext, 5 * PI_DIV_3 + ext, false);
                             ctx.stroke();
                         }
                         if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
                             ctx.beginPath();
-                            ctx.arc(-sz, 0, sz/2, -PI_DIV_3, PI_DIV_3, false);
+                            ctx.arc(-sz, 0, sz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
                             ctx.stroke();
                         }
                         if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
                             ctx.beginPath();
-                            ctx.arc(sz/2, -a, sz/2, PI_DIV_3, Math.PI, false);
+                            ctx.arc(sz/2, -a, sz/2, PI_DIV_3 - ext, Math.PI + ext, false);
                             ctx.stroke();
                         }
                     } else {
                         if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
                             ctx.beginPath();
-                            ctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
+                            ctx.arc(-sz, 0, sz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
                             ctx.stroke();
                         }
                         if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
                             ctx.beginPath();
-                            ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
+                            ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3 - ext, Math.PI + ext, false);
                             ctx.stroke();
                         }
                         if (applyCurveStyle(hq, hr, (1 + k) % 6, sz, now)) {
                             ctx.beginPath();
-                            ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
+                            ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false);
                             ctx.stroke();
                         }
                     }
