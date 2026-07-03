@@ -1059,7 +1059,6 @@
             let dragMarkerOffsetY = 0;
             let gradientCanvas = null;
             let markersVisible = true;
-            let activeMarkerIndex = 0;
 
             let curveColors = ['#444444']; // Target colors
             let curveColorsRGB = []; // Cached RGB arrays for curve colors
@@ -2635,7 +2634,6 @@
                                 y: pos.y,
                                 color: '#cccccc' // Force initial color
                             });
-                            activeMarkerIndex = 0;
                             updateGradientMarkersCache();
                             renderGradientList();
                             renderCurveList();
@@ -2699,7 +2697,7 @@
                         const m = gradientMarkers[i];
                         const dx = mx - m.x;
                         const dy = my - m.y;
-                        const hitR = (i === activeMarkerIndex) ? 26 : 20;
+                        const hitR = 30;
                         if (dx * dx + dy * dy < hitR * hitR) {
                             clickedMarkerIdx = i;
                             break;
@@ -2815,7 +2813,7 @@
                     const m = gradientMarkers[i];
                     const dx = mx - m.x;
                     const dy = my - m.y;
-                    const hitR = 26; // Match the active marker hit radius
+                    const hitR = 30;
                     if (dx * dx + dy * dy < hitR * hitR) {
                         clickedMarkerIdx = i;
                         break;
@@ -2825,15 +2823,13 @@
                 if (clickedMarkerIdx !== -1) {
                     if (gradientMarkers.length > 1) {
                         gradientMarkers.splice(clickedMarkerIdx, 1);
-                        updateGradientMarkersCache();
-                        if (activeMarkerIndex >= gradientMarkers.length) {
-                            activeMarkerIndex = gradientMarkers.length - 1;
-                        }
+                        
                         // Cancel any drag state initiated by the first click of the double-click
                         isDragMarker = false;
                         draggedMarkerIndex = -1;
                         
                         renderGradientList();
+                        updateGradientMarkersCache(); // Ensure cache stays in sync
                         requestRender();
                         toast('Marker and color removed');
                     } else {
