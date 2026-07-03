@@ -2570,35 +2570,29 @@
 
                 // ── Second pass: draw hover stroke on top ──
                 if (lod >= 1 && hoveredQ !== null && hoveredR !== null) {
-                    let targetHX = null, targetHY = null;
-                    for (const h of hexes) {
-                        if (h.q === hoveredQ && h.r === hoveredR) {
-                            targetHX = h.x;
-                            targetHY = h.y;
-                            break;
-                        }
-                    }
+                    // Calculate screen position directly instead of searching the hexes array
+                    const p = hexToPix(hoveredQ, hoveredR, z, px, py);
+                    const targetHX = p.x;
+                    const targetHY = p.y;
                     
-                    if (targetHX !== null) {
-                        // Initialize visual position if null
-                        if (visHoverX === null) {
+                    // Initialize visual position if null
+                    if (visHoverX === null) {
+                        visHoverX = targetHX;
+                        visHoverY = targetHY;
+                    } else {
+                        // Smoothly glide towards the target tile
+                        visHoverX += (targetHX - visHoverX) * 0.40; // 0.40 = glide speed
+                        visHoverY += (targetHY - visHoverY) * 0.40;
+                        
+                        // Keep rendering until we are perfectly centered
+                        if (Math.abs(targetHX - visHoverX) > 0.5 || Math.abs(targetHY - visHoverY) > 0.5) {
+                            keepRendering = true;
+                        } else {
                             visHoverX = targetHX;
                             visHoverY = targetHY;
-                        } else {
-                            // Smoothly glide towards the target tile
-                            visHoverX += (targetHX - visHoverX) * 0.40; // 0.40 = glide speed
-                            visHoverY += (targetHY - visHoverY) * 0.40;
-                            
-                            // Keep rendering until we are perfectly centered
-                            if (Math.abs(targetHX - visHoverX) > 0.5 || Math.abs(targetHY - visHoverY) > 0.5) {
-                                keepRendering = true;
-                            } else {
-                                visHoverX = targetHX;
-                                visHoverY = targetHY;
-                            }
                         }
-                        drawHoverStroke(visHoverX, visHoverY, sz, grid);
                     }
+                    drawHoverStroke(visHoverX, visHoverY, sz, grid);
                 }
 
                 if (markersVisible) {
