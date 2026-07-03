@@ -1976,7 +1976,6 @@
                         if (typeof c === 'number') {
                             targetRgb = curveColorsRGB[c % curveColorsRGB.length];
                         } else {
-                            // Fallback for hex strings if they somehow exist
                             const rgb = hexToRgb(c); 
                             targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
                         }
@@ -1988,6 +1987,7 @@
                     if (!edgeData) {
                         edgeData = { 
                             rgb: [targetRgb.r, targetRgb.g, targetRgb.b], 
+                            alpha: 1, // Default to fully visible so panning is instant
                             targetCurveID: targetCurveID, 
                             rippleTime: 0, 
                             rippleQ: 0, 
@@ -1997,7 +1997,16 @@
                         edgeRgbMap.set(id, edgeData);
                     }
                     
-                    // Detect if the curve assignment changed
+                    // Trigger fade-in ONLY if it was dotted/unassigned in the previous frame
+                    if (previousUnassignedEdges.has(id)) {
+                        edgeData.alpha = 0;
+                        edgeData.rippleActive = true;
+                        edgeData.rippleTime = 0; // No spatial delay for initial fade-in
+                        edgeData.rippleQ = 0;
+                        edgeData.rippleR = 0;
+                    }
+                    
+                    // Detect if the curve assignment changed (Rotation/Merge)
                     if (edgeData.targetCurveID !== targetCurveID) {
                         edgeData.targetCurveID = targetCurveID;
                         edgeData.rippleTime = lastRipple.time;
@@ -2026,6 +2035,12 @@
                                 if (Math.abs(targets[i] - newVal) > 0.5) diff = true;
                                 edgeData.rgb[i] = newVal;
                             }
+                            
+                            // Interpolate alpha for smooth fade-in
+                            const newAlpha = edgeData.alpha + (1 - edgeData.alpha) * 0.1;
+                            if (Math.abs(1 - newAlpha) > 0.01) diff = true;
+                            edgeData.alpha = newAlpha;
+                            
                             if (diff) {
                                 edgeColorAnimating = true;
                             } else {
@@ -2037,13 +2052,16 @@
                         edgeData.rgb[0] = targetRgb.r;
                         edgeData.rgb[1] = targetRgb.g;
                         edgeData.rgb[2] = targetRgb.b;
+                        edgeData.alpha = 1;
                     }
                     
-                    ctx.strokeStyle = `rgb(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])})`;
+                    ctx.strokeStyle = `rgba(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])},${edgeData.alpha})`;
                     ctx.lineWidth = sz / 3 * curveLineWidth;
                     return true;
                 }
 
+                // Track unassigned edges for next frame's fade-in logic
+                currentUnassignedEdges.add(id);
                 if (showUnrenderedDotted) {
                     ctx.strokeStyle = COLORS.unrenderedDotted;
                     ctx.lineWidth = Math.max(1, (sz / 10) * curveLineWidth);
@@ -2408,6 +2426,8 @@
             let lastStatsUpdate = 0; // Throttle for stats and solved check
             let isGradientDirty = true; // Cache flag for IDW gradient
             const visibleHexesArray = []; // Pre-allocated array to avoid per-frame GC pauses
+            let currentUnassignedEdges = new Set();
+            let previousUnassignedEdges = new Set();
             function requestRender() {
                 if (!isRenderScheduled) {
                     isRenderScheduled = true;
@@ -2454,6 +2474,7 @@
                 edgeColorAnimating = false;
                 let gradColorAnimating = false;
                 let curveColorAnimating = false;
+                currentUnassignedEdges.clear();
 
                 // Interpolate Gradient Marker Colors
                 for (let i = 0; i < gradientMarkersRGB.length; i++) {
@@ -2640,6 +2661,11 @@
                 if (keepRendering || edgeColorAnimating || gradColorAnimating || curveColorAnimating) {
                     requestRender();
                 }
+                
+                // Swap unassigned edge sets for next frame
+                const tempUnassigned = previousUnassignedEdges;
+                previousUnassignedEdges = currentUnassignedEdges;
+                currentUnassignedEdges = tempUnassigned;
             }
 
             // ──── Resize ────
