@@ -1287,16 +1287,28 @@
                 const maxQ = Math.max(tl.q, tr.q, bl.q, br.q);
                 const minR = Math.min(tl.r, tr.r, bl.r, br.r);
                 const maxR = Math.max(tl.r, tr.r, bl.r, br.r);
-                const out = [];
+                
+                let count = 0;
                 for (let q = minQ; q <= maxQ; q++) {
                     for (let r = minR; r <= maxR; r++) {
                         const p = hexToPix(q, r, z, px, py);
                         if (p.x > -margin && p.x < W + margin && p.y > -margin && p.y < H + margin) {
-                            out.push({ q, r, x: p.x, y: p.y });
+                            // Reuse existing object from pool or push a new one if pool is too small
+                            if (count >= visibleHexesArray.length) {
+                                visibleHexesArray.push({ q: 0, r: 0, x: 0, y: 0 });
+                            }
+                            const h = visibleHexesArray[count];
+                            h.q = q;
+                            h.r = r;
+                            h.x = p.x;
+                            h.y = p.y;
+                            count++;
                         }
                     }
                 }
-                return out;
+                // Truncate array length so iterators only see active elements
+                visibleHexesArray.length = count; 
+                return visibleHexesArray;
             }
 
             // ──── IDW Gradient ────
@@ -2395,6 +2407,7 @@
             let isRenderScheduled = false;
             let lastStatsUpdate = 0; // Throttle for stats and solved check
             let isGradientDirty = true; // Cache flag for IDW gradient
+            const visibleHexesArray = []; // Pre-allocated array to avoid per-frame GC pauses
             function requestRender() {
                 if (!isRenderScheduled) {
                     isRenderScheduled = true;
@@ -3502,13 +3515,13 @@
                 const ePanY = (panY - fy) * (eH / fh);
 
                 // Ensure all curves computed
+                const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
                 if (curveColors.length > 1) {
                     let safety = 2000;
-                    const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
                     while (safety-- > 0) { 
                         processQueue(); 
                         if (queue.length === 0) { 
-                            if (!findUncoloredTileInHexes(exportHexes)) break; 
+                            if (!findUncoloredTileInHexes(hexes)) break; 
                         } 
                     }
                 }
@@ -3534,7 +3547,6 @@
 
                 // Hex tiles
                 const eSz = HEX_R * eZoom;
-                const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
                 for (const h of hexes) {
                     const rot = tileRot(h.q, h.r);
                     drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r, now);
