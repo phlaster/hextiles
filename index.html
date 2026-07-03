@@ -2656,6 +2656,21 @@
                         dom.statColors.textContent = visColors.size;
                     }
                     checkIfSolved(); // Trigger the throttled solved check
+                    
+                    // Prune edgeRgbMap to prevent memory leak during infinite exploration
+                    if (edgeRgbMap.size > 10000) {
+                        const visibleEdgeIDs = new Set();
+                        for (const h of hexes) {
+                            for (let e = 0; e < 6; e++) {
+                                visibleEdgeIDs.add(edgeID(h.q, h.r, e));
+                            }
+                        }
+                        for (const id of edgeRgbMap.keys()) {
+                            if (!visibleEdgeIDs.has(id)) {
+                                edgeRgbMap.delete(id);
+                            }
+                        }
+                    }
                 }
 
                 if (keepRendering || edgeColorAnimating || gradColorAnimating || curveColorAnimating) {
