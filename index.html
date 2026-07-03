@@ -721,7 +721,20 @@
                     <span class="track"></span>
                 </label>
             </div>
-        </div>
+            <div class="toggle-row" style="margin-top:10px">
+                <span><i class="fas fa-water" style="margin-right:6px;color:var(--col-muted)"></i>Flow</span>
+                <label class="switch">
+                    <input type="checkbox" id="flowToggle" />
+                    <span class="track"></span>
+                </label>
+            </div>
+            <div class="toggle-row" style="margin-top:10px">
+                <span><i class="fas fa-wind" style="margin-right:6px;color:var(--col-muted)"></i>Inertia</span>
+                <label class="switch">
+                    <input type="checkbox" id="inertiaToggle" checked />
+                    <span class="track"></span>
+                </label>
+            </div>
 
         <div class="sb-section">
             <div class="section-header">
@@ -843,22 +856,6 @@
         //  ALL COLORS IN ONE PLACE — edit these to change the entire look
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const COLORS = {
-            // ── Marker palette (used for gradient control points) ──
-            markers: [
-                '#CCCCCC', '#4878D0', '#EE854A', '#6ACC64',
-                '#D65F5F', '#956CB4', '#8C613C', '#DC7EC0',
-                '#797979', '#D5BB67', '#82C6E2'
-            ],
-
-            // ── Curve palette (used for tile-edge line colors) ──
-            curves: [
-                '#444444', '#001C7F', '#B1400D', '#12711C',
-                '#8C0800', '#591E71', '#592F0D', '#A23582',
-                '#3C3C3C', '#B8850A', '#006374'
-            ],
-
-
-            // ── Theme ──
             bg: '#13132a',
             fg: '#e6e6f0',
             muted: '#6e6e90',
@@ -928,55 +925,38 @@
             return arr;
         }
 
-        function pickThemeColors(count) {
-            if (count <= 0) return { name: '', colors: [] };
+        function generateDistinctThemePool() {
             const theme = COLOR_THEMES[Math.floor(Math.random() * COLOR_THEMES.length)];
-            
-            // Convert theme colors to RGB array
             let pool = theme.colors.map(hexToRgb);
             
-            // If we need more colors than the theme has, generate random unique ones
-            while (pool.length < count * 2) {
-                const randHex = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
-                pool.push(hexToRgb(randHex));
-            }
-
-            // Greedy Max-Min Dispersion Algorithm
-            let selected = [];
-            
+            let ordered = [];
             // 1. Start with a random color from the pool
             let startIdx = Math.floor(Math.random() * pool.length);
-            selected.push(pool[startIdx]);
+            ordered.push(pool[startIdx]);
             pool.splice(startIdx, 1);
             
-            // 2. Iteratively add the color that maximizes the minimum distance to the selected set
-            while (selected.length < count) {
+            // 2. Iteratively add the color that maximizes the minimum distance to the ordered set
+            while (pool.length > 0) {
                 let bestCandidateIdx = -1;
                 let bestMinDist = -1;
                 
                 for (let i = 0; i < pool.length; i++) {
                     let minDist = Infinity;
-                    for (let j = 0; j < selected.length; j++) {
-                        let d = colorDistance(pool[i], selected[j]);
+                    for (let j = 0; j < ordered.length; j++) {
+                        let d = colorDistance(pool[i], ordered[j]);
                         if (d < minDist) minDist = d;
                     }
-                    
-                    // Keep track of the candidate whose nearest neighbor is furthest away
                     if (minDist > bestMinDist) {
                         bestMinDist = minDist;
                         bestCandidateIdx = i;
                     }
                 }
                 
-                // Add best candidate to selected, remove from pool
-                selected.push(pool[bestCandidateIdx]);
+                ordered.push(pool[bestCandidateIdx]);
                 pool.splice(bestCandidateIdx, 1);
             }
             
-            // Convert back to hex strings
-            const chosenHex = selected.map(rgbToHex);
-            
-            return { name: theme.name, colors: chosenHex };
+            return { name: theme.name, pool: ordered.map(rgbToHex) };
         }
 
         // ─── inject CSS custom properties from COLORS ───
@@ -1054,6 +1034,14 @@
             let alterTilesRatio = 0;
             let showUnrenderedDotted = true;
             let showBgDots = true;
+            let flowEnabled = false;
+            let inertiaEnabled = true;
+            let panVX = 0, panVY = 0;
+            let driftAngle = Math.random() * Math.PI * 2;
+            let driftTargetAngle = driftAngle;
+            let driftTimer = 0;
+            let driftSpeed = 0.12;
+            let driftTargetSpeed = 0.12;
             let isInitialized = false;
             let rotMode = 'hash';
             let randomSeed = 0;
@@ -1073,12 +1061,15 @@
             let markersVisible = true;
             let activeMarkerIndex = 0;
 
-            let curveColors = [COLORS.curves[0]];
+            let curveColors = ['#444444']; // Target colors
             let activeCurveIndex = 0;
             let nextCurveID = 0;
             const curveMap = new Map();
             const curves = new Map();
             let queue = [];
+            
+            let curveColorPool = { name: '', pool: [] };
+            let gradientColorPool = { name: '', pool: [] };
 
             // ──── DOM Cache ────
             const dom = {
@@ -1151,6 +1142,8 @@
                 unrenderedToggle: document.getElementById('unrenderedToggle'),
                 bgDotsToggle: document.getElementById('bgDotsToggle'),
                 markersToggle: document.getElementById('markersToggle'),
+                flowToggle: document.getElementById('flowToggle'),
+                inertiaToggle: document.getElementById('inertiaToggle'),
             };
 
             let ctx = dom.cvs.getContext('2d');
@@ -1696,7 +1689,8 @@
                         
                         let newCurve = {
                             id: newID, color: newColor, size: components[i].length, locked: false,
-                            edges: compSet
+                            edges: compSet,
+                            rgb: [...curve.rgb] // Inherit parent's current color for smooth transition!
                         };
                         curves.set(newID, newCurve);
                         for (let id of newCurve.edges) curveMap.set(id, newID);
@@ -1732,6 +1726,9 @@
                     let curve = curves.get(cid); if (curve) availableColors.push(curve.color);
                 }
                 if (availableColors.length === 0) availableColors.push(0);
+                
+                // Capture the current rendered color of the edges before we detach them
+                let prevRgbs = [null, null, null, null, null, null];
                 for (let i = 0; i < 6; i++) {
                     let id = ids[i];
                     if (curveMap.has(id)) {
@@ -1740,6 +1737,7 @@
                         if (curve) {
                             curve.edges.delete(id);
                             curve.size = curve.edges.size;
+                            prevRgbs[i] = curve.rgb ? [...curve.rgb] : hexToRgb(curveColors[curve.color % curveColors.length]);
                         }
                         curveMap.delete(id);
                     }
@@ -1818,7 +1816,10 @@
                         
                         // console.log(`%c  [NEW] Created brand new curve ${curveID} with color index ${color}`, 'color: #D65F5F; font-weight: bold;');
                         
-                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
+                        // Inherit the previous color of the edge so it fades smoothly instead of snapping
+                        let startRgb = prevRgbs[e1] || prevRgbs[e2] || hexToRgb(curveColors[color % curveColors.length]);
+                        
+                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set(), rgb: startRgb });
                         curveMap.set(id1, curveID);
                         curveMap.set(id2, curveID);
                         curves.get(curveID).edges.add(id1);
@@ -1871,7 +1872,7 @@
                         const bgColor = getBackgroundColorAt(p.x, p.y);
                         let color = pickColorForNewCurve(adjColors, -1, q, r * 6 + e1, bgColor);
                         
-                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
+                        curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set(), rgb: hexToRgb(curveColors[color % curveColors.length]) });
                         curveMap.set(id1, curveID);
                         curves.get(curveID).edges.add(id1);
                         curves.get(curveID).size++;
@@ -1890,7 +1891,8 @@
             function applyCurveStyle(q, r, e, sz) {
                 ctx.setLineDash([]);
                 if (curveColors.length === 1) {
-                    ctx.strokeStyle = curveColors[0];
+                    const rgb = curves.size > 0 ? curves.values().next().value.rgb : hexToRgb(curveColors[0]);
+                    ctx.strokeStyle = `rgb(${Math.round(rgb[0])},${Math.round(rgb[1])},${Math.round(rgb[2])})`;
                     ctx.lineWidth = sz / 3 * curveLineWidth;
                     return true;
                 }
@@ -1899,8 +1901,13 @@
                     let curveID = curveMap.get(id);
                     let curve = curves.get(curveID);
                     if (curve) {
-                        let c = curve.color;
-                        ctx.strokeStyle = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
+                        if (curve.rgb) {
+                            const rgb = curve.rgb;
+                            ctx.strokeStyle = `rgb(${Math.round(rgb[0])},${Math.round(rgb[1])},${Math.round(rgb[2])})`;
+                        } else {
+                            let c = curve.color;
+                            ctx.strokeStyle = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
+                        }
                         ctx.lineWidth = sz / 3 * curveLineWidth;
                         return true;
                     }
@@ -2311,11 +2318,72 @@
 
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
 
+                // Smoothly interpolate curve colors (handles palette changes AND curve index changes)
+                let colorAnimating = false;
+                for (const curve of curves.values()) {
+                    const c = curve.color;
+                    const targetHex = (typeof c === 'number') ? curveColors[c % curveColors.length] : c;
+                    const targetRgb = hexToRgb(targetHex);
+                    if (!curve.rgb) curve.rgb = [...targetRgb]; // Fallback init
+                    
+                    let diff = false;
+                    for (let i = 0; i < 3; i++) {
+                        const newVal = curve.rgb[i] + (targetRgb[i] - curve.rgb[i]) * 0.08;
+                        if (Math.abs(targetRgb[i] - newVal) > 0.5) diff = true;
+                        curve.rgb[i] = newVal;
+                    }
+                    if (diff) colorAnimating = true;
+                }
+                if (colorAnimating) keepRendering = true;
+
+                // Flow physics: inertia and drift
+                let driftX = 0, driftY = 0;
+                if (flowEnabled) {
+                    driftTimer++;
+                    // Pick a new random angle AND speed every 2-5 seconds
+                    if (driftTimer > 120 + Math.random() * 180) { 
+                        driftTargetAngle = Math.random() * Math.PI * 2;
+                        driftTargetSpeed = 0.01 + Math.random() * 0.49; // Speed between 0.05 and 0.20
+                        driftTimer = 0;
+                    }
+                    
+                    // Smoothly interpolate angle (slow transition)
+                    let angleDiff = driftTargetAngle - driftAngle;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    driftAngle += angleDiff * 0.002;
+
+                    // Smoothly interpolate speed (slow transition)
+                    driftSpeed += (driftTargetSpeed - driftSpeed) * 0.005;
+
+                    driftX = Math.cos(driftAngle) * driftSpeed;
+                    driftY = Math.sin(driftAngle) * driftSpeed;
+                }
+
+                // Apply inertia ONLY in normal mode and when not dragging
+                if (!isEmbedMode && inertiaEnabled && !isDrag) {
+                    panX += panVX;
+                    panY += panVY;
+                    panVX *= 0.95; // Smooth decay
+                    panVY *= 0.95;
+                    if (Math.abs(panVX) < 0.01) panVX = 0;
+                    if (Math.abs(panVY) < 0.01) panVY = 0;
+                    if (panVX !== 0 || panVY !== 0) keepRendering = true;
+                }
+                
+                // Apply flow drift in BOTH normal and embed modes (when enabled)
+                // Keep flowing during drag ONLY in embed mode
+                if (flowEnabled && (!isDrag || isEmbedMode)) {
+                    panX += driftX;
+                    panY += driftY;
+                    keepRendering = true; 
+                }
+
                 if (curveColors.length > 1) {
                     let startTime = performance.now();
                     let didWork = true;
-                    // Aggressively process the queue for up to 12ms per frame
-                    while (didWork && performance.now() - startTime < 20) {
+                    // Aggressively process the queue for up to 16ms per frame
+                    while (didWork && performance.now() - startTime < 16) {
                         if (queue.length > 0) {
                             processQueue();
                         } else if (findNextUncoloredTile()) {
@@ -2424,15 +2492,17 @@
                         panY = h / 2;
                         isInitialized = true;
 
-                        const pos = getRandomMarkerPosition();
-                        gradientMarkers.push({
-                            x: pos.x,
-                            y: pos.y,
-                            color: COLORS.markers[0]
-                        });
-                        activeMarkerIndex = 0;
-                        renderGradientList();
-                        renderCurveList();
+                        if (gradientMarkers.length === 0) {
+                            const pos = getRandomMarkerPosition();
+                            gradientMarkers.push({
+                                x: pos.x,
+                                y: pos.y,
+                                color: '#cccccc' // Force initial color
+                            });
+                            activeMarkerIndex = 0;
+                            renderGradientList();
+                            renderCurveList();
+                        }
                     } else {
                         requestAnimationFrame(resize);
                     }
@@ -2505,6 +2575,8 @@
                 dragSY = e.clientY;
                 dragPX = panX;
                 dragPY = panY;
+                panVX = 0;
+                panVY = 0;
                 requestRender();
             });
 
@@ -2523,35 +2595,40 @@
                 mouseScreenX = mx;
                 mouseScreenY = my;
                 const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
-                
-                // Check if hovered tile changed
-                if (h.q !== hoveredQ || h.r !== hoveredR) {
-                    const now = Date.now();
-                    const newPos = hexToPix(h.q, h.r, zoom, panX, panY);
-                    
-                    // Start animation from previous position (or current mouse if first hover)
-                    const fromX = prevHoverX !== null ? prevHoverX : mx;
-                    const fromY = prevHoverY !== null ? prevHoverY : my;
-                    
-                    hoverAnim = {
-                        fromX,
-                        fromY,
-                        toX: newPos.x,
-                        toY: newPos.y,
-                        start: now,
-                        duration: 120 // milliseconds
-                    };
-                    
-                    prevHoverX = newPos.x;
-                    prevHoverY = newPos.y;
-                    hoveredQ = h.q;
-                    hoveredR = h.r;
-                }
+                hoveredQ = h.q;
+                hoveredR = h.r;
 
                 if (isDrag) {
                     const dx = e.clientX - dragSX, dy = e.clientY - dragSY;
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
-                    if (!isEmbedMode) { panX = dragPX + dx; panY = dragPY + dy; }
+                    
+                    if (isEmbedMode) {
+                        // In embed mode, if we are dragging, rotate hovered tiles exactly once
+                        if (dragMoved) {
+                            const hk = hexKey(h.q, h.r);
+                            if (hk !== embedDragLastTile) {
+                                embedDragLastTile = hk;
+                                rotateTile(h.q, h.r);
+                            }
+                        }
+                    } else {
+                        // Normal mode: pan the camera
+                        let targetPanX = dragPX + dx;
+                        let targetPanY = dragPY + dy;
+                        
+                        if (inertiaEnabled) {
+                            // Store the movement delta as velocity for release
+                            panVX = targetPanX - panX;
+                            panVY = targetPanY - panY;
+                        } else {
+                            panVX = 0;
+                            panVY = 0;
+                        }
+                        
+                        // ALWAYS update panX/panY instantly for smooth 1:1 dragging
+                        panX = targetPanX;
+                        panY = targetPanY;
+                    }
                 }
                 requestRender();
             });
@@ -2676,6 +2753,18 @@
             dom.unrenderedToggle.addEventListener('change', function() { showUnrenderedDotted = this.checked; requestRender();});
             dom.bgDotsToggle.addEventListener('change', function() { showBgDots = this.checked; requestRender();});
             dom.markersToggle.addEventListener('change', function() { markersVisible = this.checked; requestRender();});
+            dom.flowToggle.addEventListener('change', function() { 
+                flowEnabled = this.checked; 
+                requestRender(); 
+            });
+            dom.inertiaToggle.addEventListener('change', function() { 
+                inertiaEnabled = this.checked; 
+                if (!inertiaEnabled) {
+                    panVX = 0; 
+                    panVY = 0;
+                }
+                requestRender(); 
+            });
             dom.sCurveW.addEventListener('input', function() {
                 curveLineWidth = +dom.sCurveW.value;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
@@ -2730,25 +2819,24 @@
 
             dom.randLineColorsBtn.onclick = () => {
                 if (curveColors.length === 0) return;
-                const { name, colors } = pickThemeColors(curveColors.length);
+                curveColorPool = generateDistinctThemePool();
                 for (let i = 0; i < curveColors.length; i++) {
-                    curveColors[i] = colors[i];
+                    curveColors[i] = curveColorPool.pool[i] || curveColors[i];
                 }
                 renderCurveList();
-                toast(`Theme "${name}" applied to curves`);
-                // Changing colors doesn't alter topology, but we check solved state anyway
+                toast(`Theme "${curveColorPool.name}" applied to curves`);
                 checkIfSolved();
                 requestRender();
             };
 
             dom.randGradColorsBtn.onclick = () => {
                 if (gradientMarkers.length === 0) return;
-                const { name, colors } = pickThemeColors(gradientMarkers.length);
+                gradientColorPool = generateDistinctThemePool();
                 for (let i = 0; i < gradientMarkers.length; i++) {
-                    gradientMarkers[i].color = colors[i];
+                    gradientMarkers[i].color = gradientColorPool.pool[i] || gradientMarkers[i].color;
                 }
                 renderGradientList();
-                toast(`Theme "${name}" applied to gradient`);
+                toast(`Theme "${gradientColorPool.name}" applied to gradient`);
                 requestRender();
             };
 
@@ -2979,8 +3067,15 @@
 
             function pickNewMarkerColor() {
                 const existing = new Set(gradientMarkers.map(m => m.color.toLowerCase()));
-                const available = COLORS.markers.filter(c => !existing.has(c.toLowerCase()));
-                if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
+                
+                // Try to find the next distinct color in the active theme pool
+                for (let i = 0; i < gradientColorPool.pool.length; i++) {
+                    if (!existing.has(gradientColorPool.pool[i].toLowerCase())) {
+                        return gradientColorPool.pool[i];
+                    }
+                }
+                
+                // Fallback: generate a completely random unique color
                 for (let attempts = 0; attempts < 200; attempts++) {
                     const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
                     if (!existing.has(c.toLowerCase())) return c;
@@ -2990,8 +3085,15 @@
 
             function pickNewCurveColor() {
                 const existing = new Set(curveColors.map(c => c.toLowerCase()));
-                const available = COLORS.curves.filter(c => !existing.has(c.toLowerCase()));
-                if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
+                
+                // Try to find the next distinct color in the active theme pool
+                for (let i = 0; i < curveColorPool.pool.length; i++) {
+                    if (!existing.has(curveColorPool.pool[i].toLowerCase())) {
+                        return curveColorPool.pool[i];
+                    }
+                }
+                
+                // Fallback: generate a completely random unique color
                 for (let attempts = 0; attempts < 200; attempts++) {
                     const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
                     if (!existing.has(c.toLowerCase())) return c;
@@ -3308,7 +3410,7 @@
 
                 const data = {
                     w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
-                    showGrid, showUnrenderedDotted, markersVisible, showBgDots,
+                    showGrid, showUnrenderedDotted, markersVisible, showBgDots, flowEnabled, inertiaEnabled,
                     rotMode, randomSeed, curveLineWidth, alterTilesRatio,
                     texTf: { ...texTf },
                     curveColors: [...curveColors],
@@ -3364,6 +3466,10 @@
                 } catch (e) { console.warn('Could not auto-detect GitHub repo URL'); }
             })();
 
+            // Initialize theme pools on startup
+            curveColorPool = generateDistinctThemePool();
+            gradientColorPool = generateDistinctThemePool();
+            
             if (isEmbedMode && embedData) {
                 // ── Embed mode: load state from data ──
                 zoom = embedData.zoom;
@@ -3377,9 +3483,12 @@
                 randomSeed = embedData.randomSeed || 0;
                 curveLineWidth = embedData.curveLineWidth || 1;
                 alterTilesRatio = embedData.alterTilesRatio || 0;
+                flowEnabled = embedData.flowEnabled || false;
+                inertiaEnabled = embedData.inertiaEnabled !== undefined ? embedData.inertiaEnabled : true;
+                dom.inertiaToggle.checked = inertiaEnabled;
                 texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
                 curveColors = embedData.curveColors && embedData.curveColors.length > 0
-                    ? [...embedData.curveColors].slice(0, 10) : [COLORS.curves[0]];
+                    ? [...embedData.curveColors].slice(0, 10) : ['#444444']; 
                 gradientMarkers = (embedData.markers || []).slice(0, 10).map(m => ({ ...m }));
 
                 // Sync DOM toggles to match loaded embed state
@@ -3387,6 +3496,7 @@
                 dom.unrenderedToggle.checked = showUnrenderedDotted;
                 dom.bgDotsToggle.checked = showBgDots;
                 dom.markersToggle.checked = markersVisible;
+                dom.flowToggle.checked = flowEnabled;
                 dom.sCurveW.value = curveLineWidth;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
                 dom.sAlterTiles.value = alterTilesRatio;
@@ -3422,10 +3532,15 @@
                 showUnrenderedDotted = dom.unrenderedToggle.checked;
                 showBgDots = dom.bgDotsToggle.checked;
                 markersVisible = dom.markersToggle.checked;
+                flowEnabled = dom.flowToggle.checked;
+                inertiaEnabled = dom.inertiaToggle.checked;
                 curveLineWidth = +dom.sCurveW.value || 1;
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
                 alterTilesRatio = +dom.sAlterTiles.value || 0;
                 dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
+
+                // Initialize with the hardcoded default color
+                curveColors = ['#444444']; // Force initial color
 
                 resize();
                 render();
