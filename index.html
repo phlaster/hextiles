@@ -1102,6 +1102,7 @@
                     gradientMarkersRGB[i].tg = rgb[1];
                     gradientMarkersRGB[i].tb = rgb[2];
                 }
+                isGradientDirty = true;
             }
 
             let edgeRgbMap = new Map(); // Tracks current animated RGB for each individual edge
@@ -1299,7 +1300,7 @@
             }
 
             // ──── IDW Gradient ────
-            function drawIDWGradient(W, H) {
+            function updateIDWGradientCanvas(W, H) {
                 if (gradientMarkersRGB.length === 0) return;
                 const scale = 0.2;
                 const lowW = Math.max(2, Math.ceil(W * scale));
@@ -1353,9 +1354,22 @@
                     }
                 }
                 gctx.putImageData(imgData, 0, 0);
+            }
+
+            function drawIDWGradient(W, H) {
+                if (gradientMarkersRGB.length === 0) return;
+                
+                // Recalculate only if dirty or if the main canvas size changed
+                const targetLowW = Math.max(2, Math.ceil(W * 0.2));
+                const targetLowH = Math.max(2, Math.ceil(H * 0.2));
+                if (isGradientDirty || !gradientCanvas || gradientCanvas.width !== targetLowW || gradientCanvas.height !== targetLowH) {
+                    updateIDWGradientCanvas(W, H);
+                    isGradientDirty = false;
+                }
+                
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(gradientCanvas, 0, 0, lowW, lowH, 0, 0, W, H);
+                ctx.drawImage(gradientCanvas, 0, 0, gradientCanvas.width, gradientCanvas.height, 0, 0, W, H);
             }
 
             function getContrastColor(hex) {
@@ -2293,8 +2307,17 @@
                 ctx.restore();
             }
 
-            // ──── Check if 95% of drawn segments are of the same color ────
+            let solvedCheckTimeout = null;
             function checkIfSolved() {
+                if (solvedCheckTimeout) return; // Throttle: max once every 500ms
+                
+                solvedCheckTimeout = setTimeout(() => {
+                    solvedCheckTimeout = null;
+                    performSolvedCheck();
+                }, 500);
+            }
+            
+            function performSolvedCheck() {
                 if (curveColors.length <= 1) {
                     window.dispatchEvent(new CustomEvent('hexCurveSolved', { detail: { solved: false } }));
                     try { 
@@ -2303,20 +2326,14 @@
                     return;
                 }
 
-                // Process a small chunk of the queue to keep the UI responsive (no freezing!)
-                for (let i = 0; i < 1000; i++) {
-                    if (queue.length === 0) break;
-                    processQueue();
-                }
-
-                const W = dom.cvs.width,
-                    H = dom.cvs.height;
+                // Let the render loop handle queue processing. 
+                // We just read the current state. The 85% threshold handles in-progress tracing gracefully.
+                const W = dom.cvs.width, H = dom.cvs.height;
                 const hexes = visibleHexes(zoom, panX, panY, W, H);
                 if (hexes.length === 0) return;
                 
                 const visibleEdges = new Set();
                 for (const h of hexes) {
-                    // STRICT CHECK: Only count tiles with their centers inside the actual frame
                     if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
                         for (let e = 0; e < 6; e++) {
                             visibleEdges.add(edgeID(h.q, h.r, e));
@@ -2347,8 +2364,6 @@
                 }
                 
                 let isSolved = false;
-                // Wait until at least 80% of visible edges are colored before evaluating
-                // This prevents false negatives while panning/zooming
                 if (totalColored >= visibleEdges.size * 0.85) {
                     if (totalColored > 0) {
                         isSolved = (maxColorCount / totalColored) >= 0.98;
@@ -2359,12 +2374,10 @@
                     console.log("Curve solved (98% threshold reached)");
                 }
 
-                // 1. Dispatch a local DOM event (Regular page)
                 window.dispatchEvent(new CustomEvent('hexCurveSolved', { 
                     detail: { solved: isSolved } 
                 }));
 
-                // 2. Notify parent window (Embedded page) - wrapped in try/catch for Firefox security
                 try {
                     if (isEmbedMode) {
                         window.parent.postMessage({ 
@@ -2380,6 +2393,8 @@
 
             // ──── Main render loop ────
             let isRenderScheduled = false;
+            let lastStatsUpdate = 0; // Throttle for stats and solved check
+            let isGradientDirty = true; // Cache flag for IDW gradient
             function requestRender() {
                 if (!isRenderScheduled) {
                     isRenderScheduled = true;
@@ -2436,9 +2451,11 @@
                     const nb = m.b + (m.tb - m.b) * 0.1;
                     if (Math.abs(m.r - nr) > 0.5 || Math.abs(m.g - ng) > 0.5 || Math.abs(m.b - nb) > 0.5) diff = true;
                     m.r = nr; m.g = ng; m.b = nb;
-                    if (diff) gradColorAnimating = true;
+                    if (diff) {
+                        gradColorAnimating = true;
+                        isGradientDirty = true; // Force IDW canvas to recalculate during transition
+                    }
                 }
-
                 // Interpolate Curve Colors
                 for (let i = 0; i < curveColorsRGB.length; i++) {
                     const c = curveColorsRGB[i];
@@ -2579,34 +2596,38 @@
                     }
                 }
 
-                // ── Quick Stats Update ──
-                if (curveColors.length <= 1) {
-                    dom.statCurvesWrap.style.display = 'none';
-                    dom.statColorsWrap.style.display = 'none';
-                } else {
-                    dom.statCurvesWrap.style.display = '';
-                    dom.statColorsWrap.style.display = '';
-                    
-                    let visCurveIDs = new Set();
-                    for (const h of hexes) {
-                        if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
-                            for (let e = 0; e < 6; e++) {
-                                const id = edgeID(h.q, h.r, e);
-                                if (curveMap.has(id)) visCurveIDs.add(curveMap.get(id));
+                // ── Quick Stats & Solved Check (Throttled to 500ms) ──
+                if (now - lastStatsUpdate > 500) {
+                    lastStatsUpdate = now;
+                    if (curveColors.length <= 1) {
+                        dom.statCurvesWrap.style.display = 'none';
+                        dom.statColorsWrap.style.display = 'none';
+                    } else {
+                        dom.statCurvesWrap.style.display = '';
+                        dom.statColorsWrap.style.display = '';
+                        
+                        let visCurveIDs = new Set();
+                        for (const h of hexes) {
+                            if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
+                                for (let e = 0; e < 6; e++) {
+                                    const id = edgeID(h.q, h.r, e);
+                                    if (curveMap.has(id)) visCurveIDs.add(curveMap.get(id));
+                                }
                             }
                         }
-                    }
-                    let visColors = new Set();
-                    for (const cid of visCurveIDs) {
-                        const c = curves.get(cid);
-                        if (c) {
-                            let col = c.color;
-                            if (typeof col === 'number') col = curveColors[col % curveColors.length];
-                            visColors.add(col.toLowerCase());
+                        let visColors = new Set();
+                        for (const cid of visCurveIDs) {
+                            const c = curves.get(cid);
+                            if (c) {
+                                let col = c.color;
+                                if (typeof col === 'number') col = curveColors[col % curveColors.length];
+                                visColors.add(col.toLowerCase());
+                            }
                         }
+                        dom.statCurves.textContent = visCurveIDs.size;
+                        dom.statColors.textContent = visColors.size;
                     }
-                    dom.statCurves.textContent = visCurveIDs.size;
-                    dom.statColors.textContent = visColors.size;
+                    checkIfSolved(); // Trigger the throttled solved check
                 }
 
                 if (keepRendering || edgeColorAnimating || gradColorAnimating || curveColorAnimating) {
@@ -2616,6 +2637,7 @@
 
             // ──── Resize ────
             function resize() {
+                isGradientDirty = true;
                 const w = dom.wrap.clientWidth;
                 const h = dom.wrap.clientHeight;
                 dom.cvs.width = w;
@@ -2735,6 +2757,7 @@
                         gradientMarkersRGB[draggedMarkerIndex].x = gradientMarkers[draggedMarkerIndex].x;
                         gradientMarkersRGB[draggedMarkerIndex].y = gradientMarkers[draggedMarkerIndex].y;
                     }
+                    isGradientDirty = true;
                     requestRender(); 
                     return;
                 }
