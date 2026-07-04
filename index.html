@@ -1638,7 +1638,7 @@
                 return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
             }
 
-            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime) {
+            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime, offsetX = 0, offsetY = 0) {
                 if (spacing < CONFIG.STAR_MIN_SPACING) return; 
                 
                 const kMin = Math.floor((0 - panX) / spacing) - 2;
@@ -1659,7 +1659,7 @@
                         
                         if (x < -spacing || x > W + spacing || y < -spacing || y > H + spacing) continue;
                         
-                        const bg = getBackgroundColorAt(x, y, coordScale);
+                        const bg = getBackgroundColorAt(x, y, coordScale, offsetX, offsetY);
                         if (!bg) continue;
                         
                         const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
@@ -1705,26 +1705,21 @@
                 }
             }
 
-            function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2, dPanX3, dPanY3, now, currentZoom, zoomOutTime) {
+            function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2, dPanX3, dPanY3, now, currentZoom, zoomOutTime, offsetX = 0, offsetY = 0) {
                 if (!showBgStars) return;
                 
                 ctx.save();
                 
-                // Layer 1: Size 7, medium spacing, fastest parallax
                 const spacing5 = CONFIG.STAR_SPACING_LARGE * starZoom5 * coordScale;
-                drawDotLayer(W, H, spacing5, CONFIG.STAR_SIZE_LARGE, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0);
+                drawDotLayer(W, H, spacing5, CONFIG.STAR_SIZE_LARGE, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0, offsetX, offsetY);
                 
-                // Layer 2: Size 4, densest spacing, medium parallax
                 const spacing2 = CONFIG.STAR_SPACING_MED * starZoom2 * coordScale;
-                drawDotLayer(W, H, spacing2, CONFIG.STAR_SIZE_MED, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0);
+                drawDotLayer(W, H, spacing2, CONFIG.STAR_SIZE_MED, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0, offsetX, offsetY);
                 
-                // Layer 3: Size 2, least dense, slowest parallax. Fades in at low zoom.
                 let layer3Alpha = 0;
                 let canBlaze = false;
                 if (currentZoom < CONFIG.ZOOM_BLAZE_FADE_START) {
-                    // Fade in smoothly
                     layer3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - currentZoom) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
-                    // Allow blazing only if delay has passed
                     if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > CONFIG.STAR_BLAZE_DELAY) {
                         canBlaze = true;
                     }
@@ -1732,18 +1727,17 @@
                 
                 if (layer3Alpha > 0) {
                     const spacing3 = CONFIG.STAR_SPACING_SMALL * starZoom3 * coordScale;
-                    drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime);
+                    drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime, offsetX, offsetY);
                 }
                 
                 ctx.restore();
             }
 
             // ──── IDW Gradient ────
-            function updateIDWGradientCanvas(W, H, coordScale = 1) {
+            function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offsetY = 0, qualityScale = 0.2) {
                 if (gradientMarkersRGB.length === 0 && fadingMarkersRGB.length === 0) return;
-                const scale = 0.2;
-                const lowW = Math.max(2, Math.ceil(W * scale));
-                const lowH = Math.max(2, Math.ceil(H * scale));
+                const lowW = Math.max(2, Math.ceil(W * qualityScale));
+                const lowH = Math.max(2, Math.ceil(H * qualityScale));
 
                 if (!gradientCanvas) gradientCanvas = document.createElement('canvas');
                 if (gradientCanvas.width !== lowW || gradientCanvas.height !== lowH) {
@@ -1782,7 +1776,8 @@
                     const m = gradientMarkersRGB[i];
                     const w = Math.max(0, Math.min(1, m.weight !== undefined ? m.weight : 1));
                     allMarkers.push({
-                        x: m.x, y: m.y,
+                        x: (m.x - offsetX) * coordScale,
+                        y: (m.y - offsetY) * coordScale,
                         r: avgR + (m.r - avgR) * w,
                         g: avgG + (m.g - avgG) * w,
                         b: avgB + (m.b - avgB) * w,
@@ -1793,7 +1788,8 @@
                     const m = fadingMarkersRGB[i];
                     const w = Math.max(0, Math.min(1, m.weight !== undefined ? m.weight : 0));
                     allMarkers.push({
-                        x: m.x, y: m.y,
+                        x: (m.x - offsetX) * coordScale,
+                        y: (m.y - offsetY) * coordScale,
                         r: avgR + (m.r - avgR) * w,
                         g: avgG + (m.g - avgG) * w,
                         b: avgB + (m.b - avgB) * w,
@@ -1810,8 +1806,9 @@
                         
                         for (let i = 0; i < n; i++) {
                             const m = allMarkers[i];
-                            const dx = px - (m.x * scale * coordScale);
-                            const dy = py - (m.y * scale * coordScale);
+                            // m.x is already in high-res space, just scale down to low-res by 'qualityScale' (0.2)
+                            const dx = px - (m.x * qualityScale);
+                            const dy = py - (m.y * qualityScale);
                             const distSq = dx * dx + dy * dy + 0.5;
                             const weight = (1 / (distSq * distSq)) * m.weight;
                             totalWeight += weight;
@@ -1840,13 +1837,13 @@
                 gctx.putImageData(imgData, 0, 0);
             }
             
-            function drawIDWGradient(W, H, coordScale = 1) {
+            function drawIDWGradient(W, H, coordScale = 1, offsetX = 0, offsetY = 0) {
                 if (gradientMarkersRGB.length === 0 && fadingMarkersRGB.length === 0) return;
                 
                 const targetLowW = Math.max(2, Math.ceil(W * 0.2));
                 const targetLowH = Math.max(2, Math.ceil(H * 0.2));
                 if (isGradientDirty || coordScale !== 1 || !gradientCanvas || gradientCanvas.width !== targetLowW || gradientCanvas.height !== targetLowH) {
-                    updateIDWGradientCanvas(W, H, coordScale);
+                    updateIDWGradientCanvas(W, H, coordScale, offsetX, offsetY);
                     isGradientDirty = false;
                 }
                 
@@ -2113,14 +2110,16 @@
                 return adjColors;
             }
 
-            function getBackgroundColorAt(x, y, coordScale = 1) {
+            function getBackgroundColorAt(x, y, coordScale = 1, offsetX = 0, offsetY = 0) {
                 if (gradientMarkersRGB.length === 0 && fadingMarkersRGB.length === 0) return null;
                 let totalWeight = 0, r = 0, g = 0, b = 0;
                 
                 for (let i = 0; i < gradientMarkersRGB.length; i++) {
                     const m = gradientMarkersRGB[i];
-                    const dx = x - (m.x * coordScale);
-                    const dy = y - (m.y * coordScale);
+                    const mx = (m.x - offsetX) * coordScale;
+                    const my = (m.y - offsetY) * coordScale;
+                    const dx = x - mx;
+                    const dy = y - my;
                     const distSq = dx * dx + dy * dy + 0.5;
                     const weight = (1 / (distSq * distSq)) * (m.weight || 0);
                     totalWeight += weight;
@@ -2130,8 +2129,10 @@
                 }
                 for (let i = 0; i < fadingMarkersRGB.length; i++) {
                     const m = fadingMarkersRGB[i];
-                    const dx = x - (m.x * coordScale);
-                    const dy = y - (m.y * coordScale);
+                    const mx = (m.x - offsetX) * coordScale;
+                    const my = (m.y - offsetY) * coordScale;
+                    const dx = x - mx;
+                    const dy = y - my;
                     const distSq = dx * dx + dy * dy + 0.5;
                     const weight = (1 / (distSq * distSq)) * (m.weight || 0);
                     totalWeight += weight;
@@ -2733,8 +2734,9 @@
             }
 
             // ──── drawTile ────
-            function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now) {
+            function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, fadeSz) {
                 const rSz = grid ? sz * 0.95 : sz;
+                const fSz = fadeSz !== undefined ? fadeSz : sz;
                 ctx.save();
                 
                 if (img) {
@@ -2761,14 +2763,14 @@
 
                     // Calculate curve alpha based on tile screen size for smooth zoom fading
                     let curveAlpha = 1.0;
-                    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT; 
+                    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
                     const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-                    
-                    if (sz <= fadeEndSz) {
-                        curveAlpha = 0.0; 
-                    } else if (sz < fadeStartSz) {
-                        let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-                        curveAlpha = t * t * (3 - 2 * t); 
+
+                    if (fSz <= fadeEndSz) {
+                        curveAlpha = 0.0;
+                    } else if (fSz < fadeStartSz) {
+                        let t = (fSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+                        curveAlpha = t * t * (3 - 2 * t);
                     }
 
                     if (curveAlpha > 0) {
@@ -2816,12 +2818,12 @@
                     let gridAlpha = 1.0;
                     const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
                     const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-                    
-                    if (sz <= fadeEndSz) {
-                        gridAlpha = 0.0; 
-                    } else if (sz < fadeStartSz) {
-                        let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-                        gridAlpha = t * t * (3 - 2 * t); 
+
+                    if (fSz <= fadeEndSz) {
+                        gridAlpha = 0.0;
+                    } else if (fSz < fadeStartSz) {
+                        let t = (fSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+                        gridAlpha = t * t * (3 - 2 * t);
                     }
 
                     if (gridAlpha > 0) {
@@ -2863,6 +2865,8 @@
             }
             
             function performSolvedCheck() {
+                if (curveColors.length <= 1) return;
+
                 if (zoom <= CONFIG.ZOOM_FADE_MID) {
                     window.dispatchEvent(new CustomEvent('hexCurveSolved', { detail: { solved: false } }));
                     try { 
@@ -3240,7 +3244,6 @@
                         dom.statCurves.textContent = visCurveIDs.size;
                         dom.statColors.textContent = visColors.size;
                     }
-                    checkIfSolved(); 
                     
                     if (edgeRgbMap.size > 10000) {
                         const visibleEdgeIDs = new Set();
@@ -3919,6 +3922,7 @@
                 dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
                 requestRender();
             });
+            
             let lastAlterRatio = 0;
             dom.sAlterTiles.addEventListener('input', function() {
                 alterTilesRatio = +dom.sAlterTiles.value;
@@ -3932,6 +3936,7 @@
                     initializeCentralTile();
                 }
                 requestRender();
+                checkIfSolved();
             });
 
             function bulkAnimate(newMode, newSeed) {
@@ -4593,6 +4598,7 @@
 
             // ── Shared SVG generation function ──
             function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
+                const now = Date.now();
                 const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
 
                 let exportBounds = { minQ: Infinity, maxQ: -Infinity, minR: Infinity, maxR: -Infinity };
@@ -4618,7 +4624,7 @@
                 svg += `<rect width="${eW}" height="${eH}" fill="${COLORS.bg}"/>`;
 
                 if (gradientMarkersRGB.length > 0) {
-                    updateIDWGradientCanvas(eW, eH, scale);
+                    updateIDWGradientCanvas(eW, eH, scale, fx, fy, 0.5);
                     const gradUrl = gradientCanvas.toDataURL('image/png');
                     svg += `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
                 }
@@ -4631,11 +4637,11 @@
                     const expStarPanX3 = (starPanX3 - fx) * scale;
                     const expStarPanY3 = (starPanY3 - fy) * scale;
                     
-                    const spacing5 = CONFIG.EXPORT_STAR_SPACING_LARGE * starZoom5 * scale;
-                    const spacing2 = CONFIG.EXPORT_STAR_SPACING_MED * starZoom2 * scale;
-                    const spacing3 = CONFIG.EXPORT_STAR_SPACING_SMALL * starZoom3 * scale;
+                    const spacing5 = CONFIG.STAR_SPACING_LARGE * starZoom5 * scale;
+                    const spacing2 = CONFIG.STAR_SPACING_MED * starZoom2 * scale;
+                    const spacing3 = CONFIG.STAR_SPACING_SMALL * starZoom3 * scale;
 
-                    function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime) {
+                    function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime, offsetX, offsetY) {
                         if (spacing < CONFIG.STAR_MIN_SPACING) return;
                         const kMin = Math.floor((0 - panX) / spacing) - 2;
                         const kMax = Math.ceil((eW - panX) / spacing) + 2;
@@ -4655,7 +4661,7 @@
                                 
                                 if (x < -spacing || x > eW + spacing || y < -spacing || y > eH + spacing) continue;
                                 
-                                const bg = getBackgroundColorAt(x, y, coordScale);
+                                const bg = getBackgroundColorAt(x, y, coordScale, offsetX, offsetY);
                                 if (!bg) continue;
                                 
                                 const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
@@ -4687,12 +4693,12 @@
                         }
                     }
                     
-                    addStars(spacing5, CONFIG.STAR_SIZE_LARGE, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0);
-                    addStars(spacing2, CONFIG.STAR_SIZE_MED, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0);
+                    addStars(spacing5, CONFIG.STAR_SIZE_LARGE, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0, fx, fy);
+                    addStars(spacing2, CONFIG.STAR_SIZE_MED, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0, fx, fy);
                     
                     let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
                     if (l3Alpha > 0) {
-                        addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, true, l3Alpha, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET);
+                        addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, true, l3Alpha, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET, fx, fy);
                     }
                 }
 
@@ -4784,10 +4790,12 @@
                 }
 
                 if (gridPaths.length > 0) {
+                    const origSz = HEX_R * zoom;
                     let gridAlpha = 1.0;
-                    if (eSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) gridAlpha = 0.0;
-                    else if (eSz < HEX_R * CONFIG.ZOOM_FADE_START_MULT) {
-                        let t = (eSz - HEX_R * CONFIG.ZOOM_FADE_END_MULT) / (HEX_R * CONFIG.ZOOM_FADE_START_MULT - HEX_R * CONFIG.ZOOM_FADE_END_MULT);
+                    if (origSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) gridAlpha = 0.0;
+                    else if (origSz < HEX_R * CONFIG.ZOOM_FADE_START_MULT) {
+                        let t = (origSz - HEX_R * CONFIG.ZOOM_FADE_END_MULT) /
+                                (HEX_R * CONFIG.ZOOM_FADE_START_MULT - HEX_R * CONFIG.ZOOM_FADE_END_MULT);
                         gridAlpha = t * t * (3 - 2 * t);
                     }
                     
@@ -5024,7 +5032,7 @@
                 offCtx.fillStyle = COLORS.bg;
                 offCtx.fillRect(0, 0, eW, eH);
 
-                drawIDWGradient(eW, eH, scale);
+                drawIDWGradient(eW, eH, scale, fx, fy);
 
                 const expStarPanX5 = (starPanX5 - fx) * scale;
                 const expStarPanY5 = (starPanY5 - fy) * scale;
@@ -5033,12 +5041,13 @@
                 const expStarPanX3 = (starPanX3 - fx) * scale;
                 const expStarPanY3 = (starPanY3 - fy) * scale;
                 
-                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET);
+                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET, fx, fy);
 
                 const eSz = HEX_R * eZoom;
+                const origSz = HEX_R * zoom;
                 for (const h of hexes) {
                     const rot = tileRot(h.q, h.r);
-                    drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r, now);
+                    drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r, now, origSz);  // ← pass origSz
                 }
 
                 ctx = oldCtx;
