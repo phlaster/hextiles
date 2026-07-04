@@ -1127,10 +1127,11 @@
             INERTIA_DAMPING_LOW: 0.99,
             INERTIA_DAMPING_NORMAL: 0.95,
             INERTIA_THRESHOLD: 0.01,
-            DRIFT_TIMER_MIN: 120,
-            DRIFT_TIMER_RANGE: 180,
-            DRIFT_SPEED_BASE: 0.05,
-            DRIFT_SPEED_RANGE: 0.15,
+            DRIFT_TIMER_MIN: 10000,
+            DRIFT_TIMER_RANGE: 10000,
+            DRIFT_SPEED_BASE: 0.4,
+            DRIFT_SPEED_RANGE: 0.4,
+            FLOW_TURN_DURATION: 3000,
             FLOW_SPEED_MULT_LOW_ZOOM: 10.0,
             FLOW_ANGLE_LERP_LOW_ZOOM: 0.015,
             FLOW_ANGLE_LERP_NORMAL: 0.03,
@@ -1342,9 +1343,10 @@
             let panVX = 0, panVY = 0;
             let driftAngle = Math.random() * Math.PI * 2;
             let driftTargetAngle = driftAngle;
-            let driftTimer = 0;
-            let driftSpeed = 0.12;
-            let driftTargetSpeed = 0.12;
+            let flowState = 'drift';
+            let flowStateEndTime = 0;
+            let driftSpeed = 0.5;
+            let driftTargetSpeed = 0.5;
             let isInitialized = false;
             let rotMode = 'hash';
             let randomSeed = 0;
@@ -1668,7 +1670,7 @@
                         t = Math.max(0, Math.min(1, t));
                         t = t * t * (3 - 2 * t);
                         
-                        const sR = Math.round(255 * (1 - t));
+                        let sR = Math.round(255 * (1 - t));
                         let sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult;
                         let drawSize = (size * coordScale) / 2;
                         
@@ -1702,6 +1704,9 @@
                                 ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
                                 ctx.fill();
                                 ctx.restore();
+                                
+                                // Interpolate star color towards white during blaze
+                                sR = Math.round(sR + (255 - sR) * blazeIntensity);
                             }
                         }
                         
@@ -3021,41 +3026,69 @@
                     }
                 }
 
-                // Flow physics: inertia and drift
+                // Flow physics: drift and turn
                 let driftX = 0, driftY = 0;
                 if (flowEnabled && !isExporting) {
                     let speedMult = (zoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
-                    let angleLerp = (zoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_ANGLE_LERP_LOW_ZOOM : CONFIG.FLOW_ANGLE_LERP_NORMAL;
                     
-                    if (hoveredQ !== null && hoveredR !== null) {
+                    if (hoveredQ !== null && hoveredR !== null && !isEmbedMode) {
+                        // Hover detected: target opposite direction from center-screen to cursor
                         const cx = W / 2;
                         const cy = H / 2;
                         const dx = mouseScreenX - cx;
                         const dy = mouseScreenY - cy;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        
-                        const maxDist = Math.min(W, H) / 2;
-                        const strength = Math.min(1, dist / maxDist);
                         
                         driftTargetAngle = Math.atan2(dy, dx) + Math.PI;
-                        driftTargetSpeed = strength * 0.35 * speedMult; 
-                        driftTimer = 0;
+                        
+                        // Slowly turn towards the target angle
+                        let angleDiff = driftTargetAngle - driftAngle;
+                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                        driftAngle += angleDiff * 0.03;
                     } else {
-                        driftTimer++;
-                        if (driftTimer > CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE) { 
-                            driftTargetAngle = Math.random() * Math.PI * 2;
-                            driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult; 
-                            driftTimer = 0;
+                        if (now > flowStateEndTime) {
+                            if (flowState === 'drift') {
+                                // Transition to turning
+                                flowState = 'turn';
+                                flowStateEndTime = now + CONFIG.FLOW_TURN_DURATION;
+                                
+                                // Pick new angle using a cardioid-like distribution (peaked forward)
+                                let turnAmount = 0;
+                                while (true) {
+                                    let theta = (Math.random() - 0.5) * Math.PI * 2; // -PI to PI
+                                    let y = Math.random();
+                                    // The cardioid probability function (1 + cos(theta)) / 2
+                                    if (y <= (1 + Math.cos(theta)) / 2) {
+                                        turnAmount = theta;
+                                        break;
+                                    }
+                                }
+                                driftTargetAngle = driftAngle + turnAmount;
+                            } else {
+                                // Transition back to drifting
+                                flowState = 'drift';
+                                driftAngle = driftTargetAngle; // Snap to target to prevent residual drift
+                                flowStateEndTime = now + CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE;
+                                
+                                // Set new base speed for this drift segment
+                                driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult;
+                            }
+                        }
+                        
+                        if (flowState === 'turn') {
+                            // Slow rotation of velocity vector
+                            let angleDiff = driftTargetAngle - driftAngle;
+                            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                            driftAngle += angleDiff * 0.03; 
                         }
                     }
                     
-                    let angleDiff = driftTargetAngle - driftAngle;
-                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                    driftAngle += angleDiff * angleLerp;
-
-                    driftSpeed += (driftTargetSpeed - driftSpeed) * 0.02;
-
+                    // Random fluctuations of absolute speed during drift (applies to both hover and normal)
+                    let fluctuation = Math.sin(now / 800) * 0.2 + Math.sin(now / 350) * 0.1;
+                    let currentTargetSpeed = driftTargetSpeed + (driftTargetSpeed * fluctuation);
+                    driftSpeed += (currentTargetSpeed - driftSpeed) * 0.02;
+                    
                     driftX = Math.cos(driftAngle) * driftSpeed;
                     driftY = Math.sin(driftAngle) * driftSpeed;
                 }
@@ -4690,6 +4723,9 @@
                                         r = r * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeIntensity); 
                                         sA = Math.min(1, sA + 0.5 * blazeIntensity);
                                         
+                                        // Interpolate star color towards white during blaze
+                                        const blazeR = Math.round(sR + (255 - sR) * blazeIntensity);
+                                        
                                         // Affect gradient around star
                                         const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
                                         const gradId = `blaze-${k}-${j}-${seed}`;
@@ -4698,7 +4734,17 @@
                                         svg += `<stop offset="40%" stop-color="rgba(150, 200, 255, ${(0.2 * blazeIntensity).toFixed(3)})"/>`;
                                         svg += `<stop offset="100%" stop-color="rgba(0, 0, 0, 0)"/></radialGradient></defs>`;
                                         svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${glowRadius.toFixed(2)}" fill="url(#${gradId})"/>`;
+                                        
+                                        // Draw the star core with the white-blended color
+                                        const coreFill = `rgba(${blazeR},${blazeR},${blazeR},${sA.toFixed(3)})`;
+                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${coreFill}"/>`;
+                                    } else {
+                                        const fill = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
+                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
                                     }
+                                } else {
+                                    const fill = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
+                                    svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
                                 }
                                 
                                 const fill = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
