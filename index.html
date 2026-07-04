@@ -25,8 +25,8 @@
         }
 
         #canvas-wrap {
-            flex: 1;
-            position: relative;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
             overflow: hidden;
         }
 
@@ -53,6 +53,12 @@
             padding: 6px 14px;
             backdrop-filter: blur(8px);
             z-index: 10;
+            transition: opacity .3s cubic-bezier(.4,0,.2,1);
+        }
+
+        body.sidebar-collapsed .zoom-bar {
+            opacity: 0;
+            pointer-events: none;
         }
 
         .zoom-bar button {
@@ -85,6 +91,9 @@
         }
 
         .sidebar {
+            position: relative;
+            z-index: 20;
+            margin-left: auto;
             width: 310px;
             background: var(--col-card);
             border-left: 1px solid var(--col-border);
@@ -92,6 +101,8 @@
             flex-direction: column;
             overflow-y: auto;
             overflow-x: hidden;
+            transition: margin-right .3s cubic-bezier(.4,0,.2,1);
+            flex-shrink: 0;
         }
 
         .sidebar::-webkit-scrollbar {
@@ -662,10 +673,69 @@
             opacity: 1;
             color: var(--col-accent);
         }
+
+        /* ── Sidebar Transition ── */
+        .sidebar {
+            transition: margin-right .3s cubic-bezier(.4,0,.2,1);
+            flex-shrink: 0;
+        }
+        .sidebar.collapsed {
+            margin-right: -310px; /* Pulls sidebar completely off-screen */
+            overflow: hidden;
+        }
+
+        /* ── Floating Toggle Button ── */
+        .sidebar-toggle {
+            position: fixed;
+            top: 26px;
+            right: 310px; /* Sits exactly on the sidebar border */
+            transform: translateX(50%); /* Centers it on the border */
+            z-index: 1000;
+            width: 28px;
+            height: 28px;
+            border: 1px solid var(--col-border);
+            border-radius: 8px;
+            background: var(--col-card2);
+            color: var(--col-accent);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            padding: 0;
+            transition: right .3s cubic-bezier(.4,0,.2,1), transform .3s cubic-bezier(.4,0,.2,1), background .2s, color .2s;
+        }
+
+        .sidebar-toggle:hover {
+            background: var(--col-accent);
+            color: #fff;
+        }
+
+        .sidebar-toggle.collapsed {
+            right: 12px; /* Moves to the top right corner when collapsed */
+            transform: translateX(0);
+        }
+
+        .sidebar-toggle i {
+            transition: transform .3s cubic-bezier(.4,0,.2,1);
+        }
+
+        .sidebar-toggle.collapsed i {
+            transform: rotate(180deg); /* Points right when collapsed */
+        }
+
+        /* Hide toggle in embed mode */
+        body.embed-mode .sidebar-toggle {
+            display: none !important;
+        }
     </style>
 </head>
 
 <body>
+
+    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">
+        <i class="fas fa-chevron-right"></i>
+    </button>
 
     <div id="canvas-wrap">
         <canvas id="hexCanvas"></canvas>
@@ -673,7 +743,6 @@
             <button id="zoomOut" title="Zoom out"><i class="fas fa-minus"></i></button>
             <span class="zlabel" id="zoomLabel">100%</span>
             <button id="zoomIn" title="Zoom in"><i class="fas fa-plus"></i></button>
-            <button id="resetView" title="Reset view"><i class="fas fa-crosshairs"></i></button>
         </div>
         <div class="stats-bar">
             <a id="ghLink" href="https://github.com/phlaster/hextiles" target="_blank" title="GitHub"><i class="fab fa-github"></i></a>
@@ -1128,7 +1197,6 @@
                 zoomLabel: document.getElementById('zoomLabel'),
                 zoomIn: document.getElementById('zoomIn'),
                 zoomOut: document.getElementById('zoomOut'),
-                resetView: document.getElementById('resetView'),
                 gridToggle: document.getElementById('gridToggle'),
                 uploadZone: document.getElementById('uploadZone'),
                 fileInput: document.getElementById('fileInput'),
@@ -2306,6 +2374,7 @@
                     let originalColor = m;
                     colorInput.addEventListener('input', (e) => {
                         curveColors[i] = e.target.value;
+                        updateCurveColorsCache();
                         hexInput.value = e.target.value.toUpperCase();
                     });
                     colorInput.addEventListener('change', (e) => {
@@ -2319,6 +2388,7 @@
                             toast('Color already exists in curve palette');
                         } else {
                             originalColor = e.target.value;
+                            updateCurveColorsCache();
                         }
                     });
                     colorInput.addEventListener('click', (e) => e.stopPropagation());
@@ -2341,6 +2411,7 @@
                             } else {
                                 curveColors[i] = newColor;
                                 originalColor = newColor;
+                                updateCurveColorsCache();
                                 colorInput.value = newColor;
                                 e.target.value = newColor.toUpperCase();
                             }
@@ -2367,6 +2438,7 @@
                             } else if (activeCurveIndex > i) {
                                 activeCurveIndex--;
                             }
+                            updateCurveColorsCache();
                             renderCurveList();
                         });
                         item.appendChild(removeBtn);
@@ -2495,13 +2567,15 @@
 
                 // Let the render loop handle queue processing. 
                 // We just read the current state. The 85% threshold handles in-progress tracing gracefully.
-                const W = dom.cvs.width, H = dom.cvs.height;
-                const hexes = visibleHexes(zoom, panX, panY, W, H);
+                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                const effectiveW = isCollapsed ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+                const H = dom.cvs.height;
+                const hexes = visibleHexes(zoom, panX, panY, dom.cvs.width, H);
                 if (hexes.length === 0) return;
                 
                 const visibleEdges = new Set();
                 for (const h of hexes) {
-                    if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
+                    if (h.x >= 0 && h.x <= effectiveW && h.y >= 0 && h.y <= H) {
                         for (let e = 0; e < 6; e++) {
                             visibleEdges.add(edgeID(h.q, h.r, e));
                         }
@@ -2789,9 +2863,11 @@
                         dom.statCurvesWrap.style.display = '';
                         dom.statColorsWrap.style.display = '';
                         
+                        const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                        const effectiveW = isCollapsed ? W : Math.max(0, W - 310);
                         let visCurveIDs = new Set();
                         for (const h of hexes) {
-                            if (h.x >= 0 && h.x <= W && h.y >= 0 && h.y <= H) {
+                            if (h.x >= 0 && h.x <= effectiveW && h.y >= 0 && h.y <= H) {
                                 for (let e = 0; e < 6; e++) {
                                     const id = edgeID(h.q, h.r, e);
                                     if (curveMap.has(id)) visCurveIDs.add(curveMap.get(id));
@@ -2841,22 +2917,25 @@
             // ──── Resize ────
             function resize() {
                 isGradientDirty = true;
-                const w = dom.wrap.clientWidth;
-                const h = dom.wrap.clientHeight;
+                const w = window.innerWidth;
+                const h = window.innerHeight;
                 dom.cvs.width = w;
                 dom.cvs.height = h;
 
                 if (!isInitialized) {
                     if (w > 0 && h > 0) {
-                        panX = w / 2;
+                        const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                        const effectiveW = isCollapsed ? w : Math.max(0, w - 310);
+                        panX = effectiveW / 2;
                         panY = h / 2;
-                        starPanX5 = w / 2;
-                        starPanY5 = h / 2;
-                        starPanX2 = w / 2;
-                        starPanY2 = h / 2;
+                        starPanX5 = panX;
+                        starPanY5 = panY;
+                        starPanX2 = panX;
+                        starPanY2 = panY;
                         starZoom5 = Math.pow(zoom, 0.4 / 1.5);
                         starZoom2 = Math.pow(zoom, 0.15 / 1.5);
                         isInitialized = true;
+
                         if (gradientMarkers.length === 0) {
                             const pos = getRandomMarkerPosition();
                             gradientMarkers.push({
@@ -2873,7 +2952,26 @@
                     }
                 }
             }
-            window.addEventListener('resize', resize);
+
+            // ──── Sidebar Toggle & Resize Handling ────
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.querySelector('.sidebar');
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('collapsed');
+                sidebarToggle.classList.toggle('collapsed');
+                document.body.classList.toggle('sidebar-collapsed');
+            });
+
+            // Use ResizeObserver to smoothly catch canvas size changes during CSS transitions
+            if (typeof ResizeObserver !== 'undefined') {
+                const ro = new ResizeObserver(() => {
+                    resize();
+                    requestRender();
+                });
+                ro.observe(dom.wrap);
+            } else {
+                window.addEventListener('resize', resize);
+            }
 
             function setZoom(nz, cx, cy) {
                 const oz = zoom;
@@ -2990,9 +3088,19 @@
 
                 mouseScreenX = mx;
                 mouseScreenY = my;
-                const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
-                hoveredQ = h.q;
-                hoveredR = h.r;
+                
+                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                const effectiveW = isCollapsed ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+                
+                // Don't update hover if the mouse is over the sidebar
+                if (!isCollapsed && mx > effectiveW) {
+                    hoveredQ = null;
+                    hoveredR = null;
+                } else {
+                    const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
+                    hoveredQ = h.q;
+                    hoveredR = h.r;
+                }
 
                 if (isDrag) {
                     const dx = mx - dragSX, dy = my - dragSY;
@@ -3140,20 +3248,6 @@
             };
             dom.zoomOut.onclick = () => {
                 setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
-                checkIfSolved();
-                requestRender();
-            };
-            dom.resetView.onclick = () => {
-                zoom = 1;
-                panX = dom.cvs.width / 2;
-                panY = dom.cvs.height / 2;
-                starPanX5 = dom.cvs.width / 2;
-                starPanY5 = dom.cvs.height / 2;
-                starPanX2 = dom.cvs.width / 2;
-                starPanY2 = dom.cvs.height / 2;
-                starZoom5 = 1;
-                starZoom2 = 1;
-                dom.zoomLabel.textContent = '100%';
                 checkIfSolved();
                 requestRender();
             };
@@ -3531,7 +3625,8 @@
             }
 
             function getRandomMarkerPosition() {
-                const W = dom.cvs.width;
+                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                const W = isCollapsed ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
                 const H = dom.cvs.height;
                 const minX = W * 0.1;
                 const maxX = W * 0.9;
