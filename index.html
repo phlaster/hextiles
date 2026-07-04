@@ -1050,6 +1050,105 @@
 
     <script>
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  GLOBAL CONFIGURATION CONSTANTS
+        //  All tuning parameters for zoom, stars, parallax, and interactions
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const CONFIG = {
+            // Core Hex Grid & Math
+            HEX_R: 62,
+            MIN_ZOOM: 0.10,
+            MAX_ZOOM: 6,
+            CLICK_THRESH: 5,
+            CLICK_DUR: 280,
+            BULK_DUR: 420,
+            ROT_STEP: 60,
+            SQRT3: Math.sqrt(3),
+            DEG2RAD: Math.PI / 180,
+            PI_DIV_3: Math.PI / 3,
+            TWO_PI_DIV_3: 2 * Math.PI / 3,
+            FOUR_PI_DIV_3: 4 * Math.PI / 3,
+
+            // Tracing & Bounds
+            TRACE_QUEUE_MARGIN: 20,
+            TRACE_MAX_PER_FRAME: 100000,
+            TRACE_SEARCH_MARGIN: 10,
+            VISIBLE_BOUND_MULT: 4,
+
+            // Zoom & Magnetism
+            MAGNET_DELAY: 500,
+            MAGNET_SNAP_POINTS: [0.30, 0.10],
+            ZOOM_BLOCK_DELAY_WHEEL: 500,
+            ZOOM_BLOCK_DELAY_BTN: 1000,
+            ZOOM_FADE_HIGH: 0.30,
+            ZOOM_FADE_MID: 0.20,
+            ZOOM_FADE_LOW: 0.105,
+            ZOOM_FADE_START_MULT: 0.30,
+            ZOOM_FADE_END_MULT: 0.20,
+            ZOOM_BLAZE_FADE_START: 0.15,
+            ZOOM_BLAZE_FADE_RANGE: 0.05,
+            
+            // Zoom Controls
+            WHEEL_DELTA_IN: 1.11,
+            WHEEL_DELTA_OUT: 0.90,
+            WHEEL_SLOW_MULT: 0.333,
+            BTN_DELTA_IN: 1.25,
+            BTN_DELTA_OUT: 0.80,
+            BTN_SLOW_MULT: 0.25,
+            KEY_DELTA_IN: 1.15,
+            KEY_DELTA_OUT: 0.85,
+
+            // Background Stars & Parallax
+            STAR_PARALLAX_LARGE: 0.08,
+            STAR_PARALLAX_MED: 0.04,
+            STAR_PARALLAX_SMALL: 0.015,
+            STAR_ZOOM_EXP_LARGE: 0.4 / 1.7,
+            STAR_ZOOM_EXP_MED: 0.15 / 1.7,
+            STAR_ZOOM_EXP_SMALL: 0.05 / 1.7,
+            STAR_SPACING_LARGE: 150,
+            STAR_SPACING_MED: 100,
+            STAR_SPACING_SMALL: 200,
+            STAR_SIZE_LARGE: 7,
+            STAR_SIZE_MED: 4,
+            STAR_SIZE_SMALL: 2,
+            STAR_MIN_SPACING: 5,
+            STAR_BLAZE_DELAY: 10000,
+            STAR_BLAZE_MIN_INTERVAL: 30000,
+            STAR_BLAZE_MAX_INTERVAL_ADD: 20000,
+            STAR_BLAZE_DURATION: 1000,
+            STAR_BLAZE_SIZE_MULT: 9,
+            STAR_LUM_MIN: 100,
+            STAR_LUM_RANGE: 80,
+            EXPORT_STAR_SPACING_LARGE: 80,
+            EXPORT_STAR_SPACING_MED: 50,
+            EXPORT_STAR_SPACING_SMALL: 250,
+            EXPORT_BLAZE_TIME_OFFSET: 11000,
+
+            // Interaction & Physics
+            INERTIA_DAMPING_LOW: 0.99,
+            INERTIA_DAMPING_NORMAL: 0.95,
+            INERTIA_THRESHOLD: 0.01,
+            DRIFT_TIMER_MIN: 120,
+            DRIFT_TIMER_RANGE: 180,
+            DRIFT_SPEED_BASE: 0.05,
+            DRIFT_SPEED_RANGE: 0.15,
+            FLOW_SPEED_MULT_LOW_ZOOM: 10.0,
+            FLOW_ANGLE_LERP_LOW_ZOOM: 0.015,
+            FLOW_ANGLE_LERP_NORMAL: 0.03,
+            TOUCH_OUTLINE_FADE: 0.035,
+            HOVER_LERP: 0.40,
+            LONG_PRESS_DUR: 500,
+            HAPTIC_DUR: 50,
+            MARKER_HIT_RADIUS: 30,
+
+            // UI & Limits
+            TOAST_DUR: 2200,
+            SIDEBAR_WIDTH: 310,
+            MAX_MARKERS: 10,
+            MAX_CURVE_COLORS: 10,
+            STATS_UPDATE_INTERVAL: 500,
+        };
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         //  ALL COLORS IN ONE PLACE — edit these to change the entire look
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const COLORS = {
@@ -1189,24 +1288,25 @@
             }
             if (isEmbedMode) document.body.classList.add('embed-mode');
 
-            const HEX_R = 62;
-            const SQRT3 = Math.sqrt(3);
-            const MIN_Z = 0.10;
-            const MAX_Z = 6;
-            const CLICK_THRESH = 5;
-            const CLICK_DUR = 280;
-            const BULK_DUR = 420;
-            const ROT_STEP = 60;
+            // ──── Local aliases for CONFIG constants (for brevity in code) ────
+            const HEX_R = CONFIG.HEX_R;
+            const SQRT3 = CONFIG.SQRT3;
+            const MIN_Z = CONFIG.MIN_ZOOM;
+            const MAX_Z = CONFIG.MAX_ZOOM;
+            const CLICK_THRESH = CONFIG.CLICK_THRESH;
+            const CLICK_DUR = CONFIG.CLICK_DUR;
+            const BULK_DUR = CONFIG.BULK_DUR;
+            const ROT_STEP = CONFIG.ROT_STEP;
             const ROT_MOD = 360 / ROT_STEP;
-            const DEG2RAD = Math.PI / 180;
-            const PI_DIV_3 = Math.PI / 3;
-            const TWO_PI_DIV_3 = 2 * Math.PI / 3;
-            const FOUR_PI_DIV_3 = 4 * Math.PI / 3;
+            const DEG2RAD = CONFIG.DEG2RAD;
+            const PI_DIV_3 = CONFIG.PI_DIV_3;
+            const TWO_PI_DIV_3 = CONFIG.TWO_PI_DIV_3;
+            const FOUR_PI_DIV_3 = CONFIG.FOUR_PI_DIV_3;
 
-            const TRACE_QUEUE_MARGIN = 20;
-            const TRACE_MAX_PER_FRAME = 100000;
-            const TRACE_SEARCH_MARGIN = 10;
-            const VISIBLE_BOUND_MULT = 4;
+            const TRACE_QUEUE_MARGIN = CONFIG.TRACE_QUEUE_MARGIN;
+            const TRACE_MAX_PER_FRAME = CONFIG.TRACE_MAX_PER_FRAME;
+            const TRACE_SEARCH_MARGIN = CONFIG.TRACE_SEARCH_MARGIN;
+            const VISIBLE_BOUND_MULT = CONFIG.VISIBLE_BOUND_MULT;
 
             // ──── State ────
             let zoom = 1,
@@ -1538,107 +1638,8 @@
                 return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
             }
 
-            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing) {
-                if (spacing < 5) return; 
-                
-                const kMin = Math.floor((0 - panX) / spacing) - 2;
-                const kMax = Math.ceil((W - panX) / spacing) + 2;
-                const jMin = Math.floor((0 - panY) / spacing) - 2;
-                const jMax = Math.ceil((H - panY) / spacing) + 2;
-                
-                for (let k = kMin; k <= kMax; k++) {
-                    for (let j = jMin; j <= jMax; j++) {
-                        const gx = panX + k * spacing;
-                        const gy = panY + j * spacing;
-                        
-                        const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
-                        const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
-                        
-                        const x = gx + rx;
-                        const y = gy + ry;
-                        
-                        if (x < -spacing || x > W + spacing || y < -spacing || y > H + spacing) continue;
-                        
-                        const bg = getBackgroundColorAt(x, y, coordScale);
-                        if (!bg) continue;
-                        
-                        const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
-                        
-                        let t = (lum - 100) / 80;
-                        t = Math.max(0, Math.min(1, t));
-                        t = t * t * (3 - 2 * t);
-                        
-                        const sR = Math.round(255 * (1 - t));
-                        let sA = (0.6 * (1 - t) + 0.5 * t).toFixed(3);
-                        let drawSize = (size * coordScale) / 2;
-                        
-                        if (allowBlazing) {
-                            const cycleDuration = 30000 + hash2D(k * seed + 555, j * seed + 999) * 10000;
-                            const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
-                            const phase = (now + offset) % cycleDuration;
-                            
-                            if (phase < 1000) { // Blaze lasts 1 second
-                                let blazeT = phase / 1000;
-                                let blazeIntensity = Math.sin(blazeT * Math.PI); // 0 to 1 to 0
-                                
-                                drawSize += drawSize * 2.5 * blazeIntensity;
-                                sA = Math.min(1, parseFloat(sA) + 0.5 * blazeIntensity).toFixed(3);
-                                
-                                // Blazing Glow
-                                const glow = ctx.createRadialGradient(x, y, 0, x, y, drawSize * 3);
-                                glow.addColorStop(0, `rgba(255, 255, 240, ${0.8 * blazeIntensity})`);
-                                glow.addColorStop(0.5, `rgba(150, 200, 255, ${0.4 * blazeIntensity})`);
-                                glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                                ctx.fillStyle = glow;
-                                ctx.beginPath();
-                                ctx.arc(x, y, drawSize * 3, 0, Math.PI * 2);
-                                ctx.fill();
-                            }
-                        }
-                        
-                        ctx.fillStyle = `rgba(${sR},${sR},${sR},${sA})`;
-                        ctx.beginPath();
-                        ctx.arc(x, y, drawSize, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
-            }
-
-            function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2, dPanX3, dPanY3, now, currentZoom, zoomOutTime) {
-                if (!showBgStars) return;
-                
-                ctx.save();
-                
-                // Layer 1: Size 7, medium spacing, fastest parallax (0.08)
-                const spacing5 = 150 * starZoom5 * coordScale;
-                drawDotLayer(W, H, spacing5, 7, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0);
-                
-                // Layer 2: Size 4, densest spacing, medium parallax (0.04)
-                const spacing2 = 100 * starZoom2 * coordScale;
-                drawDotLayer(W, H, spacing2, 4, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0);
-                
-                // Layer 3: Size 2, least dense, slowest parallax (0.015). Fades in at 10% zoom.
-                let layer3Alpha = 0;
-                let canBlaze = false;
-                if (currentZoom < 0.15) {
-                    // Fade in smoothly between 15% and 10% zoom
-                    layer3Alpha = Math.max(0, Math.min(1, (0.15 - currentZoom) / 0.05));
-                    // Allow blazing only if 10 seconds have passed since 10% was reached
-                    if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > 10000) {
-                        canBlaze = true;
-                    }
-                }
-                
-                if (layer3Alpha > 0) {
-                    const spacing3 = 200 * starZoom3 * coordScale;
-                    drawDotLayer(W, H, spacing3, 2, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime);
-                }
-                
-                ctx.restore();
-            }
-
             function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime) {
-                if (spacing < 5) return; 
+                if (spacing < CONFIG.STAR_MIN_SPACING) return; 
                 
                 const kMin = Math.floor((0 - panX) / spacing) - 2;
                 const kMax = Math.ceil((W - panX) / spacing) + 2;
@@ -1663,7 +1664,7 @@
                         
                         const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
                         
-                        let t = (lum - 100) / 80;
+                        let t = (lum - CONFIG.STAR_LUM_MIN) / CONFIG.STAR_LUM_RANGE;
                         t = Math.max(0, Math.min(1, t));
                         t = t * t * (3 - 2 * t);
                         
@@ -1672,16 +1673,16 @@
                         let drawSize = (size * coordScale) / 2;
                         
                         if (allowBlazing && zoomOutTime > 0) {
-                            // Blazing interval: 30 to 50 seconds
-                            const cycleDuration = 30000 + hash2D(k * seed + 555, j * seed + 999) * 20000;
+                            // Blazing interval
+                            const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
                             const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
                             const phase = (now + offset) % cycleDuration;
                             
-                            if (phase < 1000) { // Blaze lasts 1 second
-                                let blazeT = phase / 1000;
-                                let blazeIntensity = Math.sin(blazeT * Math.PI); // 0 to 1 to 0
+                            if (phase < CONFIG.STAR_BLAZE_DURATION) { 
+                                let blazeT = phase / CONFIG.STAR_BLAZE_DURATION;
+                                let blazeIntensity = Math.sin(blazeT * Math.PI); 
                                 
-                                drawSize = drawSize * (1 + 9 * blazeIntensity); // Expand up to 10 times
+                                drawSize = drawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeIntensity); 
                                 sA = Math.min(1, sA + 0.5 * blazeIntensity);
                                 
                                 // Blazing Glow
@@ -1702,6 +1703,39 @@
                         ctx.fill();
                     }
                 }
+            }
+
+            function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2, dPanX3, dPanY3, now, currentZoom, zoomOutTime) {
+                if (!showBgStars) return;
+                
+                ctx.save();
+                
+                // Layer 1: Size 7, medium spacing, fastest parallax
+                const spacing5 = CONFIG.STAR_SPACING_LARGE * starZoom5 * coordScale;
+                drawDotLayer(W, H, spacing5, CONFIG.STAR_SIZE_LARGE, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0);
+                
+                // Layer 2: Size 4, densest spacing, medium parallax
+                const spacing2 = CONFIG.STAR_SPACING_MED * starZoom2 * coordScale;
+                drawDotLayer(W, H, spacing2, CONFIG.STAR_SIZE_MED, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0);
+                
+                // Layer 3: Size 2, least dense, slowest parallax. Fades in at low zoom.
+                let layer3Alpha = 0;
+                let canBlaze = false;
+                if (currentZoom < CONFIG.ZOOM_BLAZE_FADE_START) {
+                    // Fade in smoothly
+                    layer3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - currentZoom) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
+                    // Allow blazing only if delay has passed
+                    if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > CONFIG.STAR_BLAZE_DELAY) {
+                        canBlaze = true;
+                    }
+                }
+                
+                if (layer3Alpha > 0) {
+                    const spacing3 = CONFIG.STAR_SPACING_SMALL * starZoom3 * coordScale;
+                    drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime);
+                }
+                
+                ctx.restore();
             }
 
             // ──── IDW Gradient ────
@@ -1743,8 +1777,6 @@
                 }
 
                 // 2. Combine active and fading markers.
-                // Fading markers have their colors lerped towards the average active color
-                // so their central "bulb" dissolves smoothly into the background.
                 const allMarkers = [];
                 for (let i = 0; i < gradientMarkersRGB.length; i++) {
                     const m = gradientMarkersRGB[i];
@@ -1813,7 +1845,6 @@
                 
                 const targetLowW = Math.max(2, Math.ceil(W * 0.2));
                 const targetLowH = Math.max(2, Math.ceil(H * 0.2));
-                // Force recalculate if dirty, or if exporting (coordScale !== 1)
                 if (isGradientDirty || coordScale !== 1 || !gradientCanvas || gradientCanvas.width !== targetLowW || gradientCanvas.height !== targetLowH) {
                     updateIDWGradientCanvas(W, H, coordScale);
                     isGradientDirty = false;
@@ -1884,8 +1915,6 @@
 
             function edgeID(q, r, e) {
                 const n = getNeighbor(q, r, e);
-                // 10,000,000 provides 7 decimal digits of space for (r+100000)*10
-                // which can be up to 1,999,990 (7 digits)
                 const id1 = (q + 100000) * 10000000 + (r + 100000) * 10 + e;
                 const id2 = (n.q + 100000) * 10000000 + (n.r + 100000) * 10 + n.edge;
                 return id1 < id2 ? id1 : id2;
@@ -1894,7 +1923,7 @@
             function decodeEdgeID(id) {
                 const e = id % 10;
                 let rem = Math.floor(id / 10);
-                const r = (rem % 1000000) - 100000;      // 6 digits for r+100000
+                const r = (rem % 1000000) - 100000;      
                 const q = Math.floor(rem / 1000000) - 100000;
                 return [q, r, e];
             }
@@ -1910,8 +1939,7 @@
                     else if (eb === 1) ob = 5;
                     else if (eb === 5) ob = 1;
                 } else {
-                    // Alter pairs: (0,1), (2,3), (4,5)
-                    ob = eb ^ 1; // 0<->1, 2<->3, 4<->5
+                    ob = eb ^ 1; 
                 }
                 return (ob + k) % 6;
             }
@@ -1956,7 +1984,6 @@
                     let item = queue.pop();
                     processed++;
                     
-                    // Skip culling check if noCull is true
                     if (!noCull && (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin ||
                         item.r < bounds.minR - margin || item.r > bounds.maxR + margin)) continue;
                         
@@ -2000,7 +2027,6 @@
             function findNextUncoloredTile() {
                 let bounds = getVisibleBounds();
                 let margin = TRACE_SEARCH_MARGIN;
-                // Just find the very first uncolored tile. Searching for the 'closest' is slow and unnecessary.
                 for (let q = bounds.minQ - margin; q <= bounds.maxQ + margin; q++) {
                     for (let r = bounds.minR - margin; r <= bounds.maxR + margin; r++) {
                         for (let i = 0; i < 6; i++) {
@@ -2059,7 +2085,6 @@
                 for (const id of edgeSet) {
                     const [q, r, e] = decodeEdgeID(id);
                     
-                    // Check edges sharing endpoints in the same tile
                     const adjEdgesInTile = [(e + 1) % 6, (e + 5) % 6];
                     for (const ae of adjEdgesInTile) {
                         const adjID = edgeID(q, r, ae);
@@ -2067,12 +2092,11 @@
                             const cid = curveMap.get(adjID);
                             if (cid !== excludeCurveID) {
                                 const c = curves.get(cid);
-                                if (c) adjColors.add(c.color); // Direct property access, no indexOf
+                                if (c) adjColors.add(c.color); 
                             }
                         }
                     }
                     
-                    // Check edges sharing endpoints in the neighbor tile
                     const n = getNeighbor(q, r, e);
                     const adjEdgesInNeighbor = [(n.edge + 1) % 6, (n.edge + 5) % 6];
                     for (const ae of adjEdgesInNeighbor) {
@@ -2123,7 +2147,6 @@
             function pickColorForNewCurve(adjColors, avoidColor = -1, seed1 = 0, seed2 = 0, bgColor = null) {
                 if (curveColors.length === 1) return 0;
                 
-                // 1. Find candidates: not in adjColors, not equal to avoidColor
                 const candidates = [];
                 for (let i = 0; i < curveColors.length; i++) {
                     if (!adjColors.has(i) && i !== avoidColor) candidates.push(i);
@@ -2131,7 +2154,6 @@
                 
                 let pool = candidates;
                 if (pool.length === 0) {
-                    // Fallback: just not in adjColors
                     const fallback = [];
                     for (let i = 0; i < curveColors.length; i++) {
                         if (!adjColors.has(i)) fallback.push(i);
@@ -2140,11 +2162,9 @@
                 }
                 
                 if (pool.length === 0) {
-                    // Ultimate fallback
                     return (avoidColor + 1) % curveColors.length;
                 }
 
-                // 2. Vague nudge: Evaluate contrast against background gradient
                 if (bgColor && pool.length > 1) {
                     let bestContrast = 0;
                     const contrasts = new Array(pool.length);
@@ -2157,8 +2177,6 @@
                         if (contrast > bestContrast) bestContrast = contrast;
                     }
                     
-                    // Keep candidates within 70% of the max contrast to strongly favor contrast,
-                    // but still allow slight variety (the "vague nudge").
                     const threshold = bestContrast * 0.7;
                     const goodCandidates = [];
                     for (let i = 0; i < pool.length; i++) {
@@ -2170,7 +2188,6 @@
                     }
                 }
 
-                // 3. Randomly pick from the best-contrasting candidates
                 let h = Math.imul(seed1 ^ (seed2 * 2654435761), 0x9E3779B1) >>> 0;
                 return pool[h % pool.length];
             }
@@ -2209,7 +2226,6 @@
                     components.push(comp);
                 }
                 if (components.length > 1) {
-                    // console.log(`%c[SPLIT] Curve ${curveID} broke into ${components.length} pieces!`, 'color: #EE854A; font-weight: bold;');
                     components.sort((a, b) => b.length - a.length);
                     curve.edges = new Set(components[0]);
                     curve.size = curve.edges.size;
@@ -2248,7 +2264,6 @@
                     if (curveMap.has(id)) affectedCurves.add(curveMap.get(id));
                 }
                 if (affectedCurves.size === 0) { recalculateTile(q, r); return; }
-                // console.log(`%c[UPDATE] Affected curves for (${q}, ${r}):`, 'color: #4878D0;', [...affectedCurves]);
                 if (affectedCurves.size === 1) {
                     let cid = [...affectedCurves][0];
                     let allEdgesSame = true;
@@ -2312,10 +2327,7 @@
                     let c2 = curveMap.has(n2_other_id) ? curveMap.get(n2_other_id) : -1;
                     if (c1 !== -1 && c2 !== -1) {
                         if (c1 !== c2) {
-                            // console.log(`  [MERGE] Connecting curves ${c1} and ${c2}`);
                             mergeCurves(c1, c2);
-                        // } else {
-                        //     console.log(`  [SAME] Connecting to same curve ${c1}`);
                         }
                         let targetCurveID = curveMap.get(n1_other_id);
                         curveMap.set(id1, targetCurveID);
@@ -2346,8 +2358,6 @@
                         let color = pickColorForNewCurve(adjColors, -1, q, r * 6 + e1, bgColor);
                         
                         let curveID = nextCurveID++;
-                        
-                        // console.log(`%c  [NEW] Created brand new curve ${curveID} with color index ${color}`, 'color: #D65F5F; font-weight: bold;');
                         
                         curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
                         curveMap.set(id1, curveID);
@@ -2419,7 +2429,7 @@
             }
 
             function applyCurveStyle(q, r, e, sz, now, alphaMult = 1) {
-                if (alphaMult === 0) return false; // Quick exit if invisible
+                if (alphaMult === 0) return false; 
 
                 ctx.setLineDash([]);
                 const id = edgeID(q, r, e);
@@ -2434,7 +2444,7 @@
                         const rgb = hexToRgb(curveColors[0]);
                         targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
                     }
-                    targetCurveID = -2; // Special ID for single color mode
+                    targetCurveID = -2; 
                 } else if (curveMap.has(id)) {
                     targetCurveID = curveMap.get(id);
                     let curve = curves.get(targetCurveID);
@@ -2512,7 +2522,6 @@
                         }
                     }
                     
-                    // Apply both edgeData.alpha (fade-in) and alphaMult (zoom fade-out)
                     const finalAlpha = (edgeData.alpha * alphaMult).toFixed(3);
                     ctx.strokeStyle = `rgba(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])},${finalAlpha})`;
                     ctx.lineWidth = sz / 3 * curveLineWidth;
@@ -2521,7 +2530,6 @@
 
                 currentUnassignedEdges.add(id);
                 if (showUnrenderedDotted) {
-                    // Faded dotted lines: rgba(110, 110, 144, 0.55) is the original #6e6e908c
                     ctx.strokeStyle = `rgba(110, 110, 144, ${(0.55 * alphaMult).toFixed(3)})`;
                     ctx.lineWidth = Math.max(1, (sz / 10) * curveLineWidth);
                     const dash = Math.max(2, sz / 8);
@@ -2618,7 +2626,7 @@
                             }
                             
                             gradientMarkers.splice(i, 1);
-                            gradientMarkersRGB.splice(i, 1); // Properly sync arrays
+                            gradientMarkersRGB.splice(i, 1); 
                             renderGradientList();
                             updateGradientMarkersCache();
                         });
@@ -2753,17 +2761,16 @@
 
                     // Calculate curve alpha based on tile screen size for smooth zoom fading
                     let curveAlpha = 1.0;
-                    const fadeStartSz = HEX_R * 0.30; // Zoom 30%
-                    const fadeEndSz = HEX_R * 0.20;   // Zoom 20%
+                    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT; 
+                    const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
                     
                     if (sz <= fadeEndSz) {
-                        curveAlpha = 0.0; // Completely hidden
+                        curveAlpha = 0.0; 
                     } else if (sz < fadeStartSz) {
                         let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-                        curveAlpha = t * t * (3 - 2 * t); // Smoothstep interpolation
+                        curveAlpha = t * t * (3 - 2 * t); 
                     }
 
-                    // Skip curve drawing entirely if alpha is 0 to save resources
                     if (curveAlpha > 0) {
                         const alter = isTileAlter(hq, hr);
                         if (alter) {
@@ -2807,14 +2814,14 @@
 
                 if (grid) {
                     let gridAlpha = 1.0;
-                    const fadeStartSz = HEX_R * 0.30; // Zoom 30%
-                    const fadeEndSz = HEX_R * 0.20;   // Zoom 20%
+                    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
+                    const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
                     
                     if (sz <= fadeEndSz) {
-                        gridAlpha = 0.0; // Completely hidden
+                        gridAlpha = 0.0; 
                     } else if (sz < fadeStartSz) {
                         let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-                        gridAlpha = t * t * (3 - 2 * t); // Smoothstep
+                        gridAlpha = t * t * (3 - 2 * t); 
                     }
 
                     if (gridAlpha > 0) {
@@ -2823,7 +2830,7 @@
                         ctx.strokeStyle = COLORS.gridLine;
                         ctx.lineWidth = 1;
                         ctx.stroke();
-                        ctx.globalAlpha = 1.0; // Reset alpha
+                        ctx.globalAlpha = 1.0; 
                     }
                 }
             }
@@ -2847,16 +2854,16 @@
 
             let solvedCheckTimeout = null;
             function checkIfSolved() {
-                if (solvedCheckTimeout) return; // Throttle: max once every 500ms
+                if (solvedCheckTimeout) return; 
                 
                 solvedCheckTimeout = setTimeout(() => {
                     solvedCheckTimeout = null;
                     performSolvedCheck();
-                }, 500);
+                }, CONFIG.STATS_UPDATE_INTERVAL);
             }
             
             function performSolvedCheck() {
-                if (zoom <= 0.20) {
+                if (zoom <= CONFIG.ZOOM_FADE_MID) {
                     window.dispatchEvent(new CustomEvent('hexCurveSolved', { detail: { solved: false } }));
                     try { 
                         if (isEmbedMode) window.parent.postMessage({ type: 'HEX_CURVE_SOLVED', solved: false }, '*'); 
@@ -2864,10 +2871,8 @@
                     return;
                 }
 
-                // Let the render loop handle queue processing. 
-                // We just read the current state. The 85% threshold handles in-progress tracing gracefully.
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                const effectiveW = (isCollapsed || isEmbedMode) ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+                const effectiveW = (isCollapsed || isEmbedMode) ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
                 const H = dom.cvs.height;
                 const hexes = visibleHexes(zoom, panX, panY, dom.cvs.width, H);
                 if (hexes.length === 0) return;
@@ -2930,22 +2935,21 @@
                 }
             }
 
-
             // ──── Main render loop ────
             let isRenderScheduled = false;
-            let lastStatsUpdate = 0; // Throttle for stats and solved check
-            let isGradientDirty = true; // Cache flag for IDW gradient
+            let lastStatsUpdate = 0; 
+            let isGradientDirty = true; 
             let starPanX5 = 0;
             let starPanY5 = 0;
-            let starZoom5 = 1; // Zoom state for large stars
+            let starZoom5 = 1; 
             let starPanX2 = 0;
             let starPanY2 = 0;
-            let starZoom2 = 1; // Zoom state for small stars
+            let starZoom2 = 1; 
             let starPanX3 = 0;
             let starPanY3 = 0;
-            let starZoom3 = 1; // Zoom state for huge blazing stars
+            let starZoom3 = 1; 
             let zoomOutStartTime = 0;
-            const visibleHexesArray = []; // Pre-allocated array to avoid per-frame GC pauses
+            const visibleHexesArray = []; 
             let currentUnassignedEdges = new Set();
             let previousUnassignedEdges = new Set();
             function requestRender() {
@@ -2979,15 +2983,13 @@
                 drawBackgroundStars(W, H, 1, starPanX5, starPanY5, starPanX2, starPanY2, starPanX3, starPanY3, now, zoom, zoomOutStartTime);
 
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
-                if (showBgStars && zoom <= 0.20) keepRendering = true;
+                if (showBgStars && zoom <= CONFIG.ZOOM_FADE_MID) keepRendering = true;
 
-                // Reset edge animation flag for this frame
                 edgeColorAnimating = false;
                 let gradColorAnimating = false;
                 let curveColorAnimating = false;
                 currentUnassignedEdges.clear();
 
-                // Interpolate Gradient Marker Colors
                 for (let i = 0; i < gradientMarkersRGB.length; i++) {
                     const m = gradientMarkersRGB[i];
                     let diff = false;
@@ -2997,7 +2999,6 @@
                     if (Math.abs(m.r - nr) > 0.5 || Math.abs(m.g - ng) > 0.5 || Math.abs(m.b - nb) > 0.5) diff = true;
                     m.r = nr; m.g = ng; m.b = nb;
                     
-                    // Fade in weight
                     const nWeight = m.weight + (1 - m.weight) * 0.05;
                     if (Math.abs(1 - nWeight) > 0.01) diff = true;
                     m.weight = nWeight;
@@ -3008,24 +3009,20 @@
                     }
                 }
                 
-                // Interpolate Fading Markers
                 for (let i = fadingMarkersRGB.length - 1; i >= 0; i--) {
                     const m = fadingMarkersRGB[i];
-                    m.weight += (0 - m.weight) * 0.15; // Much faster fade out
+                    m.weight += (0 - m.weight) * 0.15; 
                     if (m.weight <= 0.0002) {
                         fadingMarkersRGB.splice(i, 1);
                     }
-                    // Always set dirty/animating while in this loop, 
-                    // so the final removal frame redraws the canvas without the remnant.
                     gradColorAnimating = true;
                     isGradientDirty = true;
                 }
 
-                // Flow physics: inertia and drift
                 let driftX = 0, driftY = 0;
                 if (flowEnabled && !isExporting) {
-                    let speedMult = (zoom <= 0.20) ? 10.0 : 1.0;
-                    let angleLerp = (zoom <= 0.20) ? 0.015 : 0.03; // Halved angle rotation speed
+                    let speedMult = (zoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
+                    let angleLerp = (zoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_ANGLE_LERP_LOW_ZOOM : CONFIG.FLOW_ANGLE_LERP_NORMAL;
                     
                     if (hoveredQ !== null && hoveredR !== null) {
                         const cx = W / 2;
@@ -3038,13 +3035,13 @@
                         const strength = Math.min(1, dist / maxDist);
                         
                         driftTargetAngle = Math.atan2(dy, dx) + Math.PI;
-                        driftTargetSpeed = strength * 0.35 * speedMult; // 10x speed
+                        driftTargetSpeed = strength * 0.35 * speedMult; 
                         driftTimer = 0;
                     } else {
                         driftTimer++;
-                        if (driftTimer > 120 + Math.random() * 180) { 
+                        if (driftTimer > CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE) { 
                             driftTargetAngle = Math.random() * Math.PI * 2;
-                            driftTargetSpeed = (0.05 + Math.random() * 0.15) * speedMult; // 10x speed
+                            driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult; 
                             driftTimer = 0;
                         }
                     }
@@ -3060,58 +3057,52 @@
                     driftY = Math.sin(driftAngle) * driftSpeed;
                 }
 
-                // Apply inertia ONLY in normal mode and when not dragging
                 if (!isEmbedMode && inertiaEnabled && !isDrag) {
                     panX += panVX;
                     panY += panVY;
-                    starPanX5 += panVX * 0.08; 
-                    starPanY5 += panVY * 0.08;
-                    starPanX2 += panVX * 0.04;
-                    starPanY2 += panVY * 0.04;
-                    starPanX3 += panVX * 0.015;
-                    starPanY3 += panVY * 0.015;
+                    starPanX5 += panVX * CONFIG.STAR_PARALLAX_LARGE; 
+                    starPanY5 += panVY * CONFIG.STAR_PARALLAX_LARGE;
+                    starPanX2 += panVX * CONFIG.STAR_PARALLAX_MED;
+                    starPanY2 += panVY * CONFIG.STAR_PARALLAX_MED;
+                    starPanX3 += panVX * CONFIG.STAR_PARALLAX_SMALL;
+                    starPanY3 += panVY * CONFIG.STAR_PARALLAX_SMALL;
                     
-                    // Weaken inertia damping 5 times when zoomed out (<30%)
-                    let damping = (zoom < 0.30) ? 0.99 : 0.95; 
+                    let damping = (zoom < CONFIG.ZOOM_FADE_HIGH) ? CONFIG.INERTIA_DAMPING_LOW : CONFIG.INERTIA_DAMPING_NORMAL; 
                     panVX *= damping; 
                     panVY *= damping;
                     
-                    if (Math.abs(panVX) < 0.01) panVX = 0;
-                    if (Math.abs(panVY) < 0.01) panVY = 0;
+                    if (Math.abs(panVX) < CONFIG.INERTIA_THRESHOLD) panVX = 0;
+                    if (Math.abs(panVY) < CONFIG.INERTIA_THRESHOLD) panVY = 0;
                     if (panVX !== 0 || panVY !== 0) keepRendering = true;
                 }
                 
-                // Apply flow drift in BOTH normal and embed modes (when enabled)
                 if (flowEnabled && (!isDrag || isEmbedMode)) {
                     panX += driftX;
                     panY += driftY;
-                    starPanX5 += driftX * 0.08; 
-                    starPanY5 += driftY * 0.08;
-                    starPanX2 += driftX * 0.04;
-                    starPanY2 += driftY * 0.04;
-                    starPanX3 += driftX * 0.015;
-                    starPanY3 += driftY * 0.015;
+                    starPanX5 += driftX * CONFIG.STAR_PARALLAX_LARGE; 
+                    starPanY5 += driftY * CONFIG.STAR_PARALLAX_LARGE;
+                    starPanX2 += driftX * CONFIG.STAR_PARALLAX_MED;
+                    starPanY2 += driftY * CONFIG.STAR_PARALLAX_MED;
+                    starPanX3 += driftX * CONFIG.STAR_PARALLAX_SMALL;
+                    starPanY3 += driftY * CONFIG.STAR_PARALLAX_SMALL;
                     keepRendering = true; 
                 }
 
-                // Smooth zoom interpolation
                 if (Math.abs(targetZoom - zoom) > 0.0001) {
                     let lerpFactor = 0.15; 
                     let step = (targetZoom - zoom) * lerpFactor;
-                    if (Math.abs(step) < 0.0005) step = targetZoom - zoom; // Snap if very close
+                    if (Math.abs(step) < 0.0005) step = targetZoom - zoom; 
                     setZoom(zoom + step, zoomCx, zoomCy);
                     keepRendering = true;
                 }
 
-                // Track when user reaches exactly 10% zoom for blazing star delay
-                if (zoom <= 0.105) { // 10%
+                if (zoom <= CONFIG.ZOOM_FADE_LOW) { 
                     if (zoomOutStartTime === 0) zoomOutStartTime = now;
                 } else {
-                    zoomOutStartTime = 0; // Reset timer when leaving 10% zoom
+                    zoomOutStartTime = 0; 
                 }
-                let hexes = visibleHexes(z, px, py, W, H); // Moved up
+                let hexes = visibleHexes(z, px, py, W, H); 
                 
-                // Sort hexes by distance from screen center so tracing radiates outward
                 const centerHex = pixToHex(W / 2, H / 2, z, px, py);
                 hexes.sort((a, b) => {
                     return hexDistance(a.q, a.r, centerHex.q, centerHex.r) - 
@@ -3121,7 +3112,6 @@
                 if (curveColors.length >= 1) {
                     let startTime = performance.now();
                     let didWork = true;
-                    // Aggressively process the queue for up to 16ms per frame
                     while (didWork && performance.now() - startTime < 16) {
                         if (queue.length > 0) {
                             processQueue();
@@ -3137,15 +3127,12 @@
                 const sz = HEX_R * z;
                 const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
 
-                // ── First pass: draw all tiles (no hover stroke) ──
                 for (const h of hexes) {
                     const rot = displayRot(h.q, h.r, now);
                     drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r, now);
                 }
 
-                // ── Second pass: draw hover stroke on top ──
-                if (lod >= 1 && zoom > 0.20 && !isExporting) {
-                    // Standard Mouse Hover
+                if (lod >= 1 && zoom > CONFIG.ZOOM_FADE_MID && !isExporting) {
                     if (!isTouchDevice && hoveredQ !== null && hoveredR !== null) {
                         const p = hexToPix(hoveredQ, hoveredR, z, px, py);
                         const targetHX = p.x;
@@ -3155,8 +3142,8 @@
                             visHoverX = targetHX;
                             visHoverY = targetHY;
                         } else {
-                            visHoverX += (targetHX - visHoverX) * 0.40; 
-                            visHoverY += (targetHY - visHoverY) * 0.40;
+                            visHoverX += (targetHX - visHoverX) * CONFIG.HOVER_LERP; 
+                            visHoverY += (targetHY - visHoverY) * CONFIG.HOVER_LERP;
                             
                             if (Math.abs(targetHX - visHoverX) > 0.5 || Math.abs(targetHY - visHoverY) > 0.5) {
                                 keepRendering = true;
@@ -3168,12 +3155,11 @@
                         drawHoverStroke(visHoverX, visHoverY, sz, grid);
                     }
                     
-                    // Touch Tap Outlines (Multiple can exist and fade out simultaneously)
                     if (touchOutlines.length > 0) {
-                        keepRendering = true; // Keep rendering until all fades complete
+                        keepRendering = true; 
                         for (let i = touchOutlines.length - 1; i >= 0; i--) {
                             const t = touchOutlines[i];
-                            t.alpha -= 0.035; // Fade out speed
+                            t.alpha -= CONFIG.TOUCH_OUTLINE_FADE; 
                             if (t.alpha <= 0) {
                                 touchOutlines.splice(i, 1);
                                 continue;
@@ -3202,10 +3188,9 @@
                     }
                 }
 
-                // ── Quick Stats & Solved Check (Throttled to 500ms) ──
-                if (now - lastStatsUpdate > 500) {
+                if (now - lastStatsUpdate > CONFIG.STATS_UPDATE_INTERVAL) {
                     lastStatsUpdate = now;
-                    if (zoom <= 0.20 || curveColors.length <= 1) {
+                    if (zoom <= CONFIG.ZOOM_FADE_MID || curveColors.length <= 1) {
                         dom.statCurvesWrap.style.display = 'none';
                         dom.statColorsWrap.style.display = 'none';
                     } else {
@@ -3213,7 +3198,7 @@
                         dom.statColorsWrap.style.display = '';
                         
                         const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                        const effectiveW = isCollapsed ? W : Math.max(0, W - 310);
+                        const effectiveW = isCollapsed ? W : Math.max(0, W - CONFIG.SIDEBAR_WIDTH);
                         let visCurveIDs = new Set();
                         for (const h of hexes) {
                             if (h.x >= 0 && h.x <= effectiveW && h.y >= 0 && h.y <= H) {
@@ -3235,9 +3220,8 @@
                         dom.statCurves.textContent = visCurveIDs.size;
                         dom.statColors.textContent = visColors.size;
                     }
-                    checkIfSolved(); // Trigger the throttled solved check
+                    checkIfSolved(); 
                     
-                    // Prune edgeRgbMap to prevent memory leak during infinite exploration
                     if (edgeRgbMap.size > 10000) {
                         const visibleEdgeIDs = new Set();
                         for (const h of hexes) {
@@ -3257,7 +3241,6 @@
                     requestRender();
                 }
                 
-                // Swap unassigned edge sets for next frame
                 const tempUnassigned = previousUnassignedEdges;
                 previousUnassignedEdges = currentUnassignedEdges;
                 currentUnassignedEdges = tempUnassigned;
@@ -3274,18 +3257,16 @@
                 if (!isInitialized) {
                     if (w > 0 && h > 0) {
                         const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                        const effectiveW = isCollapsed ? w : Math.max(0, w - 310);
+                        const effectiveW = isCollapsed ? w : Math.max(0, w - CONFIG.SIDEBAR_WIDTH);
                         panX = effectiveW / 2;
                         panY = h / 2;
                         starPanX5 = panX;
                         starPanY5 = panY;
-                        starPanX2 = panX;
-                        starPanY2 = panY;
-                        starZoom5 = Math.pow(zoom, 0.4 / 1.5);
-                        starZoom2 = Math.pow(zoom, 0.15 / 1.5);
+                        starZoom5 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+                        starZoom2 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_MED);
                         starPanX3 = panX;
                         starPanY3 = panY;
-                        starZoom3 = Math.pow(zoom, 0.05 / 1.7);
+                        starZoom3 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_SMALL);
                         isInitialized = true;
 
                         if (gradientMarkers.length === 0) {
@@ -3293,13 +3274,13 @@
                             gradientMarkers.push({
                                 x: pos.x,
                                 y: pos.y,
-                                color: '#cccccc' // Force initial color
+                                color: '#cccccc' 
                             });
                             updateGradientMarkersCache();
                             renderGradientList();
                             renderCurveList();
                         }
-                        initializeCentralTile(); // Ensure tracing starts immediately
+                        initializeCentralTile(); 
                     } else {
                         requestAnimationFrame(resize);
                     }
@@ -3315,7 +3296,6 @@
                 document.body.classList.toggle('sidebar-collapsed');
             });
 
-            // Use ResizeObserver to smoothly catch canvas size changes during CSS transitions
             if (typeof ResizeObserver !== 'undefined') {
                 const ro = new ResizeObserver(() => {
                     resize();
@@ -3329,22 +3309,21 @@
             function scheduleMagnetZoom() {
                 clearTimeout(magnetTimer);
                 magnetTimer = setTimeout(() => {
-                    if (targetZoom < 0.30 && targetZoom > 0.10) {
-                        const snapPoints = [0.30, 0.10];
-                        let closest = snapPoints[0];
+                    if (targetZoom < CONFIG.ZOOM_FADE_HIGH && targetZoom > CONFIG.MIN_ZOOM) {
+                        let closest = CONFIG.MAGNET_SNAP_POINTS[0];
                         let minDiff = Math.abs(targetZoom - closest);
                         
-                        for (let i = 1; i < snapPoints.length; i++) {
-                            const diff = Math.abs(targetZoom - snapPoints[i]);
+                        for (let i = 1; i < CONFIG.MAGNET_SNAP_POINTS.length; i++) {
+                            const diff = Math.abs(targetZoom - CONFIG.MAGNET_SNAP_POINTS[i]);
                             if (diff < minDiff) {
                                 minDiff = diff;
-                                closest = snapPoints[i];
+                                closest = CONFIG.MAGNET_SNAP_POINTS[i];
                             }
                         }
                         targetZoom = closest;
                         requestRender();
                     }
-                }, 500); // 0.5 second delay
+                }, CONFIG.MAGNET_DELAY);
             }
 
             function setZoom(nz, cx, cy) {
@@ -3361,9 +3340,9 @@
                         const odz2 = starZoom2;
                         const odz3 = starZoom3;
 
-                        starZoom5 = Math.pow(zoom, 0.4 / 1.7);
-                        starZoom2 = Math.pow(zoom, 0.15 / 1.7);
-                        starZoom3 = Math.pow(zoom, 0.05 / 1.7);
+                        starZoom5 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+                        starZoom2 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_MED);
+                        starZoom3 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_SMALL);
                         
                         starPanX5 = cx - (cx - starPanX5) * (starZoom5 / odz5);
                         starPanY5 = cy - (cy - starPanY5) * (starZoom5 / odz5);
@@ -3385,7 +3364,7 @@
 
             // ──── Touch / Mobile Pinch Zoom & Pan ────
             let touchState = {
-                mode: 'none', // 'pan', 'pinch', 'marker_wait', 'marker_drag'
+                mode: 'none', 
                 startX: 0, startY: 0,
                 startPanX: 0, startPanY: 0,
                 startDist: 0,
@@ -3396,7 +3375,6 @@
                 timer: null
             };
 
-            // Touchstart remains on the canvas so we only initiate if touching the canvas
             dom.cvs.addEventListener('touchstart', e => {
                 isTouchDevice = true;
                 hoveredQ = null;
@@ -3408,14 +3386,13 @@
                     const tx = e.touches[0].clientX - r.left;
                     const ty = e.touches[0].clientY - r.top;
 
-                    // 1. Check for Marker Long Press (500ms)
                     if (!isEmbedMode && markersVisible) {
                         let clickedMarkerIdx = -1;
                         for (let i = 0; i < gradientMarkers.length; i++) {
                             const m = gradientMarkers[i];
                             const dx = tx - m.x;
                             const dy = ty - m.y;
-                            if (dx * dx + dy * dy < 900) { // 30px radius
+                            if (dx * dx + dy * dy < CONFIG.MARKER_HIT_RADIUS * CONFIG.MARKER_HIT_RADIUS) { 
                                 clickedMarkerIdx = i;
                                 break;
                             }
@@ -3432,15 +3409,14 @@
                                     draggedMarkerIndex = touchState.markerIdx;
                                     dragMarkerOffsetX = touchState.startX - gradientMarkers[touchState.markerIdx].x;
                                     dragMarkerOffsetY = touchState.startY - gradientMarkers[touchState.markerIdx].y;
-                                    if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+                                    if (navigator.vibrate) navigator.vibrate(CONFIG.HAPTIC_DUR); 
                                 }
-                            }, 500); // 500ms feels much more responsive
+                            }, CONFIG.LONG_PRESS_DUR); 
                             e.preventDefault();
                             return;
                         }
                     }
 
-                    // 2. Normal Pan / Draw
                     touchState.mode = 'pan';
                     touchState.startX = tx;
                     touchState.startY = ty;
@@ -3457,7 +3433,7 @@
                         clearTimeout(touchState.timer);
                     }
                     touchState.mode = 'pinch';
-                    isDrag = false; // Stop panning immediately when pinching
+                    isDrag = false; 
                     
                     const dx = e.touches[0].clientX - e.touches[1].clientX;
                     const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -3470,15 +3446,13 @@
                     
                     zoomCx = touchState.pinchCenterX;
                     zoomCy = touchState.pinchCenterY;
-                    zoomOutBlockedUntil = 0; // Bypass 1s block for fluid pinch zooming
+                    zoomOutBlockedUntil = 0; 
                 }
                 e.preventDefault();
             }, { passive: false });
 
-            // touchmove and touchend go on window so we don't lose the drag 
-            // if the finger moves over the sidebar or off-screen
             window.addEventListener('touchmove', e => {
-                if (touchState.mode === 'none') return; // Ignore if not initiated by canvas
+                if (touchState.mode === 'none') return; 
                 const r = dom.cvs.getBoundingClientRect();
                 
                 if (touchState.mode === 'marker_drag' && e.touches.length === 1) {
@@ -3529,12 +3503,12 @@
                         panX = targetPanX;
                         panY = targetPanY;
                         
-                        starPanX5 += dPanX * 0.08;
-                        starPanY5 += dPanY * 0.08;
-                        starPanX2 += dPanX * 0.04;
-                        starPanY2 += dPanY * 0.04;
-                        starPanX3 += dPanX * 0.015;
-                        starPanY3 += dPanY * 0.015;
+                        starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
+                        starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
+                        starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
+                        starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
+                        starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
+                        starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
                     }
                     requestRender();
                 } else if (touchState.mode === 'pinch' && e.touches.length === 2) {
@@ -3545,7 +3519,7 @@
                     let scale = newDist / Math.max(1, touchState.startDist);
                     let newTargetZoom = touchState.startZoom * scale;
                     
-                    if (targetZoom < 0.30 && newTargetZoom < targetZoom) {
+                    if (targetZoom < CONFIG.ZOOM_FADE_HIGH && newTargetZoom < targetZoom) {
                         let delta = newTargetZoom - targetZoom;
                         newTargetZoom = targetZoom + delta * 0.25;
                     }
@@ -3568,22 +3542,18 @@
                     draggedMarkerIndex = -1;
                 } else if (touchState.mode === 'pan') {
                     if (!dragMoved) {
-                        // Single tap - act as click (rotate tile)
                         const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
                         rotateTile(h.q, h.r);
-                        touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); // Add fading outline
+                        touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); 
                     } else {
-                        // Pan release - check solved
                         checkIfSolved();
                     }
                 }
                 
-                // Reset state if all fingers are lifted
                 if (e.touches.length === 0) {
                     touchState.mode = 'none';
                     isDrag = false;
                 } else if (touchState.mode === 'pinch' && e.touches.length === 1) {
-                    // Lifted one finger from pinch, stop tracking to avoid jumps
                     touchState.mode = 'none';
                     isDrag = false;
                 }
@@ -3591,7 +3561,6 @@
                 requestRender();
                 e.preventDefault();
             }, { passive: false });
-
 
             dom.cvs.addEventListener('wheel', e => {
                 if (isEmbedMode) return;
@@ -3601,24 +3570,21 @@
                 zoomCy = e.clientY - r.top;
 
                 const now = Date.now();
-                let delta = e.deltaY > 0 ? 0.90 : 1.11;
+                let delta = e.deltaY > 0 ? CONFIG.WHEEL_DELTA_OUT : CONFIG.WHEEL_DELTA_IN;
 
-                if (e.deltaY > 0) { // Zooming out
-                    // 1-second block logic when crossing 30%
-                    if (targetZoom >= 0.30 && targetZoom * delta < 0.30) {
+                if (e.deltaY > 0) { 
+                    if (targetZoom >= CONFIG.ZOOM_FADE_HIGH && targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
                         if (now < zoomOutBlockedUntil) return;
                         if (zoomOutBlockedUntil === 0) {
-                            zoomOutBlockedUntil = now + 500;
+                            zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_WHEEL;
                             return;
                         }
                     }
-                    // 0.25x speed multiplier while below 30%
-                    if (targetZoom < 0.30) {
-                        delta = 1 + (delta - 1) * 0.333;
+                    if (targetZoom < CONFIG.ZOOM_FADE_HIGH) {
+                        delta = 1 + (delta - 1) * CONFIG.WHEEL_SLOW_MULT;
                     }
-                } else { // Zooming in
-                    // Reset block timer if returning above 30%
-                    if (targetZoom * delta >= 0.30) {
+                } else { 
+                    if (targetZoom * delta >= CONFIG.ZOOM_FADE_HIGH) {
                         zoomOutBlockedUntil = 0;
                     }
                 }
@@ -3655,7 +3621,7 @@
                         const m = gradientMarkers[i];
                         const dx = mx - m.x;
                         const dy = my - m.y;
-                        const hitR = 30;
+                        const hitR = CONFIG.MARKER_HIT_RADIUS;
                         if (dx * dx + dy * dy < hitR * hitR) {
                             clickedMarkerIdx = i;
                             break;
@@ -3703,17 +3669,14 @@
 
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
                 const sidebarHidden = isCollapsed || isEmbedMode;
-                const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+                const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
 
-                // Always compute hex coords under the cursor so drag-rotate can use them
                 const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
 
-                // Suppress mouse hover on touch devices to prevent sticky outlines
                 if (isTouchDevice) {
                     hoveredQ = null;
                     hoveredR = null;
                 } else {
-                    // Don't update hover if the mouse is over the (visible) sidebar
                     if (!sidebarHidden && mx > effectiveW) {
                         hoveredQ = null;
                         hoveredR = null;
@@ -3727,7 +3690,6 @@
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
 
                     if (isEmbedMode) {
-                        // In embed mode, if we are dragging, rotate hovered tiles exactly once
                         if (dragMoved) {
                             const hk = hexKey(h.q, h.r);
                             if (hk !== embedDragLastTile) {
@@ -3736,7 +3698,6 @@
                             }
                         }
                     } else {
-                        // Normal mode: pan the camera
                         let targetPanX = dragPX + dx;
                         let targetPanY = dragPY + dy;
 
@@ -3754,13 +3715,12 @@
                         panX = targetPanX;
                         panY = targetPanY;
                         
-                        // Apply parallax: 0.08x for large stars, 0.04x for small stars, 0.015x for huge stars
-                        starPanX5 += dPanX * 0.08;
-                        starPanY5 += dPanY * 0.08;
-                        starPanX2 += dPanX * 0.04;
-                        starPanY2 += dPanY * 0.04;
-                        starPanX3 += dPanX * 0.015;
-                        starPanY3 += dPanY * 0.015;
+                        starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
+                        starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
+                        starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
+                        starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
+                        starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
+                        starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
                     }
                 }
                 requestRender();
@@ -3776,7 +3736,6 @@
                     if (!dragMoved) {
                         handleClick(e);
                     } else {
-                        // Pan release – check if we've solved the curve
                         checkIfSolved();
                     }
                     isDrag = false;
@@ -3784,7 +3743,6 @@
                 requestRender();
             });
 
-            // ──── Double click to remove marker ────
             dom.cvs.addEventListener('dblclick', e => {
                 if (isEmbedMode) return;
                 const r = dom.cvs.getBoundingClientRect();
@@ -3798,7 +3756,7 @@
                     const m = gradientMarkers[i];
                     const dx = mx - m.x;
                     const dy = my - m.y;
-                    const hitR = 30;
+                    const hitR = CONFIG.MARKER_HIT_RADIUS;
                     if (dx * dx + dy * dy < hitR * hitR) {
                         clickedMarkerIdx = i;
                         break;
@@ -3809,7 +3767,6 @@
                     if (gradientMarkers.length > 1) {
                         const removedMarker = gradientMarkers[clickedMarkerIdx];
                         const cached = gradientMarkersRGB[clickedMarkerIdx];
-                        // Add to fading list with current interpolated color and weight
                         fadingMarkersRGB.push({
                             x: removedMarker.x,
                             y: removedMarker.y,
@@ -3818,9 +3775,8 @@
                         });
                         
                         gradientMarkers.splice(clickedMarkerIdx, 1);
-                        gradientMarkersRGB.splice(clickedMarkerIdx, 1); // Properly sync arrays
+                        gradientMarkersRGB.splice(clickedMarkerIdx, 1); 
                         
-                        // Cancel any drag state initiated by the first click of the double-click
                         isDragMarker = false;
                         draggedMarkerIndex = -1;
                         
@@ -3838,7 +3794,6 @@
                 const k = hexKey(q, r);
                 const now = Date.now();
                 
-                // Record epicenter for color wave
                 lastRipple = { q, r, time: now };
 
                 const curDisplay = displayRot(q, r, now);
@@ -3849,9 +3804,7 @@
                 const target = curDisplay + ROT_STEP;
                 animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
                 updateLocalCurves(q, r);
-                // console.log(`%c[CLICK] Rotated tile (${q}, ${r}) to ${nextLogical}°`, 'color: #e07a5f; font-weight: bold;');
 
-                // After rotation, check if solved
                 checkIfSolved();
                 requestRender();
             }
@@ -3865,8 +3818,8 @@
             dom.zoomIn.onclick = () => {
                 zoomCx = dom.cvs.width / 2; 
                 zoomCy = dom.cvs.height / 2;
-                targetZoom = Math.min(MAX_Z, targetZoom * 1.25);
-                if (targetZoom >= 0.30) zoomOutBlockedUntil = 0;
+                targetZoom = Math.min(MAX_Z, targetZoom * CONFIG.BTN_DELTA_IN);
+                if (targetZoom >= CONFIG.ZOOM_FADE_HIGH) zoomOutBlockedUntil = 0;
                 checkIfSolved();
                 scheduleMagnetZoom();
                 requestRender();
@@ -3876,17 +3829,17 @@
                 zoomCx = dom.cvs.width / 2; 
                 zoomCy = dom.cvs.height / 2;
                 const now = Date.now();
-                let delta = 0.8;
+                let delta = CONFIG.BTN_DELTA_OUT;
                 
-                if (targetZoom >= 0.30 && targetZoom * delta < 0.30) {
+                if (targetZoom >= CONFIG.ZOOM_FADE_HIGH && targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
                     if (now < zoomOutBlockedUntil) return;
                     if (zoomOutBlockedUntil === 0) {
-                        zoomOutBlockedUntil = now + 1000;
+                        zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
                         return;
                     }
                 }
-                if (targetZoom < 0.30) {
-                    delta = 1 + (delta - 1) * 0.25;
+                if (targetZoom < CONFIG.ZOOM_FADE_HIGH) {
+                    delta = 1 + (delta - 1) * CONFIG.BTN_SLOW_MULT;
                 }
                 targetZoom = Math.max(MIN_Z, targetZoom * delta);
                 checkIfSolved();
@@ -3901,22 +3854,22 @@
                 const now = Date.now();
                 
                 if (e.key === '=' || e.key === '+') {
-                    targetZoom = Math.min(MAX_Z, targetZoom * 1.15);
-                    if (targetZoom >= 0.30) zoomOutBlockedUntil = 0;
+                    targetZoom = Math.min(MAX_Z, targetZoom * CONFIG.KEY_DELTA_IN);
+                    if (targetZoom >= CONFIG.ZOOM_FADE_HIGH) zoomOutBlockedUntil = 0;
                     checkIfSolved();
                     scheduleMagnetZoom();
                 }
                 if (e.key === '-') {
-                    let delta = 0.85;
-                    if (targetZoom >= 0.30 && targetZoom * delta < 0.30) {
+                    let delta = CONFIG.KEY_DELTA_OUT;
+                    if (targetZoom >= CONFIG.ZOOM_FADE_HIGH && targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
                         if (now < zoomOutBlockedUntil) return;
                         if (zoomOutBlockedUntil === 0) {
-                            zoomOutBlockedUntil = now + 1000;
+                            zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
                             return;
                         }
                     }
-                    if (targetZoom < 0.30) {
-                        delta = 1 + (delta - 1) * 0.25;
+                    if (targetZoom < CONFIG.ZOOM_FADE_HIGH) {
+                        delta = 1 + (delta - 1) * CONFIG.BTN_SLOW_MULT;
                     }
                     targetZoom = Math.max(MIN_Z, targetZoom * delta);
                     checkIfSolved();
@@ -3950,7 +3903,6 @@
             dom.sAlterTiles.addEventListener('input', function() {
                 alterTilesRatio = +dom.sAlterTiles.value;
                 dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
-                // Rebuild topology if ratio changed to avoid visual disconnects
                 if (Math.abs(alterTilesRatio - lastAlterRatio) > 0.001) {
                     lastAlterRatio = alterTilesRatio;
                     curveMap.clear();
@@ -3969,7 +3921,7 @@
                 for (const h of hexes) snapshots.set(hexKey(h.q, h.r), displayRot(h.q, h.r, now));
                 rotOverrides.clear();
                 rotMode = newMode;
-                rotSeed = newSeed; // Use rotSeed instead of randomSeed
+                rotSeed = newSeed; 
                 for (const h of hexes) {
                     const k = hexKey(h.q, h.r);
                     const curDisplay = snapshots.get(k);
@@ -3986,7 +3938,6 @@
                 curves.clear();
                 queue = [];
                 initializeCentralTile();
-                // After randomization, check if solved
                 checkIfSolved();
             }
 
@@ -4170,21 +4121,18 @@
                 const cx = 32;
                 const cy = 32;
                 const rSz = sz * 0.95;
-                const PI_DIV_3 = Math.PI / 3;
-                const TWO_PI_DIV_3 = 2 * Math.PI / 3;
-                const FOUR_PI_DIV_3 = 4 * Math.PI / 3;
-                const SQRT3 = Math.sqrt(3);
+                const PI_DIV_3 = CONFIG.PI_DIV_3;
+                const TWO_PI_DIV_3 = CONFIG.TWO_PI_DIV_3;
+                const FOUR_PI_DIV_3 = CONFIG.FOUR_PI_DIV_3;
+                const SQRT3 = CONFIG.SQRT3;
                 const a = sz * SQRT3 / 2;
 
-                // Random rotation: 0, 60, 120, 180, 240, or 300 degrees
                 const randomAngle = Math.floor(Math.random() * 6) * PI_DIV_3;
 
-                // Everything is drawn relative to the centre, then rotated as a whole
                 fctx.save();
                 fctx.translate(cx, cy);
                 fctx.rotate(randomAngle);
 
-                // ----- Draw hexagon (fill + outline) -----
                 fctx.beginPath();
                 for (let i = 0; i < 6; i++) {
                     const angle = PI_DIV_3 * i;
@@ -4201,7 +4149,6 @@
                 fctx.lineWidth = 2;
                 fctx.stroke();
 
-                // ----- Clip to the hexagon and draw the three arcs -----
                 fctx.clip();
 
                 fctx.lineCap = 'round';
@@ -4209,24 +4156,20 @@
                 fctx.strokeStyle = '#444444';
                 fctx.lineWidth = lineWidth;
 
-                // Curve 1 (Edge 2)
                 fctx.beginPath();
                 fctx.arc(-sz, 0, sz / 2, -PI_DIV_3, PI_DIV_3, false);
                 fctx.stroke();
 
-                // Curve 2 (Edge 4)
                 fctx.beginPath();
                 fctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3, Math.PI, false);
                 fctx.stroke();
 
-                // Curve 3 (Edge 1)
                 fctx.beginPath();
                 fctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
                 fctx.stroke();
 
                 fctx.restore();
 
-                // ----- Set as favicon -----
                 const url = favCanvas.toDataURL('image/png');
                 let link = document.querySelector("link[rel~='icon']");
                 if (!link) {
@@ -4236,7 +4179,7 @@
                 }
                 link.href = url;
                 
-                return url; // Return the URL for reuse
+                return url; 
             }
 
             let toastTimer = null;
@@ -4245,20 +4188,18 @@
                 dom.toast.textContent = msg;
                 dom.toast.classList.add('show');
                 clearTimeout(toastTimer);
-                toastTimer = setTimeout(() => dom.toast.classList.remove('show'), 2200);
+                toastTimer = setTimeout(() => dom.toast.classList.remove('show'), CONFIG.TOAST_DUR);
             }
 
             function pickNewMarkerColor() {
                 const existing = new Set(gradientMarkers.map(m => m.color.toLowerCase()));
                 
-                // Try to find the next distinct color in the active theme pool
                 for (let i = 0; i < gradientColorPool.pool.length; i++) {
                     if (!existing.has(gradientColorPool.pool[i].toLowerCase())) {
                         return gradientColorPool.pool[i];
                     }
                 }
                 
-                // Fallback: generate a completely random unique color
                 for (let attempts = 0; attempts < 200; attempts++) {
                     const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
                     if (!existing.has(c.toLowerCase())) return c;
@@ -4269,14 +4210,12 @@
             function pickNewCurveColor() {
                 const existing = new Set(curveColors.map(c => c.toLowerCase()));
                 
-                // Try to find the next distinct color in the active theme pool
                 for (let i = 0; i < curveColorPool.pool.length; i++) {
                     if (!existing.has(curveColorPool.pool[i].toLowerCase())) {
                         return curveColorPool.pool[i];
                     }
                 }
                 
-                // Fallback: generate a completely random unique color
                 for (let attempts = 0; attempts < 200; attempts++) {
                     const c = '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
                     if (!existing.has(c.toLowerCase())) return c;
@@ -4287,7 +4226,7 @@
             function getRandomMarkerPosition() {
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
                 const sidebarHidden = isCollapsed || isEmbedMode;
-                const W = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+                const W = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
                 const H = dom.cvs.height;
                 const minX = W * 0.1;
                 const maxX = W * 0.9;
@@ -4321,8 +4260,8 @@
             }
 
             dom.addMarkerBtn.onclick = () => {
-                if (gradientMarkers.length >= 10) {
-                    toast('Maximum of 10 gradient markers reached');
+                if (gradientMarkers.length >= CONFIG.MAX_MARKERS) {
+                    toast('Maximum of ' + CONFIG.MAX_MARKERS + ' gradient markers reached');
                     return;
                 }
                 const color = pickNewMarkerColor();
@@ -4339,8 +4278,8 @@
             };
 
             dom.addCurveBtn.onclick = () => {
-                if (curveColors.length >= 10) {
-                    toast('Maximum of 10 curve colors reached');
+                if (curveColors.length >= CONFIG.MAX_CURVE_COLORS) {
+                    toast('Maximum of ' + CONFIG.MAX_CURVE_COLORS + ' curve colors reached');
                     return;
                 }
                 const color = pickNewCurveColor();
@@ -4353,11 +4292,9 @@
                 activeCurveIndex = curveColors.length - 1;
                 renderCurveList();
                 curveMap.clear();
-                // Intentionally NOT clearing edgeRgbMap to allow smooth color transitions
                 curves.clear();
                 queue = [];
                 initializeCentralTile();
-                // After adding a new color, the topology doesn't change, but we still check
                 checkIfSolved();
             };
 
@@ -4424,7 +4361,6 @@
                 dom.aspectLockBtn.classList.remove('active');
                 dom.exportFrame.classList.remove('locked-aspect');
                 
-                // Neither tab is active by default
                 dom.exportImageBtn.classList.remove('active');
                 dom.exportEmbedBtn.classList.remove('active');
                 dom.imageExportWrap.classList.remove('visible');
@@ -4475,19 +4411,16 @@
             dom.closeExportBtn.onclick = closeExportOverlay;
 
             // ── Aspect Ratio Lock ──
-            // ── Aspect Ratio Lock ──
             dom.aspectLockBtn.addEventListener('click', () => {
                 aspectLocked = !aspectLocked;
                 dom.aspectLockBtn.classList.toggle('active', aspectLocked);
                 dom.exportFrame.classList.toggle('locked-aspect', aspectLocked);
                 
                 if (aspectLocked) {
-                    // Calculate target ratio from current inputs
                     let valW = parseInt(dom.exportW.value) || 50;
                     let valH = parseInt(dom.exportH.value) || 50;
                     targetRatio = valW / valH;
                     
-                    // Snap current frame to target ratio immediately
                     let newW = efRect.w;
                     let newH = newW / targetRatio;
                     if (newH > efRect.h) { 
@@ -4570,10 +4503,8 @@
                 const ePanX = (panX - fx) * scale;
                 const ePanY = (panY - fy) * scale;
 
-                // Generate vector SVG string
                 const svgString = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
 
-                // Convert SVG string to a DOM element for svg2pdf
                 const parser = new DOMParser();
                 const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
                 const svgElement = svgDoc.documentElement;
@@ -4587,7 +4518,6 @@
                     compress: true
                 });
                 
-                // Add SVG as vector graphics directly to the PDF
                 await pdf.svg(svgElement, { x: 0, y: 0, width: eW, height: eH });
                 
                 pdf.save('hex-tiles-export.pdf');
@@ -4598,7 +4528,6 @@
             function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
                 const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
 
-                // Calculate custom bounds for the export area
                 let exportBounds = { minQ: Infinity, maxQ: -Infinity, minR: Infinity, maxR: -Infinity };
                 for (const h of exportHexes) {
                     if (h.q < exportBounds.minQ) exportBounds.minQ = h.q;
@@ -4627,7 +4556,6 @@
                     svg += `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
                 }
 
-                // ── Add Stars ──
                 if (showBgStars) {
                     const expStarPanX5 = (starPanX5 - fx) * scale;
                     const expStarPanY5 = (starPanY5 - fy) * scale;
@@ -4636,12 +4564,12 @@
                     const expStarPanX3 = (starPanX3 - fx) * scale;
                     const expStarPanY3 = (starPanY3 - fy) * scale;
                     
-                    const spacing5 = 80 * starZoom5 * scale;
-                    const spacing2 = 50 * starZoom2 * scale;
-                    const spacing3 = 250 * starZoom3 * scale;
+                    const spacing5 = CONFIG.EXPORT_STAR_SPACING_LARGE * starZoom5 * scale;
+                    const spacing2 = CONFIG.EXPORT_STAR_SPACING_MED * starZoom2 * scale;
+                    const spacing3 = CONFIG.EXPORT_STAR_SPACING_SMALL * starZoom3 * scale;
 
                     function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime) {
-                        if (spacing < 5) return;
+                        if (spacing < CONFIG.STAR_MIN_SPACING) return;
                         const kMin = Math.floor((0 - panX) / spacing) - 2;
                         const kMax = Math.ceil((eW - panX) / spacing) + 2;
                         const jMin = Math.floor((0 - panY) / spacing) - 2;
@@ -4665,7 +4593,7 @@
                                 
                                 const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
                                 
-                                let t = (lum - 100) / 80;
+                                let t = (lum - CONFIG.STAR_LUM_MIN) / CONFIG.STAR_LUM_RANGE;
                                 t = Math.max(0, Math.min(1, t));
                                 t = t * t * (3 - 2 * t);
                                 
@@ -4674,13 +4602,13 @@
                                 let r = (size * coordScale) / 2;
                                 
                                 if (allowBlazing && zoomOutTime > 0) {
-                                    const cycleDuration = 30000 + hash2D(k * seed + 555, j * seed + 999) * 20000;
+                                    const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
                                     const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
                                     const phase = (now + offset) % cycleDuration;
-                                    if (phase < 1000) {
-                                        let blazeT = phase / 1000;
+                                    if (phase < CONFIG.STAR_BLAZE_DURATION) {
+                                        let blazeT = phase / CONFIG.STAR_BLAZE_DURATION;
                                         let blazeIntensity = Math.sin(blazeT * Math.PI);
-                                        r = r * (1 + 9 * blazeIntensity); // Expand 10 times
+                                        r = r * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeIntensity); 
                                         sA = Math.min(1, sA + 0.5 * blazeIntensity);
                                         svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(r * 2).toFixed(2)}" fill="rgba(255, 255, 240, ${(0.4 * blazeIntensity).toFixed(3)})"/>`;
                                     }
@@ -4692,12 +4620,12 @@
                         }
                     }
                     
-                    addStars(spacing5, 7, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0);
-                    addStars(spacing2, 4, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0);
+                    addStars(spacing5, CONFIG.STAR_SIZE_LARGE, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0);
+                    addStars(spacing2, CONFIG.STAR_SIZE_MED, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0);
                     
-                    let l3Alpha = Math.max(0, Math.min(1, (0.15 - (eZoom / scale)) / 0.05));
+                    let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
                     if (l3Alpha > 0) {
-                        addStars(spacing3, 2, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, true, l3Alpha, now - 11000);
+                        addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, true, l3Alpha, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET);
                     }
                 }
 
@@ -4723,7 +4651,6 @@
                     return c;
                 }
 
-                // Transform arc coordinates to absolute SVG coordinates
                 function arcToPath(tx, ty, rot, cx, cy, r, startAngle, endAngle, anticlockwise) {
                     const rad = rot * Math.PI / 180.0;
                     const cos = Math.cos(rad);
@@ -4791,9 +4718,9 @@
 
                 if (gridPaths.length > 0) {
                     let gridAlpha = 1.0;
-                    if (eSz <= HEX_R * 0.20) gridAlpha = 0.0;
-                    else if (eSz < HEX_R * 0.30) {
-                        let t = (eSz - HEX_R * 0.20) / (HEX_R * 0.30 - HEX_R * 0.20);
+                    if (eSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) gridAlpha = 0.0;
+                    else if (eSz < HEX_R * CONFIG.ZOOM_FADE_START_MULT) {
+                        let t = (eSz - HEX_R * CONFIG.ZOOM_FADE_END_MULT) / (HEX_R * CONFIG.ZOOM_FADE_START_MULT - HEX_R * CONFIG.ZOOM_FADE_END_MULT);
                         gridAlpha = t * t * (3 - 2 * t);
                     }
                     
@@ -4836,11 +4763,10 @@
 
             // ── Mobile Touch Support for Export Frame ──
             function simulateMouseEvent(e) {
-                // Let native clicks/focus happen for buttons, inputs, and textareas
                 const tag = e.target.tagName;
                 if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
                 
-                if (e.type === 'touchmove' && e.touches.length > 1) return; // Ignore pinch
+                if (e.type === 'touchmove' && e.touches.length > 1) return; 
                 const t = e.touches[0] || e.changedTouches[0];
                 if (!t) return;
                 const type = { touchstart: 'mousedown', touchmove: 'mousemove', touchend: 'mouseup' }[e.type];
@@ -4868,7 +4794,6 @@
                 e.stopPropagation();
             });
 
-            // ── Draw new frame on backdrop drag ──
             dom.exportBackdrop.addEventListener('mousedown', e => {
                 efDrag = { mode: 'draw', mx: e.clientX, my: e.clientY, startX: e.clientX, startY: e.clientY, prevRect: {...efRect}, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
                 efRect.x = e.clientX;
@@ -4939,38 +4864,12 @@
             });
 
             window.addEventListener('mouseup', () => { 
-                // If user clicked on backdrop without drawing a new frame, close the export
                 if (efDrag && efDrag.mode === 'draw' && (efRect.w < 10 || efRect.h < 10)) {
                     closeExportOverlay();
                 }
                 efDrag = null; 
                 requestRender(); 
             });
-
-            function clampFrameToCanvas() {
-                const cr = dom.cvs.getBoundingClientRect();
-                efRect.w = Math.max(50, efRect.w);
-                efRect.h = Math.max(50, efRect.h);
-                if (efRect.w > cr.width) efRect.w = cr.width;
-                if (efRect.h > cr.height) efRect.h = cr.height;
-                
-                if (efRect.x < cr.left) {
-                    if (efDrag && efDrag.mode.includes('l')) efRect.w -= (cr.left - efRect.x);
-                    efRect.x = cr.left;
-                }
-                if (efRect.y < cr.top) {
-                    if (efDrag && efDrag.mode.includes('t')) efRect.h -= (cr.top - efRect.y);
-                    efRect.y = cr.top;
-                }
-                if (efRect.x + efRect.w > cr.left + cr.width) {
-                    if (efDrag && efDrag.mode.includes('r')) efRect.w = cr.left + cr.width - efRect.x;
-                    else efRect.x = cr.left + cr.width - efRect.w;
-                }
-                if (efRect.y + efRect.h > cr.top + cr.height) {
-                    if (efDrag && efDrag.mode.includes('b')) efRect.h = cr.top + cr.height - efRect.y;
-                    else efRect.y = cr.top + cr.height - efRect.h;
-                }
-            }
 
             // ── Output Size Inputs ──
             dom.exportW.addEventListener('input', () => {
@@ -4987,7 +4886,6 @@
                 }
             });
 
-            // Resize frame proportionally on Enter / focus loss if aspect is unlocked
             dom.exportW.addEventListener('change', () => {
                 if (!aspectLocked) {
                     const val = parseInt(dom.exportW.value) || 50;
@@ -5034,7 +4932,6 @@
                         hexDistance(b.q, b.r, centerHex.q, centerHex.r);
                 });
 
-                // Calculate custom bounds for the export area
                 let exportBounds = { minQ: Infinity, maxQ: -Infinity, minR: Infinity, maxR: -Infinity };
                 for (const h of hexes) {
                     if (h.q < exportBounds.minQ) exportBounds.minQ = h.q;
@@ -5046,7 +4943,7 @@
                 if (curveColors.length >= 1) {
                     let safety = 2000;
                     while (safety-- > 0) {
-                        processQueue(exportBounds, true);  // ← Pass bounds and disable culling
+                        processQueue(exportBounds, true); 
                         if (queue.length === 0) {
                             if (!findUncoloredTileInHexes(hexes)) break;
                         }
@@ -5069,8 +4966,7 @@
                 const expStarPanX3 = (starPanX3 - fx) * scale;
                 const expStarPanY3 = (starPanY3 - fy) * scale;
                 
-                // We pass `now - 11000` so exports can capture blazing stars if they happen to be in phase
-                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, now - 11000);
+                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET);
 
                 const eSz = HEX_R * eZoom;
                 for (const h of hexes) {
@@ -5101,7 +4997,6 @@
                 const off = document.createElement('canvas');
                 renderToOffscreen(off, eW, eH, fx, fy, efRect.w, efRect.h);
 
-                // Await the blob creation
                 const blob = await canvasToBlob(off, 'image/png');
                 
                 const url = URL.createObjectURL(blob);
@@ -5183,7 +5078,6 @@
                     if (dom.exportOverlay.classList.contains('active')) {
                         closeExportOverlay();
                     } else if (document.body.classList.contains('sidebar-collapsed')) {
-                        // Expand sidebar if it was manually hidden
                         document.body.classList.remove('sidebar-collapsed');
                         document.querySelector('.sidebar').classList.remove('collapsed');
                         document.getElementById('sidebarToggle').classList.remove('collapsed');
@@ -5235,14 +5129,13 @@
                 dom.inertiaToggle.checked = inertiaEnabled;
                 texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
                 curveColors = embedData.curveColors && embedData.curveColors.length > 0
-                    ? [...embedData.curveColors].slice(0, 10) : ['#444444']; 
-                gradientMarkers = (embedData.markers || []).slice(0, 10).map(m => ({ ...m }));
-                markersVisible = false; // Hide the sun icons, but keep the gradient
+                    ? [...embedData.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']; 
+                gradientMarkers = (embedData.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({ ...m }));
+                markersVisible = false; 
 
                 updateCurveColorsCache();
                 updateGradientMarkersCache();
 
-                // Sync DOM toggles to match loaded embed state
                 dom.gridToggle.checked = showGrid;
                 dom.unrenderedToggle.checked = showUnrenderedDotted;
                 dom.bgStarsToggle.checked = showBgStars;
@@ -5279,7 +5172,6 @@
                 }
             } else {
                 // ── Normal mode ──
-                // Sync toggle states from persisted DOM state on page load
                 showGrid = dom.gridToggle.checked;
                 showUnrenderedDotted = dom.unrenderedToggle.checked;
                 showBgStars = dom.bgStarsToggle.checked;
@@ -5291,10 +5183,9 @@
                 alterTilesRatio = +dom.sAlterTiles.value || 0;
                 dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
 
-                // Initialize with the hardcoded default color
-                curveColors = ['#444444']; // Force initial color
+                curveColors = ['#444444']; 
                 updateCurveColorsCache();
-                updateGradientMarkersCache(); // Ensure cache is built on load
+                updateGradientMarkersCache(); 
 
                 resize();
                 render();
@@ -5303,7 +5194,6 @@
             // Generate default tile favicon and replace GH icon in embed mode
             const generatedFaviconUrl = generateFavicon();
             if (isEmbedMode) {
-                // Link to the full hosted interface (base URL without the embed hash)
                 dom.ghLink.href = location.href.split('#')[0];
                 dom.ghLink.title = 'Open Full Interface';
                 
@@ -5314,7 +5204,7 @@
                 img.style.verticalAlign = 'middle';
                 img.style.position = 'relative';
                 img.style.top = '-1px'; 
-                dom.ghLink.innerHTML = ''; // Clear the FA icon
+                dom.ghLink.innerHTML = ''; 
                 dom.ghLink.appendChild(img);
             }
         })();
