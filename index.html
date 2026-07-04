@@ -2711,6 +2711,13 @@
                 }
 
                 let hexes = visibleHexes(z, px, py, W, H); // Moved up
+                
+                // Sort hexes by distance from screen center so tracing radiates outward
+                const centerHex = pixToHex(W / 2, H / 2, z, px, py);
+                hexes.sort((a, b) => {
+                    return hexDistance(a.q, a.r, centerHex.q, centerHex.r) - 
+                           hexDistance(b.q, b.r, centerHex.q, centerHex.r);
+                });
 
                 if (curveColors.length > 1) {
                     let startTime = performance.now();
@@ -3749,6 +3756,13 @@
 
                 // Ensure all curves computed
                 const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+                
+                // Sort hexes by distance from screen center so tracing radiates outward
+                const centerHex = pixToHex(eW / 2, eH / 2, eZoom, ePanX, ePanY);
+                hexes.sort((a, b) => {
+                    return hexDistance(a.q, a.r, centerHex.q, centerHex.r) - 
+                           hexDistance(b.q, b.r, centerHex.q, centerHex.r);
+                });
                 if (curveColors.length > 1) {
                     let safety = 2000;
                     while (safety-- > 0) { 
