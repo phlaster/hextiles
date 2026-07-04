@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -279,6 +281,7 @@
 
         input[type=range] {
             -webkit-appearance: none;
+            appearance: none;
             width: 100%;
             height: 5px;
             background: var(--col-border);
@@ -466,6 +469,7 @@
 
         .grad-item input[type="color"] {
             -webkit-appearance: none;
+            appearance: none;
             border: none;
             width: 24px;
             height: 24px;
@@ -572,12 +576,13 @@
         }
         .export-overlay.active { display: block; }
         .export-backdrop {
-            position: absolute; inset: 0; background: rgba(0,0,0,.35);
+            position: absolute; inset: 0; background: transparent;
         }
         .export-frame {
             position: absolute; border: 2px solid var(--col-accent);
             box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
             cursor: move; box-sizing: border-box;
+            background: transparent;
         }
         .export-frame .handle {
             position: absolute; width: 14px; height: 14px;
@@ -588,6 +593,10 @@
         .export-frame .handle.tr { top: -7px; right: -7px; cursor: nesw-resize; }
         .export-frame .handle.bl { bottom: -7px; left: -7px; cursor: nesw-resize; }
         .export-frame .handle.br { bottom: -7px; right: -7px; cursor: nwse-resize; }
+        .export-frame .handle.t { top: -7px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .export-frame .handle.b { bottom: -7px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .export-frame .handle.l { left: -7px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+        .export-frame .handle.r { right: -7px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
 
         .export-menu {
             position: absolute; background: var(--col-card);
@@ -608,6 +617,77 @@
             font-size: 13px; padding: 6px 8px; width: 100%; box-sizing: border-box;
         }
         .export-menu input[type=number]:focus { outline: none; border-color: var(--col-accent); }
+        .export-menu .export-menu-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .export-menu .export-menu-header label { margin-bottom: 0; }
+        
+        .export-close-btn {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: var(--col-card2);
+            border: 1px solid var(--col-border);
+            color: var(--col-fg);
+            font-size: 16px;
+            cursor: pointer;
+            transition: all .2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            z-index: 520;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .export-close-btn:hover {
+            background: var(--col-accent);
+            color: #fff;
+            border-color: var(--col-accent);
+            transform: scale(1.05);
+        }
+
+        .export-menu .aspect-lock-btn {
+            align-self: flex-end;
+            margin-bottom: 4px; 
+            background: var(--col-card2);
+            border: 1px solid var(--col-border);
+            color: var(--col-accent);
+            width: 30px; height: 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all .2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .export-menu .aspect-lock-btn.active { background: var(--col-accent); color: #fff; }
+        .export-menu .aspect-lock-btn:hover { opacity: 0.8; }
+
+        .export-tab-btn.active { background: var(--col-accent); color: #fff; border-color: var(--col-accent); }
+        .export-tab-btn:hover:not(.active) { border-color: var(--col-accent); color: var(--col-accent); }
+        
+        .image-export-wrap { display: none; margin-top: 12px; }
+        .image-export-wrap.visible { display: block; }
+        .format-row { display: flex; gap: 8px; }
+        .fmt-btn:hover { border-color: var(--col-accent); color: var(--col-accent); }
+        
+        .embed-code { display: none; margin-top: 12px; }
+        .embed-code.visible { display: block; }
+
+        /* Hide side handles when aspect ratio is locked */
+        .export-frame.locked-aspect .handle.t,
+        .export-frame.locked-aspect .handle.b,
+        .export-frame.locked-aspect .handle.l,
+        .export-frame.locked-aspect .handle.r {
+            display: none;
+        }
+
         .export-menu .btn-row { display: flex; gap: 8px; margin-bottom: 8px; }
         .export-menu .embed-code { display: none; margin-top: 12px; }
         .export-menu .embed-code.visible { display: block; }
@@ -619,12 +699,20 @@
         }
         .export-menu .close-export { width: 100%; margin-top: 8px; }
 
+        /* Hide UI when exporting */
+        body.exporting .sidebar,
+        body.exporting .zoom-bar,
+        body.exporting .sidebar-toggle {
+            display: none !important;
+        }
+        
         /* ── Embed mode: hide all UI ── */
         body.embed-mode .sidebar,
         body.embed-mode .zoom-bar { display: none !important; }
         body.embed-mode #canvas-wrap { flex: 1; }
         body.embed-mode #hexCanvas { cursor: pointer; }
         body.embed-mode .stats-bar { opacity: 0.8; }
+
 
         .stats-bar {
             position: absolute;
@@ -892,29 +980,53 @@
             <div class="handle tr" data-h="tr"></div>
             <div class="handle bl" data-h="bl"></div>
             <div class="handle br" data-h="br"></div>
+            <div class="handle t" data-h="t"></div>
+            <div class="handle b" data-h="b"></div>
+            <div class="handle l" data-h="l"></div>
+            <div class="handle r" data-h="r"></div>
         </div>
+        <button class="export-close-btn" id="closeExportBtn" title="Close"><i class="fas fa-times"></i></button>
         <div class="export-menu" id="exportMenu">
-            <label>Export Size</label>
+            <div class="export-menu-header">
+                <label>Export Settings</label>
+            </div>
+            
             <div class="size-row">
                 <div class="size-input">
                     <span>Width (px)</span>
                     <input type="number" id="exportW" value="800" min="50" max="8000" />
                 </div>
+                <button class="aspect-lock-btn" id="aspectLockBtn" title="Lock aspect ratio"><i class="fas fa-link"></i></button>
                 <div class="size-input">
                     <span>Height (px)</span>
                     <input type="number" id="exportH" value="600" min="50" max="8000" />
                 </div>
             </div>
-            <div class="btn-row">
-                <button class="btn btn-accent" id="exportPngBtn" style="flex:1"><i class="fas fa-image"></i> PNG</button>
-                <button class="btn btn-ghost" id="exportEmbedBtn" style="flex:1"><i class="fas fa-code"></i> Embed</button>
+            
+            <div class="size-input" style="margin-bottom: 14px;">
+                <span>Exported sidelength (px)</span>
+                <input type="number" id="exportSide" value="1920" min="50" max="8000" />
             </div>
+
+            <div class="btn-row">
+                <button class="btn btn-ghost export-tab-btn" id="exportImageBtn" style="flex:1"><i class="fas fa-image"></i> Image</button>
+                <button class="btn btn-ghost export-tab-btn" id="exportEmbedBtn" style="flex:1"><i class="fas fa-code"></i> Embed</button>
+            </div>
+            
+            <div class="image-export-wrap" id="imageExportWrap">
+                <label>Choose export format</label>
+                <div class="format-row">
+                    <button class="btn btn-ghost fmt-btn" id="fmtPngBtn" style="flex:1">PNG</button>
+                    <button class="btn btn-ghost fmt-btn" id="fmtPdfBtn" style="flex:1">PDF</button>
+                    <button class="btn btn-ghost fmt-btn" id="fmtSvgBtn" style="flex:1">SVG</button>
+                </div>
+            </div>
+            
             <div class="embed-code" id="embedCodeWrap">
                 <label>Embed Code</label>
                 <textarea id="embedCode" readonly></textarea>
                 <button class="btn btn-ghost" id="copyEmbedBtn" style="width:100%; margin-top:6px;"><i class="fas fa-copy"></i> Copy</button>
             </div>
-            <button class="btn btn-ghost close-export" id="closeExportBtn">Close</button>
         </div>
     </div>
 
@@ -1242,7 +1354,16 @@
                 embedCodeWrap: document.getElementById('embedCodeWrap'),
                 embedCode: document.getElementById('embedCode'),
                 copyEmbedBtn: document.getElementById('copyEmbedBtn'),
+                
                 closeExportBtn: document.getElementById('closeExportBtn'),
+                exportImageBtn: document.getElementById('exportImageBtn'),
+                exportEmbedBtn: document.getElementById('exportEmbedBtn'),
+                imageExportWrap: document.getElementById('imageExportWrap'),
+                fmtPngBtn: document.getElementById('fmtPngBtn'),
+                fmtPdfBtn: document.getElementById('fmtPdfBtn'),
+                fmtSvgBtn: document.getElementById('fmtSvgBtn'),
+                aspectLockBtn: document.getElementById('aspectLockBtn'),
+                exportSide: document.getElementById('exportSide'),
 
                 statCurves: document.getElementById('statCurves'),
                 statColors: document.getElementById('statColors'),
@@ -1686,24 +1807,31 @@
                 curves.delete(source.id);
             }
 
-            function processQueue() {
-                let bounds = getVisibleBounds();
-                let margin = TRACE_QUEUE_MARGIN;
+            function processQueue(customBounds, noCull = false) {
+                let bounds = customBounds || getVisibleBounds();
+                let margin = noCull ? 1000000 : TRACE_QUEUE_MARGIN;
                 let processed = 0;
                 let maxPerFrame = TRACE_MAX_PER_FRAME;
+                
                 while (queue.length > 0 && processed < maxPerFrame) {
                     let item = queue.pop();
                     processed++;
-                    if (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin ||
-                        item.r < bounds.minR - margin || item.r > bounds.maxR + margin) continue;
+                    
+                    // Skip culling check if noCull is true
+                    if (!noCull && (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin ||
+                        item.r < bounds.minR - margin || item.r > bounds.maxR + margin)) continue;
+                        
                     let id = edgeID(item.q, item.r, item.e);
                     if (!curveMap.has(id)) continue;
+                    
                     let curveID = curveMap.get(id);
                     let curve = curves.get(curveID);
                     if (!curve) continue;
+                    
                     let k = (tileRot(item.q, item.r) / 60) % 6;
                     let pe = getOtherEdge(k, item.e, isTileAlter(item.q, item.r));
                     let pid = edgeID(item.q, item.r, pe);
+                    
                     if (curveMap.has(pid)) {
                         let existingCurve = curveMap.get(pid);
                         if (existingCurve === curveID) curve.locked = true;
@@ -2157,9 +2285,14 @@
                 
                 let targetRgb = null;
                 let targetCurveID = -1;
-                if (curveColorsRGB.length === 1) {
+                if (curveColors.length === 1) {
                     const c = curveColorsRGB[0];
-                    targetRgb = { r: c.tr !== undefined ? c.tr : c.r, g: c.tg !== undefined ? c.tg : c.g, b: c.tb !== undefined ? c.tb : c.b };
+                    if (c) {
+                        targetRgb = { r: c.tr !== undefined ? c.tr : c.r, g: c.tg !== undefined ? c.tg : c.g, b: c.tb !== undefined ? c.tb : c.b };
+                    } else {
+                        const rgb = hexToRgb(curveColors[0]);
+                        targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
+                    }
                     targetCurveID = -2; // Special ID for single color mode
                 } else if (curveMap.has(id)) {
                     targetCurveID = curveMap.get(id);
@@ -2568,7 +2701,7 @@
                 // Let the render loop handle queue processing. 
                 // We just read the current state. The 85% threshold handles in-progress tracing gracefully.
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                const effectiveW = isCollapsed ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+                const effectiveW = (isCollapsed || isEmbedMode) ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
                 const H = dom.cvs.height;
                 const hexes = visibleHexes(zoom, panX, panY, dom.cvs.width, H);
                 if (hexes.length === 0) return;
@@ -2719,7 +2852,7 @@
 
                 // Flow physics: inertia and drift
                 let driftX = 0, driftY = 0;
-                if (flowEnabled) {
+                if (flowEnabled && !isExporting) {
                     if (hoveredQ !== null && hoveredR !== null) {
                         // Nudge flow AWAY from the mouse, strength based on distance from center
                         const cx = W / 2;
@@ -2793,7 +2926,7 @@
                            hexDistance(b.q, b.r, centerHex.q, centerHex.r);
                 });
 
-                if (curveColors.length > 1) {
+                if (curveColors.length >= 1) {
                     let startTime = performance.now();
                     let didWork = true;
                     // Aggressively process the queue for up to 16ms per frame
@@ -2819,7 +2952,7 @@
                 }
 
                 // ── Second pass: draw hover stroke on top ──
-                if (lod >= 1 && hoveredQ !== null && hoveredR !== null) {
+                if (lod >= 1 && hoveredQ !== null && hoveredR !== null && !isExporting) {
                     // Calculate screen position directly instead of searching the hexes array
                     const p = hexToPix(hoveredQ, hoveredR, z, px, py);
                     const targetHX = p.x;
@@ -2947,6 +3080,7 @@
                             renderGradientList();
                             renderCurveList();
                         }
+                        initializeCentralTile(); // Ensure tracing starts immediately
                     } else {
                         requestAnimationFrame(resize);
                     }
@@ -3082,22 +3216,26 @@
                         gradientMarkersRGB[draggedMarkerIndex].y = gradientMarkers[draggedMarkerIndex].y;
                     }
                     isGradientDirty = true;
-                    requestRender(); 
+                    requestRender();
                     return;
                 }
 
                 mouseScreenX = mx;
                 mouseScreenY = my;
-                
+
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                const effectiveW = isCollapsed ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
-                
-                // Don't update hover if the mouse is over the sidebar
-                if (!isCollapsed && mx > effectiveW) {
+                // Sidebar is hidden in embed mode too — full canvas is usable
+                const sidebarHidden = isCollapsed || isEmbedMode;
+                const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+
+                // Always compute hex coords under the cursor so drag-rotate can use them
+                const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
+
+                // Don't update hover if the mouse is over the (visible) sidebar
+                if (!sidebarHidden && mx > effectiveW) {
                     hoveredQ = null;
                     hoveredR = null;
                 } else {
-                    const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
                     hoveredQ = h.q;
                     hoveredR = h.r;
                 }
@@ -3105,7 +3243,7 @@
                 if (isDrag) {
                     const dx = mx - dragSX, dy = my - dragSY;
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
-                    
+
                     if (isEmbedMode) {
                         // In embed mode, if we are dragging, rotate hovered tiles exactly once
                         if (dragMoved) {
@@ -3119,10 +3257,10 @@
                         // Normal mode: pan the camera
                         let targetPanX = dragPX + dx;
                         let targetPanY = dragPY + dy;
-                        
+
                         const dPanX = targetPanX - panX;
                         const dPanY = targetPanY - panY;
-                        
+
                         if (inertiaEnabled) {
                             panVX = dPanX;
                             panVY = dPanY;
@@ -3130,11 +3268,11 @@
                             panVX = 0;
                             panVY = 0;
                         }
-                        
+
                         panX = targetPanX;
                         panY = targetPanY;
-                        
-                        // Apply parallax: 0.3x for large stars, 0.15x for small stars
+
+                        // Apply parallax: 0.08x for large stars, 0.04x for small stars
                         starPanX5 += dPanX * 0.08;
                         starPanY5 += dPanY * 0.08;
                         starPanX2 += dPanX * 0.04;
@@ -3143,7 +3281,6 @@
                 }
                 requestRender();
             });
-
             window.addEventListener('mouseup', e => {
                 if (isDragMarker) {
                     isDragMarker = false;
@@ -3626,7 +3763,8 @@
 
             function getRandomMarkerPosition() {
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                const W = isCollapsed ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
+                const sidebarHidden = isCollapsed || isEmbedMode;
+                const W = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
                 const H = dom.cvs.height;
                 const minX = W * 0.1;
                 const maxX = W * 0.9;
@@ -3735,21 +3873,56 @@
             // ── Frame state ──
             let efRect = { x: 0, y: 0, w: 0, h: 0 };
             let efDrag = null;
+            let isExporting = false;
+            let aspectLocked = false;
+            let targetRatio = 1;
+            let sidebarWasCollapsed = false;
 
             function openExportOverlay() {
                 const cr = dom.cvs.getBoundingClientRect();
-                const fw = cr.width * 0.6, fh = cr.height * 0.6;
+                const fw = cr.width / 2, fh = cr.height / 2;
+                targetRatio = fw / fh;
                 efRect = { x: cr.left + (cr.width - fw) / 2, y: cr.top + (cr.height - fh) / 2, w: fw, h: fh };
                 dom.exportOverlay.classList.add('active');
+                
+                sidebarWasCollapsed = document.body.classList.contains('sidebar-collapsed');
+                if (!sidebarWasCollapsed) {
+                    document.body.classList.add('sidebar-collapsed');
+                    document.querySelector('.sidebar').classList.add('collapsed');
+                    document.getElementById('sidebarToggle').classList.add('collapsed');
+                }
+                document.body.classList.add('exporting');
+                isExporting = true;
+                
+                dom.exportW.value = Math.round(fw);
+                dom.exportH.value = Math.round(fh);
+                
+                aspectLocked = false;
+                dom.aspectLockBtn.classList.remove('active');
+                dom.exportFrame.classList.remove('locked-aspect');
+                
+                // Neither tab is active by default
+                dom.exportImageBtn.classList.remove('active');
+                dom.exportEmbedBtn.classList.remove('active');
+                dom.imageExportWrap.classList.remove('visible');
+                dom.embedCodeWrap.classList.remove('visible');
+
                 updateExportFrameDOM();
-                syncExportSizeFromFrame();
             }
 
             function closeExportOverlay() {
                 dom.exportOverlay.classList.remove('active');
+                document.body.classList.remove('exporting');
+                if (!sidebarWasCollapsed) {
+                    document.body.classList.remove('sidebar-collapsed');
+                    document.querySelector('.sidebar').classList.remove('collapsed');
+                    document.getElementById('sidebarToggle').classList.remove('collapsed');
+                }
+                isExporting = false;
                 dom.embedCodeWrap.classList.remove('visible');
+                dom.imageExportWrap.classList.remove('visible');
             }
-
+            
             function updateExportFrameDOM() {
                 const f = dom.exportFrame;
                 f.style.left = efRect.x + 'px';
@@ -3775,68 +3948,490 @@
                 efRect.h = Math.max(50, Math.min(efRect.h, cr.top + cr.height - efRect.y));
             }
 
-            function syncExportSizeFromFrame() {
-                const ratio = efRect.h / efRect.w;
-                const curW = parseInt(dom.exportW.value) || 800;
-                dom.exportH.value = Math.round(curW * ratio);
-            }
-
             dom.exportBtn.onclick = openExportOverlay;
             dom.closeExportBtn.onclick = closeExportOverlay;
+
+            // ── Aspect Ratio Lock ──
+            // ── Aspect Ratio Lock ──
+            dom.aspectLockBtn.addEventListener('click', () => {
+                aspectLocked = !aspectLocked;
+                dom.aspectLockBtn.classList.toggle('active', aspectLocked);
+                dom.exportFrame.classList.toggle('locked-aspect', aspectLocked);
+                
+                if (aspectLocked) {
+                    // Calculate target ratio from current inputs
+                    let valW = parseInt(dom.exportW.value) || 50;
+                    let valH = parseInt(dom.exportH.value) || 50;
+                    targetRatio = valW / valH;
+                    
+                    // Snap current frame to target ratio immediately
+                    let newW = efRect.w;
+                    let newH = newW / targetRatio;
+                    if (newH > efRect.h) { 
+                        newH = efRect.h; 
+                        newW = newH * targetRatio; 
+                    }
+                    
+                    efRect.x += (efRect.w - newW) / 2;
+                    efRect.y += (efRect.h - newH) / 2;
+                    efRect.w = newW;
+                    efRect.h = newH;
+                    
+                    clampFrameToCanvas();
+                    updateExportFrameDOM();
+                    
+                    dom.exportW.value = Math.round(efRect.w);
+                    dom.exportH.value = Math.round(efRect.h);
+                }
+            });
+
+            // ── Output Size Inputs (Enter to apply) ──
+            dom.exportW.addEventListener('change', () => {
+                const cr = dom.cvs.getBoundingClientRect();
+                let valW = parseInt(dom.exportW.value) || 50;
+                if (aspectLocked) {
+                    let valH = valW / targetRatio;
+                    if (valH > cr.height) { valH = cr.height; valW = valH * targetRatio; }
+                    if (valW > cr.width) { valW = cr.width; valH = valW / targetRatio; }
+                    dom.exportH.value = Math.round(valH);
+                    dom.exportW.value = Math.round(valW);
+                    efRect.w = valW;
+                    efRect.h = valH;
+                } else {
+                    valW = Math.min(valW, cr.width);
+                    dom.exportW.value = valW;
+                    efRect.w = valW;
+                }
+                clampFrameToCanvas();
+                updateExportFrameDOM();
+            });
+            
+            dom.exportH.addEventListener('change', () => {
+                const cr = dom.cvs.getBoundingClientRect();
+                let valH = parseInt(dom.exportH.value) || 50;
+                if (aspectLocked) {
+                    let valW = valH * targetRatio;
+                    if (valW > cr.width) { valW = cr.width; valH = valW / targetRatio; }
+                    if (valH > cr.height) { valH = cr.height; valW = valH * targetRatio; }
+                    dom.exportW.value = Math.round(valW);
+                    dom.exportH.value = Math.round(valH);
+                    efRect.w = valW;
+                    efRect.h = valH;
+                } else {
+                    valH = Math.min(valH, cr.height);
+                    dom.exportH.value = valH;
+                    efRect.h = valH;
+                }
+                clampFrameToCanvas();
+                updateExportFrameDOM();
+            });
+
+            // ── Tab Switching ──
+            dom.exportImageBtn.onclick = () => {
+                dom.exportImageBtn.classList.add('active');
+                dom.exportEmbedBtn.classList.remove('active');
+                dom.imageExportWrap.classList.add('visible');
+                dom.embedCodeWrap.classList.remove('visible');
+            };
+
+            dom.fmtPdfBtn.onclick = async () => {
+                const cr = dom.cvs.getBoundingClientRect();
+                const fx = efRect.x - cr.left;
+                const fy = efRect.y - cr.top;
+                const targetLong = parseInt(dom.exportSide.value) || 1920;
+                const currentLong = Math.max(efRect.w, efRect.h);
+                const scale = targetLong / currentLong;
+                const eW = Math.round(efRect.w * scale);
+                const eH = Math.round(efRect.h * scale);
+                const eZoom = zoom * scale;
+                const ePanX = (panX - fx) * scale;
+                const ePanY = (panY - fy) * scale;
+
+                // Generate vector SVG string
+                const svgString = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
+
+                // Convert SVG string to a DOM element for svg2pdf
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+                const svgElement = svgDoc.documentElement;
+
+                const { jsPDF } = window.jspdf;
+                const orientation = eW > eH ? 'landscape' : 'portrait';
+                const pdf = new jsPDF({
+                    orientation: orientation,
+                    unit: 'px',
+                    format: [eW, eH],
+                    compress: true
+                });
+                
+                // Add SVG as vector graphics directly to the PDF
+                await pdf.svg(svgElement, { x: 0, y: 0, width: eW, height: eH });
+                
+                pdf.save('hex-tiles-export.pdf');
+                toast('PDF exported (Vector)');
+            };
+
+            // ── Shared SVG generation function ──
+            function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
+                const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+
+                // Calculate custom bounds for the export area
+                let exportBounds = { minQ: Infinity, maxQ: -Infinity, minR: Infinity, maxR: -Infinity };
+                for (const h of exportHexes) {
+                    if (h.q < exportBounds.minQ) exportBounds.minQ = h.q;
+                    if (h.q > exportBounds.maxQ) exportBounds.maxQ = h.q;
+                    if (h.r < exportBounds.minR) exportBounds.minR = h.r;
+                    if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
+                }
+
+                if (curveColors.length >= 1) {
+                    let safety = 2000;
+                    while (safety-- > 0) {
+                        processQueue(exportBounds, true);
+                        if (queue.length === 0) {
+                            if (!findUncoloredTileInHexes(exportHexes)) break;
+                        }
+                    }
+                }
+
+                let svg = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n`;
+                svg += `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${eW}" height="${eH}" viewBox="0 0 ${eW} ${eH}">`;
+                svg += `<rect width="${eW}" height="${eH}" fill="${COLORS.bg}"/>`;
+
+                if (gradientMarkersRGB.length > 0) {
+                    updateIDWGradientCanvas(eW, eH, scale);
+                    const gradUrl = gradientCanvas.toDataURL('image/png');
+                    svg += `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
+                }
+
+                // ── Add Stars ──
+                if (showBgStars) {
+                    const expStarPanX5 = (starPanX5 - fx) * scale;
+                    const expStarPanY5 = (starPanY5 - fy) * scale;
+                    const expStarPanX2 = (starPanX2 - fx) * scale;
+                    const expStarPanY2 = (starPanY2 - fy) * scale;
+                    
+                    const spacing5 = 90 * starZoom5 * scale;
+                    const spacing2 = 60 * starZoom2 * scale;
+
+                    function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale) {
+                        if (spacing < 5) return;
+                        const kMin = Math.floor((0 - panX) / spacing) - 2;
+                        const kMax = Math.ceil((eW - panX) / spacing) + 2;
+                        const jMin = Math.floor((0 - panY) / spacing) - 2;
+                        const jMax = Math.ceil((eH - panY) / spacing) + 2;
+                        
+                        for (let k = kMin; k <= kMax; k++) {
+                            for (let j = jMin; j <= jMax; j++) {
+                                const gx = panX + k * spacing;
+                                const gy = panY + j * spacing;
+                                
+                                const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
+                                const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
+                                
+                                const x = gx + rx;
+                                const y = gy + ry;
+                                
+                                if (x < -spacing || x > eW + spacing || y < -spacing || y > eH + spacing) continue;
+                                
+                                const bg = getBackgroundColorAt(x, y, coordScale);
+                                if (!bg) continue;
+                                
+                                const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
+                                const fill = lum > 140 ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)';
+                                const r = (size * coordScale) / 2;
+                                
+                                svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
+                            }
+                        }
+                    }
+                    
+                    addStars(spacing5, 4, 1, expStarPanX5, expStarPanY5, eW, eH, scale);
+                    addStars(spacing2, 2, 2, expStarPanX2, expStarPanY2, eW, eH, scale);
+                }
+
+                const eSz = HEX_R * eZoom;
+                const pathsByColor = {};
+                const gridPaths = [];
+                const ext = 0.012; 
+
+                function getSvgEdgeColor(q, r, e) {
+                    if (curveColors.length === 1) {
+                        const cc = curveColorsRGB[0];
+                        return `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
+                    }
+                    const id = edgeID(q, r, e);
+                    if (!curveMap.has(id)) return null;
+                    const curve = curves.get(curveMap.get(id));
+                    if (!curve) return null;
+                    const c = curve.color;
+                    if (typeof c === 'number') {
+                        const cc = curveColorsRGB[c % curveColorsRGB.length];
+                        return `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
+                    }
+                    return c;
+                }
+
+                // Transform arc coordinates to absolute SVG coordinates
+                function arcToPath(tx, ty, rot, cx, cy, r, startAngle, endAngle, anticlockwise) {
+                    const rad = rot * Math.PI / 180.0;
+                    const cos = Math.cos(rad);
+                    const sin = Math.sin(rad);
+                    
+                    const p1x = cx + r * Math.cos(startAngle);
+                    const p1y = cy + r * Math.sin(startAngle);
+                    const p2x = cx + r * Math.cos(endAngle);
+                    const p2y = cy + r * Math.sin(endAngle);
+                    
+                    const tx1 = tx + p1x * cos - p1y * sin;
+                    const ty1 = ty + p1x * sin + p1y * cos;
+                    const tx2 = tx + p2x * cos - p2y * sin;
+                    const ty2 = ty + p2x * sin + p2y * cos;
+                    
+                    const sweep = anticlockwise ? 0 : 1;
+                    const largeArc = Math.abs(endAngle - startAngle) > Math.PI ? 1 : 0;
+                    return `M ${tx1.toFixed(2)} ${ty1.toFixed(2)} A ${r.toFixed(2)} ${r.toFixed(2)} 0 ${largeArc} ${sweep} ${tx2.toFixed(2)} ${ty2.toFixed(2)}`;
+                }
+
+                for (const h of exportHexes) {
+                    const rot = tileRot(h.q, h.r);
+                    const k = (rot / 60) % 6;
+                    const alter = isTileAlter(h.q, h.r);
+                    
+                    const rad = rot * Math.PI / 180.0;
+                    const cos = Math.cos(rad);
+                    const sin = Math.sin(rad);
+
+                    if (texImg) {
+                        // Skip vector logic for texture tiles
+                    } else {
+                        const a = eSz * SQRT3 / 2;
+                        if (alter) {
+                            let c = getSvgEdgeColor(h.q, h.r, (0 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz/2, a, eSz/2, Math.PI - ext, 5 * PI_DIV_3 + ext, false)); }
+                            c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false)); }
+                            c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz/2, -a, eSz/2, PI_DIV_3 - ext, Math.PI + ext, false)); }
+                        } else {
+                            let c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false)); }
+                            c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, -a, 1.5 * eSz, TWO_PI_DIV_3 - ext, Math.PI + ext, false)); }
+                            c = getSvgEdgeColor(h.q, h.r, (1 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, a, 1.5 * eSz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false)); }
+                        }
+
+                        if (showGrid) {
+                            let hexPath = "M ";
+                            for (let i = 0; i < 6; i++) {
+                                const ang = PI_DIV_3 * i;
+                                const vx = (eSz * 0.95) * Math.cos(ang);
+                                const vy = (eSz * 0.95) * Math.sin(ang);
+                                const tx_v = h.x + vx * cos - vy * sin;
+                                const ty_v = h.y + vx * sin + vy * cos;
+                                hexPath += `${tx_v.toFixed(2)} ${ty_v.toFixed(2)} `;
+                                if (i < 5) hexPath += "L ";
+                            }
+                            hexPath += "Z";
+                            gridPaths.push(hexPath);
+                        }
+                    }
+                }
+
+                const lw = (eSz / 3 * curveLineWidth).toFixed(2);
+                for (const color in pathsByColor) {
+                    svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"/>`;
+                }
+
+                if (gridPaths.length > 0) {
+                    svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none"/>`;
+                }
+
+                svg += `</svg>`;
+                return svg;
+            }
+
+            dom.fmtSvgBtn.onclick = () => {
+                const cr = dom.cvs.getBoundingClientRect();
+                const fx = efRect.x - cr.left;
+                const fy = efRect.y - cr.top;
+                const targetLong = parseInt(dom.exportSide.value) || 1920;
+                const currentLong = Math.max(efRect.w, efRect.h);
+                const scale = targetLong / currentLong;
+                
+                const eW = Math.round(efRect.w * scale);
+                const eH = Math.round(efRect.h * scale);
+                const eZoom = zoom * scale;
+                const ePanX = (panX - fx) * scale;
+                const ePanY = (panY - fy) * scale;
+
+                const svg = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
+
+                const blob = new Blob([svg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'hex-tiles-export.svg';
+                a.click();
+                URL.revokeObjectURL(url);
+                toast('SVG exported');
+            };
+
             dom.exportBackdrop.onclick = closeExportOverlay;
 
-            // ── Frame dragging ──
+            // ── Frame dragging & resizing ──
             dom.exportFrame.addEventListener('mousedown', e => {
                 const h = e.target.dataset.h;
                 if (h) {
-                    efDrag = { mode: h, mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y, w: efRect.w, h: efRect.h };
+                    efDrag = { mode: h, mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y, w: efRect.w, h: efRect.h, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
                 } else {
-                    efDrag = { mode: 'move', mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y };
+                    efDrag = { mode: 'move', mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
                 }
                 e.preventDefault();
+                e.stopPropagation();
+            });
+
+            // ── Draw new frame on backdrop drag ──
+            dom.exportBackdrop.addEventListener('mousedown', e => {
+                efDrag = { mode: 'draw', mx: e.clientX, my: e.clientY, startX: e.clientX, startY: e.clientY, prevRect: {...efRect}, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
+                efRect.x = e.clientX;
+                efRect.y = e.clientY;
+                efRect.w = 0;
+                efRect.h = 0;
+                updateExportFrameDOM();
+                e.preventDefault();
+                e.stopPropagation();
             });
 
             window.addEventListener('mousemove', e => {
                 if (!efDrag) return;
                 const dx = e.clientX - efDrag.mx, dy = e.clientY - efDrag.my;
                 const cr = dom.cvs.getBoundingClientRect();
+                
                 if (efDrag.mode === 'move') {
                     efRect.x = efDrag.x + dx;
                     efRect.y = efDrag.y + dy;
-                } else if (efDrag.mode === 'br') {
-                    efRect.w = Math.max(50, efDrag.w + dx);
-                    efRect.h = Math.max(50, efDrag.h + dy);
-                } else if (efDrag.mode === 'tr') {
-                    efRect.w = Math.max(50, efDrag.w + dx);
-                    efRect.y = efDrag.y + dy;
-                    efRect.h = Math.max(50, efDrag.h - dy);
-                } else if (efDrag.mode === 'bl') {
-                    efRect.x = efDrag.x + dx;
-                    efRect.w = Math.max(50, efDrag.w - dx);
-                    efRect.h = Math.max(50, efDrag.h + dy);
-                } else if (efDrag.mode === 'tl') {
-                    efRect.x = efDrag.x + dx;
-                    efRect.y = efDrag.y + dy;
-                    efRect.w = Math.max(50, efDrag.w - dx);
-                    efRect.h = Math.max(50, efDrag.h - dy);
+                } else if (efDrag.mode === 'draw') {
+                    let rawW = Math.abs(e.clientX - efDrag.startX);
+                    let rawH = Math.abs(e.clientY - efDrag.startY);
+                    let startX = Math.min(efDrag.startX, e.clientX);
+                    let startY = Math.min(efDrag.startY, e.clientY);
+                    
+                    if (aspectLocked) {
+                        if (rawW / rawH > targetRatio) { rawW = rawH * targetRatio; } 
+                        else { rawH = rawW / targetRatio; }
+                    }
+                    
+                    efRect.x = (e.clientX < efDrag.startX) ? efDrag.startX - rawW : startX;
+                    efRect.y = (e.clientY < efDrag.startY) ? efDrag.startY - rawH : startY;
+                    efRect.w = rawW;
+                    efRect.h = rawH;
+                    
+                    dom.exportW.value = Math.round(efRect.w);
+                    dom.exportH.value = Math.round(efRect.h);
+                    
+                    updateExportFrameDOM();
+                    return;
+                } else {
+                    let { x, y, w, h } = efDrag;
+                    let newW = w, newH = h;
+                    
+                    if (efDrag.mode.includes('r')) newW = efDrag.w + dx;
+                    if (efDrag.mode.includes('l')) { newW = efDrag.w - dx; x = efDrag.x + dx; }
+                    if (efDrag.mode.includes('b')) newH = efDrag.h + dy;
+                    if (efDrag.mode.includes('t')) { newH = efDrag.h - dy; y = efDrag.y + dy; }
+                    
+                    if (aspectLocked) {
+                        let scale = Math.max(newW / efDrag.w, newH / efDrag.h);
+                        scale = Math.max(0.1, scale);
+                        newW = efDrag.w * scale;
+                        newH = efDrag.h * scale;
+                        if (efDrag.mode.includes('l')) x = efDrag.x + (efDrag.w - newW);
+                        if (efDrag.mode.includes('t')) y = efDrag.y + (efDrag.h - newH);
+                    }
+                    if (newW < 50) { newW = 50; if (efDrag.mode.includes('l')) x = efDrag.x + efDrag.w - 50; if (aspectLocked) newH = newW / targetRatio; }
+                    if (newH < 50) { newH = 50; if (efDrag.mode.includes('t')) y = efDrag.y + efDrag.h - 50; if (aspectLocked) newW = newH * targetRatio; }
+                    
+                    efRect.x = x; efRect.y = y; efRect.w = newW; efRect.h = newH;
+                    
+                    dom.exportW.value = Math.round(efRect.w);
+                    dom.exportH.value = Math.round(efRect.h);
                 }
                 clampFrameToCanvas();
                 updateExportFrameDOM();
-                syncExportSizeFromFrame();
             });
 
-            window.addEventListener('mouseup', () => { efDrag = null; requestRender(); });
+            window.addEventListener('mouseup', () => { 
+                // If user clicked on backdrop without drawing a new frame, close the export
+                if (efDrag && efDrag.mode === 'draw' && (efRect.w < 10 || efRect.h < 10)) {
+                    closeExportOverlay();
+                }
+                efDrag = null; 
+                requestRender(); 
+            });
 
-            // ── Interlocked width/height ──
+            function clampFrameToCanvas() {
+                const cr = dom.cvs.getBoundingClientRect();
+                efRect.w = Math.max(50, efRect.w);
+                efRect.h = Math.max(50, efRect.h);
+                if (efRect.w > cr.width) efRect.w = cr.width;
+                if (efRect.h > cr.height) efRect.h = cr.height;
+                
+                if (efRect.x < cr.left) {
+                    if (efDrag && efDrag.mode.includes('l')) efRect.w -= (cr.left - efRect.x);
+                    efRect.x = cr.left;
+                }
+                if (efRect.y < cr.top) {
+                    if (efDrag && efDrag.mode.includes('t')) efRect.h -= (cr.top - efRect.y);
+                    efRect.y = cr.top;
+                }
+                if (efRect.x + efRect.w > cr.left + cr.width) {
+                    if (efDrag && efDrag.mode.includes('r')) efRect.w = cr.left + cr.width - efRect.x;
+                    else efRect.x = cr.left + cr.width - efRect.w;
+                }
+                if (efRect.y + efRect.h > cr.top + cr.height) {
+                    if (efDrag && efDrag.mode.includes('b')) efRect.h = cr.top + cr.height - efRect.y;
+                    else efRect.y = cr.top + cr.height - efRect.h;
+                }
+            }
+
+            // ── Output Size Inputs ──
             dom.exportW.addEventListener('input', () => {
-                const ratio = efRect.h / efRect.w;
-                const w = parseInt(dom.exportW.value) || 50;
-                dom.exportH.value = Math.round(w * ratio);
+                let val = parseInt(dom.exportW.value) || 50;
+                if (aspectLocked) {
+                    dom.exportH.value = Math.round(val / targetRatio);
+                }
             });
+            
             dom.exportH.addEventListener('input', () => {
-                const ratio = efRect.w / efRect.h;
-                const h = parseInt(dom.exportH.value) || 50;
-                dom.exportW.value = Math.round(h * ratio);
+                let val = parseInt(dom.exportH.value) || 50;
+                if (aspectLocked) {
+                    dom.exportW.value = Math.round(val * targetRatio);
+                }
+            });
+
+            // Resize frame proportionally on Enter / focus loss if aspect is unlocked
+            dom.exportW.addEventListener('change', () => {
+                if (!aspectLocked) {
+                    const val = parseInt(dom.exportW.value) || 50;
+                    const prev = parseFloat(dom.exportW.dataset.prev || val);
+                    if (prev > 0) {
+                        const ratio = val / prev;
+                        efRect.w *= ratio;
+                        clampFrameToCanvas();
+                        updateExportFrameDOM();
+                    }
+                    dom.exportW.dataset.prev = val;
+                }
+            });
+
+            dom.exportH.addEventListener('change', () => {
+                if (!aspectLocked) {
+                    const val = parseInt(dom.exportH.value) || 50;
+                    const prev = parseFloat(dom.exportH.dataset.prev || val);
+                    if (prev > 0) {
+                        const ratio = val / prev;
+                        efRect.h *= ratio;
+                        clampFrameToCanvas();
+                        updateExportFrameDOM();
+                    }
+                    dom.exportH.dataset.prev = val;
+                }
             });
 
             // ── Render to offscreen canvas ──
@@ -3849,56 +4444,52 @@
                 const ePanX = (panX - fx) * scale;
                 const ePanY = (panY - fy) * (eH / fh);
 
-                // Ensure all curves computed
                 const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
-                
-                // Sort hexes by distance from screen center so tracing radiates outward
+
                 const centerHex = pixToHex(eW / 2, eH / 2, eZoom, ePanX, ePanY);
                 hexes.sort((a, b) => {
-                    return hexDistance(a.q, a.r, centerHex.q, centerHex.r) - 
-                           hexDistance(b.q, b.r, centerHex.q, centerHex.r);
+                    return hexDistance(a.q, a.r, centerHex.q, centerHex.r) -
+                        hexDistance(b.q, b.r, centerHex.q, centerHex.r);
                 });
-                if (curveColors.length > 1) {
+
+                // Calculate custom bounds for the export area
+                let exportBounds = { minQ: Infinity, maxQ: -Infinity, minR: Infinity, maxR: -Infinity };
+                for (const h of hexes) {
+                    if (h.q < exportBounds.minQ) exportBounds.minQ = h.q;
+                    if (h.q > exportBounds.maxQ) exportBounds.maxQ = h.q;
+                    if (h.r < exportBounds.minR) exportBounds.minR = h.r;
+                    if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
+                }
+
+                if (curveColors.length >= 1) {
                     let safety = 2000;
-                    while (safety-- > 0) { 
-                        processQueue(); 
-                        if (queue.length === 0) { 
-                            if (!findUncoloredTileInHexes(hexes)) break; 
-                        } 
+                    while (safety-- > 0) {
+                        processQueue(exportBounds, true);  // ← Pass bounds and disable culling
+                        if (queue.length === 0) {
+                            if (!findUncoloredTileInHexes(hexes)) break;
+                        }
                     }
                 }
 
                 const oldCtx = ctx;
                 ctx = offCtx;
-                const now = Date.now(); // Add timestamp
+                const now = Date.now();
 
-                // Background
                 offCtx.fillStyle = COLORS.bg;
                 offCtx.fillRect(0, 0, eW, eH);
 
-                // IDW Gradient
                 drawIDWGradient(eW, eH, scale);
+
                 const expStarPanX5 = (starPanX5 - fx) * scale;
                 const expStarPanY5 = (starPanY5 - fy) * scale;
                 const expStarPanX2 = (starPanX2 - fx) * scale;
                 const expStarPanY2 = (starPanY2 - fy) * scale;
                 drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2);
 
-                // Hex tiles
                 const eSz = HEX_R * eZoom;
                 for (const h of hexes) {
                     const rot = tileRot(h.q, h.r);
                     drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r, now);
-                }
-
-                // Markers
-                if (markersVisible) {
-                    for (const m of gradientMarkers) {
-                        const mx = (m.x - fx) * scale;
-                        const my = (m.y - fy) * (eH / fh);
-                        const outline = getContrastColor(m.color);
-                        drawSunMarker(offCtx, mx, my, m.color, outline, scale);
-                    }
                 }
 
                 ctx = oldCtx;
@@ -3906,52 +4497,70 @@
             }
 
             // ── PNG export ──
-            dom.exportPngBtn.onclick = () => {
+            function canvasToBlob(canvas, type) {
+                return new Promise(resolve => canvas.toBlob(resolve, type));
+            }
+
+            dom.fmtPngBtn.onclick = async () => {
                 const cr = dom.cvs.getBoundingClientRect();
                 const fx = efRect.x - cr.left;
                 const fy = efRect.y - cr.top;
-                const eW = parseInt(dom.exportW.value) || 800;
-                const eH = parseInt(dom.exportH.value) || 600;
+                const targetLong = parseInt(dom.exportSide.value) || 1920;
+                const currentLong = Math.max(efRect.w, efRect.h);
+                const scale = targetLong / currentLong;
+                
+                const eW = Math.round(efRect.w * scale);
+                const eH = Math.round(efRect.h * scale);
 
                 const off = document.createElement('canvas');
                 renderToOffscreen(off, eW, eH, fx, fy, efRect.w, efRect.h);
 
-                off.toBlob(blob => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'hex-tiles-export.png';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    toast('PNG exported');
-                }, 'image/png');
+                // Await the blob creation
+                const blob = await canvasToBlob(off, 'image/png');
+                
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'hex-tiles-export.png';
+                a.click();
+                URL.revokeObjectURL(url);
+                toast('PNG exported');
             };
 
             // ── Embed code generation ──
             dom.exportEmbedBtn.onclick = () => {
+                dom.exportImageBtn.classList.remove('active');
+                dom.exportEmbedBtn.classList.add('active');
+                dom.imageExportWrap.classList.remove('visible');
+                dom.embedCodeWrap.classList.add('visible');
+                
                 const cr = dom.cvs.getBoundingClientRect();
                 const fx = efRect.x - cr.left;
                 const fy = efRect.y - cr.top;
-                const eW = parseInt(dom.exportW.value) || 800;
-                const eH = parseInt(dom.exportH.value) || 600;
-                const scale = eW / efRect.w;
+                
+                const targetLong = parseInt(dom.exportSide.value) || 1920;
+                const currentLong = Math.max(efRect.w, efRect.h);
+                const scale = targetLong / currentLong;
+                
+                const eW = Math.round(efRect.w * scale);
+                const eH = Math.round(efRect.h * scale);
                 const eZoom = zoom * scale;
                 const ePanX = (panX - fx) * scale;
-                const ePanY = (panY - fy) * (eH / efRect.h);
+                const ePanY = (panY - fy) * scale;
 
                 const eMarkers = gradientMarkers.map(m => ({
                     x: (m.x - fx) * scale,
-                    y: (m.y - fy) * (eH / efRect.h),
+                    y: (m.y - fy) * scale,
                     color: m.color
                 }));
 
                 const data = {
                     w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
-                    showGrid, showUnrenderedDotted, markersVisible: false, showBgDots, flowEnabled, inertiaEnabled,
+                    showGrid, showUnrenderedDotted, markersVisible: false, showBgStars, flowEnabled, inertiaEnabled,
                     rotMode, randomSeed, rotSeed, curveLineWidth, alterTilesRatio,
                     texTf: { ...texTf },
                     curveColors: [...curveColors],
-                    markers: eMarkers, // Keep marker data so the gradient works!
+                    markers: eMarkers, 
                     rotOverrides: serializeRotOverrides(),
                     texture: getTextureDataUrl()
                 };
@@ -3964,24 +4573,38 @@
                     return;
                 }
 
-                if (encoded.length > 1000000) {
-                    toast('Warning: embed data is very large (>1MB)');
-                }
-
                 const baseUrl = location.href.split('#')[0];
                 const iframe = `<iframe src="${baseUrl}#embed=${encoded}" width="${eW}" height="${eH}" frameborder="0" style="border:none;width:${eW}px;height:${eH}px;"></iframe>`;
 
                 dom.embedCode.value = iframe;
-                dom.embedCodeWrap.classList.add('visible');
                 toast('Embed code generated');
             };
 
             // ── Copy embed code ──
-            dom.copyEmbedBtn.onclick = () => {
-                dom.embedCode.select();
-                document.execCommand('copy');
-                toast('Copied to clipboard');
+            dom.copyEmbedBtn.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(dom.embedCode.value);
+                    toast('Copied to clipboard');
+                } catch (err) {
+                    console.error('Failed to copy: ', err);
+                    toast('Failed to copy');
+                }
             };
+
+            // ── Escape to close export or restore sidebar ──
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape') {
+                    if (dom.exportOverlay.classList.contains('active')) {
+                        closeExportOverlay();
+                    } else if (document.body.classList.contains('sidebar-collapsed')) {
+                        // Expand sidebar if it was manually hidden
+                        document.body.classList.remove('sidebar-collapsed');
+                        document.querySelector('.sidebar').classList.remove('collapsed');
+                        document.getElementById('sidebarToggle').classList.remove('collapsed');
+                    }
+                }
+            });
+            
 
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             //  INITIALIZATION
