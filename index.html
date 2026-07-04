@@ -2962,10 +2962,19 @@
                 }
             }
             
+            let exportFreezeTime = 0;
             function render() {
                 const W = dom.cvs.width,
                     H = dom.cvs.height;
-                const now = Date.now();
+                let now = Date.now();
+                
+                if (isExporting) {
+                    if (!exportFreezeTime) exportFreezeTime = now;
+                    now = exportFreezeTime;
+                } else {
+                    exportFreezeTime = 0;
+                }
+
                 const z = zoom,
                     px = panX,
                     py = panY;
@@ -2984,41 +2993,48 @@
 
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
                 if (showBgStars && zoom <= CONFIG.ZOOM_FADE_MID) keepRendering = true;
+                
+                if (isExporting) keepRendering = false;
 
                 edgeColorAnimating = false;
                 let gradColorAnimating = false;
                 let curveColorAnimating = false;
                 currentUnassignedEdges.clear();
 
-                for (let i = 0; i < gradientMarkersRGB.length; i++) {
-                    const m = gradientMarkersRGB[i];
-                    let diff = false;
-                    const nr = m.r + (m.tr - m.r) * 0.1;
-                    const ng = m.g + (m.tg - m.g) * 0.1;
-                    const nb = m.b + (m.tb - m.b) * 0.1;
-                    if (Math.abs(m.r - nr) > 0.5 || Math.abs(m.g - ng) > 0.5 || Math.abs(m.b - nb) > 0.5) diff = true;
-                    m.r = nr; m.g = ng; m.b = nb;
+                if (!isExporting) {
+                    for (let i = 0; i < gradientMarkersRGB.length; i++) {
+                        const m = gradientMarkersRGB[i];
+                        let diff = false;
+                        const nr = m.r + (m.tr - m.r) * 0.1;
+                        const ng = m.g + (m.tg - m.g) * 0.1;
+                        const nb = m.b + (m.tb - m.b) * 0.1;
+                        if (Math.abs(m.r - nr) > 0.5 || Math.abs(m.g - ng) > 0.5 || Math.abs(m.b - nb) > 0.5) diff = true;
+                        m.r = nr; m.g = ng; m.b = nb;
+                        
+                        const nWeight = m.weight + (1 - m.weight) * 0.05;
+                        if (Math.abs(1 - nWeight) > 0.01) diff = true;
+                        m.weight = nWeight;
+                        
+                        if (diff) {
+                            gradColorAnimating = true;
+                            isGradientDirty = true;
+                        }
+                    }
                     
-                    const nWeight = m.weight + (1 - m.weight) * 0.05;
-                    if (Math.abs(1 - nWeight) > 0.01) diff = true;
-                    m.weight = nWeight;
-                    
-                    if (diff) {
+                    for (let i = fadingMarkersRGB.length - 1; i >= 0; i--) {
+                        const m = fadingMarkersRGB[i];
+                        m.weight += (0 - m.weight) * 0.15; // Much faster fade out
+                        if (m.weight <= 0.0002) {
+                            fadingMarkersRGB.splice(i, 1);
+                        }
+                        // Always set dirty/animating while in this loop, 
+                        // so the final removal frame redraws the canvas without the remnant.
                         gradColorAnimating = true;
                         isGradientDirty = true;
                     }
                 }
-                
-                for (let i = fadingMarkersRGB.length - 1; i >= 0; i--) {
-                    const m = fadingMarkersRGB[i];
-                    m.weight += (0 - m.weight) * 0.15; 
-                    if (m.weight <= 0.0002) {
-                        fadingMarkersRGB.splice(i, 1);
-                    }
-                    gradColorAnimating = true;
-                    isGradientDirty = true;
-                }
 
+                // Flow physics: inertia and drift
                 let driftX = 0, driftY = 0;
                 if (flowEnabled && !isExporting) {
                     let speedMult = (zoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
@@ -3057,7 +3073,8 @@
                     driftY = Math.sin(driftAngle) * driftSpeed;
                 }
 
-                if (!isEmbedMode && inertiaEnabled && !isDrag) {
+                // Apply inertia ONLY in normal mode and when not dragging
+                if (!isEmbedMode && inertiaEnabled && !isDrag && !isExporting) {
                     panX += panVX;
                     panY += panVY;
                     starPanX5 += panVX * CONFIG.STAR_PARALLAX_LARGE; 
@@ -3076,7 +3093,8 @@
                     if (panVX !== 0 || panVY !== 0) keepRendering = true;
                 }
                 
-                if (flowEnabled && (!isDrag || isEmbedMode)) {
+                // Apply flow drift in BOTH normal and embed modes (when enabled)
+                if (flowEnabled && (!isDrag || isEmbedMode) && !isExporting) {
                     panX += driftX;
                     panY += driftY;
                     starPanX5 += driftX * CONFIG.STAR_PARALLAX_LARGE; 
@@ -3088,14 +3106,16 @@
                     keepRendering = true; 
                 }
 
-                if (Math.abs(targetZoom - zoom) > 0.0001) {
+                // Smooth zoom interpolation
+                if (!isExporting && Math.abs(targetZoom - zoom) > 0.0001) {
                     let lerpFactor = 0.15; 
                     let step = (targetZoom - zoom) * lerpFactor;
-                    if (Math.abs(step) < 0.0005) step = targetZoom - zoom; 
+                    if (Math.abs(step) < 0.0005) step = targetZoom - zoom; // Snap if very close
                     setZoom(zoom + step, zoomCx, zoomCy);
                     keepRendering = true;
                 }
 
+                // Track when user reaches exactly 10% zoom for blazing star delay
                 if (zoom <= CONFIG.ZOOM_FADE_LOW) { 
                     if (zoomOutStartTime === 0) zoomOutStartTime = now;
                 } else {
@@ -4354,6 +4374,10 @@
                 document.body.classList.add('exporting');
                 isExporting = true;
                 
+                // Kill any ongoing inertia immediately
+                panVX = 0; 
+                panVY = 0;
+
                 dom.exportW.value = Math.round(fw);
                 dom.exportH.value = Math.round(fh);
                 
@@ -4388,13 +4412,56 @@
                 f.style.top = efRect.y + 'px';
                 f.style.width = efRect.w + 'px';
                 f.style.height = efRect.h + 'px';
-                const cr = dom.cvs.getBoundingClientRect();
-                let mx = efRect.x + efRect.w + 16;
-                let my = efRect.y;
-                if (mx + 280 > window.innerWidth) mx = efRect.x - 296;
-                if (mx < 0) mx = efRect.x + 16;
-                if (my + 300 > window.innerHeight) my = window.innerHeight - 310;
-                if (my < 0) my = 16;
+                const menuW = 280; // Approximate menu width
+                const menuH = 320; // Approximate menu height
+                let mx = 0, my = 0;
+                let placed = false;
+
+                // 1. Try Right side
+                if (efRect.x + efRect.w + 16 + menuW <= window.innerWidth - 16) {
+                    mx = efRect.x + efRect.w + 16;
+                    my = efRect.y;
+                    // Clamp vertically to screen bounds
+                    my = Math.max(16, Math.min(my, window.innerHeight - menuH - 16));
+                    placed = true;
+                }
+
+                // 2. Try Left side
+                if (!placed && efRect.x - menuW - 16 >= 16) {
+                    mx = efRect.x - menuW - 16;
+                    my = efRect.y;
+                    // Clamp vertically to screen bounds
+                    my = Math.max(16, Math.min(my, window.innerHeight - menuH - 16));
+                    placed = true;
+                }
+
+                // 3. Try Top
+                if (!placed && efRect.y - menuH - 16 >= 16) {
+                    my = efRect.y - menuH - 16;
+                    // Center horizontally over the frame
+                    mx = efRect.x + (efRect.w / 2) - (menuW / 2);
+                    mx = Math.max(16, Math.min(mx, window.innerWidth - menuW - 16));
+                    placed = true;
+                }
+
+                // 4. Try Bottom
+                if (!placed && efRect.y + efRect.h + 16 + menuH <= window.innerHeight - 16) {
+                    my = efRect.y + efRect.h + 16;
+                    // Center horizontally over the frame
+                    mx = efRect.x + (efRect.w / 2) - (menuW / 2);
+                    mx = Math.max(16, Math.min(mx, window.innerWidth - menuW - 16));
+                    placed = true;
+                }
+
+                // 5. Absolute Last Resort: Inside the frame (top-left corner)
+                if (!placed) {
+                    mx = efRect.x + 16;
+                    my = efRect.y + 16;
+                    // Just in case the frame itself is smaller than the menu, clamp to screen
+                    mx = Math.max(16, Math.min(mx, window.innerWidth - menuW - 16));
+                    my = Math.max(16, Math.min(my, window.innerHeight - menuH - 16));
+                }
+
                 dom.exportMenu.style.left = mx + 'px';
                 dom.exportMenu.style.top = my + 'px';
             }
