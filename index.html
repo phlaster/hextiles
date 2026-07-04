@@ -24,7 +24,6 @@
             overflow: hidden;
             height: 100vh;
             display: flex;
-            touch-action: none;
         }
 
         #canvas-wrap {
@@ -1216,7 +1215,8 @@
                 panY = 0;
             let zoomCx = 0,
                 zoomCy = 0;
-            let zoomOutBlockedUntil = 0;
+            let zoomOutBlockedUntil = 0; 
+            let magnetTimer = null;
             let isTouchDevice = false;
             let touchOutlines = [];
             let isDrag = false,
@@ -1610,26 +1610,27 @@
                 ctx.save();
                 
                 // Layer 1: Size 7, medium spacing, fastest parallax (0.08)
-                const spacing5 = 120 * starZoom5 * coordScale;
+                const spacing5 = 150 * starZoom5 * coordScale;
                 drawDotLayer(W, H, spacing5, 7, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0);
                 
                 // Layer 2: Size 4, densest spacing, medium parallax (0.04)
-                const spacing2 = 80 * starZoom2 * coordScale;
+                const spacing2 = 100 * starZoom2 * coordScale;
                 drawDotLayer(W, H, spacing2, 4, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0);
                 
-                // Layer 3: Size 2, least dense, slowest parallax (0.015). Fades in on zoom out.
+                // Layer 3: Size 2, least dense, slowest parallax (0.015). Fades in at 10% zoom.
                 let layer3Alpha = 0;
                 let canBlaze = false;
-                if (currentZoom < 0.30) {
-                    layer3Alpha = Math.max(0, Math.min(1, (0.30 - currentZoom) / 0.20));
-                    // Allow blazing only if 10 seconds have passed since zooming out
+                if (currentZoom < 0.15) {
+                    // Fade in smoothly between 15% and 10% zoom
+                    layer3Alpha = Math.max(0, Math.min(1, (0.15 - currentZoom) / 0.05));
+                    // Allow blazing only if 10 seconds have passed since 10% was reached
                     if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > 10000) {
                         canBlaze = true;
                     }
                 }
                 
                 if (layer3Alpha > 0) {
-                    const spacing3 = 300 * starZoom3 * coordScale;
+                    const spacing3 = 200 * starZoom3 * coordScale;
                     drawDotLayer(W, H, spacing3, 2, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime);
                 }
                 
@@ -3102,11 +3103,11 @@
                     keepRendering = true;
                 }
 
-                // Track when user zoomed out past 30% for blazing star delay
-                if (zoom < 0.30) {
+                // Track when user reaches exactly 10% zoom for blazing star delay
+                if (zoom <= 0.105) { // 10%
                     if (zoomOutStartTime === 0) zoomOutStartTime = now;
                 } else {
-                    zoomOutStartTime = 0;
+                    zoomOutStartTime = 0; // Reset timer when leaving 10% zoom
                 }
                 let hexes = visibleHexes(z, px, py, W, H); // Moved up
                 
@@ -3324,6 +3325,27 @@
             } else {
                 window.addEventListener('resize', resize);
             }
+            
+            function scheduleMagnetZoom() {
+                clearTimeout(magnetTimer);
+                magnetTimer = setTimeout(() => {
+                    if (targetZoom < 0.30 && targetZoom > 0.10) {
+                        const snapPoints = [0.30, 0.10];
+                        let closest = snapPoints[0];
+                        let minDiff = Math.abs(targetZoom - closest);
+                        
+                        for (let i = 1; i < snapPoints.length; i++) {
+                            const diff = Math.abs(targetZoom - snapPoints[i]);
+                            if (diff < minDiff) {
+                                minDiff = diff;
+                                closest = snapPoints[i];
+                            }
+                        }
+                        targetZoom = closest;
+                        requestRender();
+                    }
+                }, 500); // 0.5 second delay
+            }
 
             function setZoom(nz, cx, cy) {
                 const oz = zoom;
@@ -3530,6 +3552,7 @@
                     
                     targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, newTargetZoom));
                     checkIfSolved();
+                    scheduleMagnetZoom();
                     requestRender();
                 }
                 e.preventDefault();
@@ -3585,7 +3608,7 @@
                     if (targetZoom >= 0.30 && targetZoom * delta < 0.30) {
                         if (now < zoomOutBlockedUntil) return;
                         if (zoomOutBlockedUntil === 0) {
-                            zoomOutBlockedUntil = now + 1000;
+                            zoomOutBlockedUntil = now + 500;
                             return;
                         }
                     }
@@ -3603,6 +3626,7 @@
                 targetZoom *= delta;
                 targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, targetZoom));
                 checkIfSolved();
+                scheduleMagnetZoom();
                 requestRender();
             }, { passive: false });
 
@@ -3844,6 +3868,7 @@
                 targetZoom = Math.min(MAX_Z, targetZoom * 1.25);
                 if (targetZoom >= 0.30) zoomOutBlockedUntil = 0;
                 checkIfSolved();
+                scheduleMagnetZoom();
                 requestRender();
             };
             
@@ -3865,6 +3890,7 @@
                 }
                 targetZoom = Math.max(MIN_Z, targetZoom * delta);
                 checkIfSolved();
+                scheduleMagnetZoom();
                 requestRender();
             };
 
@@ -3878,6 +3904,7 @@
                     targetZoom = Math.min(MAX_Z, targetZoom * 1.15);
                     if (targetZoom >= 0.30) zoomOutBlockedUntil = 0;
                     checkIfSolved();
+                    scheduleMagnetZoom();
                 }
                 if (e.key === '-') {
                     let delta = 0.85;
@@ -3893,6 +3920,7 @@
                     }
                     targetZoom = Math.max(MIN_Z, targetZoom * delta);
                     checkIfSolved();
+                    scheduleMagnetZoom(); 
                 }
                 requestRender();
             });
@@ -4667,7 +4695,7 @@
                     addStars(spacing5, 7, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0);
                     addStars(spacing2, 4, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0);
                     
-                    let l3Alpha = Math.max(0, Math.min(1, (0.30 - (eZoom / scale)) / 0.20));
+                    let l3Alpha = Math.max(0, Math.min(1, (0.15 - (eZoom / scale)) / 0.05));
                     if (l3Alpha > 0) {
                         addStars(spacing3, 2, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, true, l3Alpha, now - 11000);
                     }
@@ -4808,6 +4836,10 @@
 
             // ── Mobile Touch Support for Export Frame ──
             function simulateMouseEvent(e) {
+                // Let native clicks/focus happen for buttons, inputs, and textareas
+                const tag = e.target.tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
+                
                 if (e.type === 'touchmove' && e.touches.length > 1) return; // Ignore pinch
                 const t = e.touches[0] || e.changedTouches[0];
                 if (!t) return;
