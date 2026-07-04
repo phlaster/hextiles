@@ -917,7 +917,7 @@
             <label>Tile texture</label>
             <div class="slider-row" style="margin-top: 14px; margin-bottom: 16px;">
                 <div class="s-top"><span>Curve Line Width</span><span class="s-val" id="vCurveW">1.0x</span></div>
-                <input type="range" id="sCurveW" min="0.1" max="2" step="0.05" value="1.0" />
+                <input type="range" id="sCurveW" min="0.0" max="2" step="0.05" value="1.0" />
             </div>
             <div class="slider-row" style="margin-bottom: 16px;">
                 <div class="s-top"><span>Alternative Tiles</span><span class="s-val" id="vAlterTiles">0.00</span></div>
@@ -1175,7 +1175,7 @@
 
             const HEX_R = 62;
             const SQRT3 = Math.sqrt(3);
-            const MIN_Z = 0.25;
+            const MIN_Z = 0.10;
             const MAX_Z = 6;
             const CLICK_THRESH = 5;
             const CLICK_DUR = 280;
@@ -1194,8 +1194,12 @@
 
             // ──── State ────
             let zoom = 1,
+                targetZoom = 1,
                 panX = 0,
                 panY = 0;
+            let zoomCx = 0,
+                zoomCy = 0;
+            let zoomOutBlockedUntil = 0;
             let isDrag = false,
                 dragSX = 0,
                 dragSY = 0,
@@ -1540,7 +1544,18 @@
                         if (!bg) continue;
                         
                         const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
-                        ctx.fillStyle = lum > 140 ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)';
+                        
+                        // Smoothly transition between bright and dark stars
+                        let t = (lum - 100) / 80; // Transition range: 100 to 180
+                        t = Math.max(0, Math.min(1, t));
+                        t = t * t * (3 - 2 * t); // Smoothstep for organic blending
+                        
+                        const sR = Math.round(255 * (1 - t));
+                        const sG = sR; // Grayscale
+                        const sB = sR;
+                        const sA = (0.6 * (1 - t) + 0.5 * t).toFixed(3);
+                        
+                        ctx.fillStyle = `rgba(${sR},${sG},${sB},${sA})`;
                         
                         ctx.beginPath();
                         ctx.arc(x, y, (size * coordScale) / 2, 0, Math.PI * 2);
@@ -2279,7 +2294,9 @@
                 }
             }
 
-            function applyCurveStyle(q, r, e, sz, now) {
+            function applyCurveStyle(q, r, e, sz, now, alphaMult = 1) {
+                if (alphaMult === 0) return false; // Quick exit if invisible
+
                 ctx.setLineDash([]);
                 const id = edgeID(q, r, e);
                 
@@ -2324,7 +2341,6 @@
                         edgeRgbMap.set(id, edgeData);
                     }
                     
-                    // Trigger fade-in ONLY if it was dotted/unassigned in the previous frame
                     if (previousUnassignedEdges.has(id)) {
                         edgeData.alpha = 0;
                         edgeData.rippleActive = true;
@@ -2333,7 +2349,6 @@
                         edgeData.rippleR = 0;
                     }
                     
-                    // Detect if the curve assignment changed (Rotation/Merge)
                     if (edgeData.targetCurveID !== targetCurveID) {
                         edgeData.targetCurveID = targetCurveID;
                         edgeData.rippleTime = lastRipple.time;
@@ -2342,7 +2357,6 @@
                         edgeData.rippleActive = true;
                     }
                     
-                    // Apply spatial delay only if a rotation/merge ripple is active
                     let canTransition = true;
                     if (edgeData.rippleActive && edgeData.rippleTime > 0) {
                         const [eq, er] = decodeEdgeID(id);
@@ -2354,7 +2368,6 @@
                         }
                     }
                     
-                    // Interpolate colors and alpha whenever allowed
                     if (canTransition) {
                         let diff = false;
                         const targets = [targetRgb.r, targetRgb.g, targetRgb.b];
@@ -2364,7 +2377,6 @@
                             edgeData.rgb[i] = newVal;
                         }
                         
-                        // Interpolate alpha for smooth fade-in
                         const newAlpha = edgeData.alpha + (1 - edgeData.alpha) * 0.1;
                         if (Math.abs(1 - newAlpha) > 0.01) diff = true;
                         edgeData.alpha = newAlpha;
@@ -2372,19 +2384,21 @@
                         if (diff) {
                             edgeColorAnimating = true;
                         } else {
-                            edgeData.rippleActive = false; // Lerp finished
+                            edgeData.rippleActive = false;
                         }
                     }
                     
-                    ctx.strokeStyle = `rgba(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])},${edgeData.alpha})`;
+                    // Apply both edgeData.alpha (fade-in) and alphaMult (zoom fade-out)
+                    const finalAlpha = (edgeData.alpha * alphaMult).toFixed(3);
+                    ctx.strokeStyle = `rgba(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])},${finalAlpha})`;
                     ctx.lineWidth = sz / 3 * curveLineWidth;
                     return true;
                 }
 
-                // Track unassigned edges for next frame's fade-in logic
                 currentUnassignedEdges.add(id);
                 if (showUnrenderedDotted) {
-                    ctx.strokeStyle = COLORS.unrenderedDotted;
+                    // Faded dotted lines: rgba(110, 110, 144, 0.55) is the original #6e6e908c
+                    ctx.strokeStyle = `rgba(110, 110, 144, ${(0.55 * alphaMult).toFixed(3)})`;
                     ctx.lineWidth = Math.max(1, (sz / 10) * curveLineWidth);
                     const dash = Math.max(2, sz / 8);
                     ctx.setLineDash([dash, dash]);
@@ -2591,8 +2605,6 @@
                 const rSz = grid ? sz * 0.95 : sz;
                 ctx.save();
                 
-                // Only clip if there's an image to constrain. 
-                // We no longer clip for grid lines so curves can overlap smoothly under the grid border.
                 if (img) {
                     traceHexPath(ctx, cx, cy, rSz);
                     ctx.clip();
@@ -2609,47 +2621,62 @@
                     ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
                 } else {
                     const a = sz * SQRT3 / 2;
-                    ctx.lineCap = 'butt'; // Remove bulging round caps
-                    const ext = 0.012; // Small angle extension (radians) to overlap adjacent tiles perfectly
+                    ctx.lineCap = 'butt'; 
+                    const ext = 0.012; 
                     
                     const logicalRot = tileRot(hq, hr);
                     const k = (logicalRot / 60) % 6;
 
-                    const alter = isTileAlter(hq, hr);
-                    if (alter) {
-                        if (applyCurveStyle(hq, hr, (0 + k) % 6, sz, now)) {
-                            ctx.beginPath();
-                            ctx.arc(sz/2, a, sz/2, Math.PI - ext, 5 * PI_DIV_3 + ext, false);
-                            ctx.stroke();
-                        }
-                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
-                            ctx.beginPath();
-                            ctx.arc(-sz, 0, sz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
-                            ctx.stroke();
-                        }
-                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
-                            ctx.beginPath();
-                            ctx.arc(sz/2, -a, sz/2, PI_DIV_3 - ext, Math.PI + ext, false);
-                            ctx.stroke();
-                        }
-                    } else {
-                        if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
-                            ctx.beginPath();
-                            ctx.arc(-sz, 0, sz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
-                            ctx.stroke();
-                        }
-                        if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
-                            ctx.beginPath();
-                            ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3 - ext, Math.PI + ext, false);
-                            ctx.stroke();
-                        }
-                        if (applyCurveStyle(hq, hr, (1 + k) % 6, sz, now)) {
-                            ctx.beginPath();
-                            ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false);
-                            ctx.stroke();
-                        }
+                    // Calculate curve alpha based on tile screen size for smooth zoom fading
+                    let curveAlpha = 1.0;
+                    const fadeStartSz = HEX_R * 0.30; // Zoom 30%
+                    const fadeEndSz = HEX_R * 0.20;   // Zoom 20%
+                    
+                    if (sz <= fadeEndSz) {
+                        curveAlpha = 0.0; // Completely hidden
+                    } else if (sz < fadeStartSz) {
+                        let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+                        curveAlpha = t * t * (3 - 2 * t); // Smoothstep interpolation
                     }
-                    ctx.setLineDash([]);
+
+                    // Skip curve drawing entirely if alpha is 0 to save resources
+                    if (curveAlpha > 0) {
+                        const alter = isTileAlter(hq, hr);
+                        if (alter) {
+                            if (applyCurveStyle(hq, hr, (0 + k) % 6, sz, now, curveAlpha)) {
+                                ctx.beginPath();
+                                ctx.arc(sz/2, a, sz/2, Math.PI - ext, 5 * PI_DIV_3 + ext, false);
+                                ctx.stroke();
+                            }
+                            if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now, curveAlpha)) {
+                                ctx.beginPath();
+                                ctx.arc(-sz, 0, sz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
+                                ctx.stroke();
+                            }
+                            if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now, curveAlpha)) {
+                                ctx.beginPath();
+                                ctx.arc(sz/2, -a, sz/2, PI_DIV_3 - ext, Math.PI + ext, false);
+                                ctx.stroke();
+                            }
+                        } else {
+                            if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now, curveAlpha)) {
+                                ctx.beginPath();
+                                ctx.arc(-sz, 0, sz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
+                                ctx.stroke();
+                            }
+                            if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now, curveAlpha)) {
+                                ctx.beginPath();
+                                ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3 - ext, Math.PI + ext, false);
+                                ctx.stroke();
+                            }
+                            if (applyCurveStyle(hq, hr, (1 + k) % 6, sz, now, curveAlpha)) {
+                                ctx.beginPath();
+                                ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false);
+                                ctx.stroke();
+                            }
+                        }
+                        ctx.setLineDash([]);
+                    }
                 }
 
                 ctx.restore();
@@ -2690,7 +2717,7 @@
             }
             
             function performSolvedCheck() {
-                if (curveColors.length <= 1) {
+                if (zoom <= 0.20) {
                     window.dispatchEvent(new CustomEvent('hexCurveSolved', { detail: { solved: false } }));
                     try { 
                         if (isEmbedMode) window.parent.postMessage({ type: 'HEX_CURVE_SOLVED', solved: false }, '*'); 
@@ -2917,6 +2944,15 @@
                     keepRendering = true; 
                 }
 
+                // Smooth zoom interpolation
+                if (Math.abs(targetZoom - zoom) > 0.0001) {
+                    let lerpFactor = (zoom < 0.30) ? 0.0375 : 0.15; // 0.25 * 0.15 = 0.0375
+                    let step = (targetZoom - zoom) * lerpFactor;
+                    if (Math.abs(step) < 0.0005) step = targetZoom - zoom; // Snap if very close
+                    setZoom(zoom + step, zoomCx, zoomCy);
+                    keepRendering = true;
+                }
+
                 let hexes = visibleHexes(z, px, py, W, H); // Moved up
                 
                 // Sort hexes by distance from screen center so tracing radiates outward
@@ -2989,7 +3025,7 @@
                 // ── Quick Stats & Solved Check (Throttled to 500ms) ──
                 if (now - lastStatsUpdate > 500) {
                     lastStatsUpdate = now;
-                    if (curveColors.length <= 1) {
+                    if (zoom <= 0.20 || curveColors.length <= 1) {
                         dom.statCurvesWrap.style.display = 'none';
                         dom.statColorsWrap.style.display = 'none';
                     } else {
@@ -3116,23 +3152,17 @@
                     panX = cx - (cx - oPanX) * (zoom / oz);
                     panY = cy - (cy - oPanY) * (zoom / oz);
                     
-                    // Only update star cameras if zoom actually changed
                     if (zoom !== oz) {
                         const odz5 = starZoom5;
                         const odz2 = starZoom2;
-                        
-                        starZoom5 = Math.pow(zoom, 0.4 / 1.7); // 1.7x slower zoom rate
-                        starZoom2 = Math.pow(zoom, 0.15 / 1.7); // 1.7x slower zoom rate
-                        
-                        // Scale both star layers from the zoom center to prevent jumping
+                        starZoom5 = Math.pow(zoom, 0.4 / 1.7);
+                        starZoom2 = Math.pow(zoom, 0.15 / 1.7);
                         starPanX5 = cx - (cx - starPanX5) * (starZoom5 / odz5);
                         starPanY5 = cy - (cy - starPanY5) * (starZoom5 / odz5);
-                        
                         starPanX2 = cx - (cx - starPanX2) * (starZoom2 / odz2);
                         starPanY2 = cy - (cy - starPanY2) * (starZoom2 / odz2);
                     }
                     
-                    // Prevent jump when zooming while panning
                     if (isDrag) {
                         const dx = mouseScreenX - dragSX;
                         const dy = mouseScreenY - dragSY;
@@ -3147,7 +3177,34 @@
                 if (isEmbedMode) return;
                 e.preventDefault();
                 const r = dom.cvs.getBoundingClientRect();
-                setZoom(zoom * (e.deltaY > 0 ? 0.88 : 1.12), e.clientX - r.left, e.clientY - r.top);
+                zoomCx = e.clientX - r.left;
+                zoomCy = e.clientY - r.top;
+
+                const now = Date.now();
+                let delta = e.deltaY > 0 ? 0.90 : 1.11;
+
+                if (e.deltaY > 0) { // Zooming out
+                    // 1-second block logic when crossing 30%
+                    if (targetZoom >= 0.30 && targetZoom * delta < 0.30) {
+                        if (now < zoomOutBlockedUntil) return;
+                        if (zoomOutBlockedUntil === 0) {
+                            zoomOutBlockedUntil = now + 1000;
+                            return;
+                        }
+                    }
+                    // 0.25x speed multiplier while below 30%
+                    if (targetZoom < 0.30) {
+                        delta = 1 + (delta - 1) * 0.25;
+                    }
+                } else { // Zooming in
+                    // Reset block timer if returning above 30%
+                    if (targetZoom * delta >= 0.30) {
+                        zoomOutBlockedUntil = 0;
+                    }
+                }
+
+                targetZoom *= delta;
+                targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, targetZoom));
                 checkIfSolved();
                 requestRender();
             }, { passive: false });
@@ -3379,24 +3436,59 @@
             }
 
             dom.zoomIn.onclick = () => {
-                setZoom(zoom * 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
+                zoomCx = dom.cvs.width / 2; 
+                zoomCy = dom.cvs.height / 2;
+                targetZoom = Math.min(MAX_Z, targetZoom * 1.25);
+                if (targetZoom >= 0.30) zoomOutBlockedUntil = 0;
                 checkIfSolved();
                 requestRender();
             };
+            
             dom.zoomOut.onclick = () => {
-                setZoom(zoom / 1.25, dom.cvs.width / 2, dom.cvs.height / 2);
+                zoomCx = dom.cvs.width / 2; 
+                zoomCy = dom.cvs.height / 2;
+                const now = Date.now();
+                let delta = 0.8;
+                
+                if (targetZoom >= 0.30 && targetZoom * delta < 0.30) {
+                    if (now < zoomOutBlockedUntil) return;
+                    if (zoomOutBlockedUntil === 0) {
+                        zoomOutBlockedUntil = now + 1000;
+                        return;
+                    }
+                }
+                if (targetZoom < 0.30) {
+                    delta = 1 + (delta - 1) * 0.25;
+                }
+                targetZoom = Math.max(MIN_Z, targetZoom * delta);
                 checkIfSolved();
                 requestRender();
             };
 
             window.addEventListener('keydown', e => {
                 if (isEmbedMode) return;
+                zoomCx = dom.cvs.width / 2; 
+                zoomCy = dom.cvs.height / 2;
+                const now = Date.now();
+                
                 if (e.key === '=' || e.key === '+') {
-                    setZoom(zoom * 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
+                    targetZoom = Math.min(MAX_Z, targetZoom * 1.15);
+                    if (targetZoom >= 0.30) zoomOutBlockedUntil = 0;
                     checkIfSolved();
                 }
                 if (e.key === '-') {
-                    setZoom(zoom / 1.15, dom.cvs.width / 2, dom.cvs.height / 2);
+                    let delta = 0.85;
+                    if (targetZoom >= 0.30 && targetZoom * delta < 0.30) {
+                        if (now < zoomOutBlockedUntil) return;
+                        if (zoomOutBlockedUntil === 0) {
+                            zoomOutBlockedUntil = now + 1000;
+                            return;
+                        }
+                    }
+                    if (targetZoom < 0.30) {
+                        delta = 1 + (delta - 1) * 0.25;
+                    }
+                    targetZoom = Math.max(MIN_Z, targetZoom * delta);
                     checkIfSolved();
                 }
                 requestRender();
@@ -4138,7 +4230,15 @@
                                 if (!bg) continue;
                                 
                                 const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
-                                const fill = lum > 140 ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)';
+                                
+                                // Smoothly transition between bright and dark stars
+                                let t = (lum - 100) / 80;
+                                t = Math.max(0, Math.min(1, t));
+                                t = t * t * (3 - 2 * t);
+                                
+                                const sR = Math.round(255 * (1 - t));
+                                const sA = (0.6 * (1 - t) + 0.5 * t).toFixed(3);
+                                const fill = `rgba(${sR},${sR},${sR},${sA})`;
                                 const r = (size * coordScale) / 2;
                                 
                                 svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
