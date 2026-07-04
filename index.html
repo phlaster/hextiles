@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Hextiles</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
@@ -35,6 +35,7 @@
         #hexCanvas {
             display: block;
             cursor: grab;
+            touch-action: none; 
         }
 
         #hexCanvas:active {
@@ -760,6 +761,13 @@
         .stats-bar a:hover {
             opacity: 1;
             color: var(--col-accent);
+        }
+
+        /* ── Mobile: Hide zoom controls ── */
+        @media (max-width: 768px) {
+            .zoom-bar {
+                display: none !important;
+            }
         }
 
         /* ── Sidebar Transition ── */
@@ -1519,8 +1527,8 @@
                 return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
             }
 
-            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY) {
-                if (spacing < 5) return; // Prevent infinite loops at extreme zoom outs
+            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing) {
+                if (spacing < 5) return; 
                 
                 const kMin = Math.floor((0 - panX) / spacing) - 2;
                 const kMax = Math.ceil((W - panX) / spacing) + 2;
@@ -1545,39 +1553,143 @@
                         
                         const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
                         
-                        // Smoothly transition between bright and dark stars
-                        let t = (lum - 100) / 80; // Transition range: 100 to 180
+                        let t = (lum - 100) / 80;
                         t = Math.max(0, Math.min(1, t));
-                        t = t * t * (3 - 2 * t); // Smoothstep for organic blending
+                        t = t * t * (3 - 2 * t);
                         
                         const sR = Math.round(255 * (1 - t));
-                        const sG = sR; // Grayscale
-                        const sB = sR;
-                        const sA = (0.6 * (1 - t) + 0.5 * t).toFixed(3);
+                        let sA = (0.6 * (1 - t) + 0.5 * t).toFixed(3);
+                        let drawSize = (size * coordScale) / 2;
                         
-                        ctx.fillStyle = `rgba(${sR},${sG},${sB},${sA})`;
+                        if (allowBlazing) {
+                            const cycleDuration = 30000 + hash2D(k * seed + 555, j * seed + 999) * 10000;
+                            const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
+                            const phase = (now + offset) % cycleDuration;
+                            
+                            if (phase < 1000) { // Blaze lasts 1 second
+                                let blazeT = phase / 1000;
+                                let blazeIntensity = Math.sin(blazeT * Math.PI); // 0 to 1 to 0
+                                
+                                drawSize += drawSize * 2.5 * blazeIntensity;
+                                sA = Math.min(1, parseFloat(sA) + 0.5 * blazeIntensity).toFixed(3);
+                                
+                                // Blazing Glow
+                                const glow = ctx.createRadialGradient(x, y, 0, x, y, drawSize * 3);
+                                glow.addColorStop(0, `rgba(255, 255, 240, ${0.8 * blazeIntensity})`);
+                                glow.addColorStop(0.5, `rgba(150, 200, 255, ${0.4 * blazeIntensity})`);
+                                glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                                ctx.fillStyle = glow;
+                                ctx.beginPath();
+                                ctx.arc(x, y, drawSize * 3, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
+                        }
                         
+                        ctx.fillStyle = `rgba(${sR},${sR},${sR},${sA})`;
                         ctx.beginPath();
-                        ctx.arc(x, y, (size * coordScale) / 2, 0, Math.PI * 2);
+                        ctx.arc(x, y, drawSize, 0, Math.PI * 2);
                         ctx.fill();
                     }
                 }
             }
 
-            function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2) {
+            function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2, dPanX3, dPanY3, now, currentZoom, zoomOutTime) {
                 if (!showBgStars) return;
                 
                 ctx.save();
                 
-                // Large stars (Size 5)
-                const spacing5 = 90 * starZoom5 * coordScale;
-                drawDotLayer(W, H, spacing5, 4, 1, coordScale, dPanX5, dPanY5);
+                // Layer 1: Size 7, medium spacing, fastest parallax (0.08)
+                const spacing5 = 120 * starZoom5 * coordScale;
+                drawDotLayer(W, H, spacing5, 7, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0);
                 
-                // Small stars (Size 2)
-                const spacing2 = 60 * starZoom2 * coordScale;
-                drawDotLayer(W, H, spacing2, 2, 2, coordScale, dPanX2, dPanY2);
+                // Layer 2: Size 4, densest spacing, medium parallax (0.04)
+                const spacing2 = 80 * starZoom2 * coordScale;
+                drawDotLayer(W, H, spacing2, 4, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0);
+                
+                // Layer 3: Size 2, least dense, slowest parallax (0.015). Fades in on zoom out.
+                let layer3Alpha = 0;
+                let canBlaze = false;
+                if (currentZoom < 0.30) {
+                    layer3Alpha = Math.max(0, Math.min(1, (0.30 - currentZoom) / 0.20));
+                    // Allow blazing only if 10 seconds have passed since zooming out
+                    if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > 10000) {
+                        canBlaze = true;
+                    }
+                }
+                
+                if (layer3Alpha > 0) {
+                    const spacing3 = 300 * starZoom3 * coordScale;
+                    drawDotLayer(W, H, spacing3, 2, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime);
+                }
                 
                 ctx.restore();
+            }
+
+            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime) {
+                if (spacing < 5) return; 
+                
+                const kMin = Math.floor((0 - panX) / spacing) - 2;
+                const kMax = Math.ceil((W - panX) / spacing) + 2;
+                const jMin = Math.floor((0 - panY) / spacing) - 2;
+                const jMax = Math.ceil((H - panY) / spacing) + 2;
+                
+                for (let k = kMin; k <= kMax; k++) {
+                    for (let j = jMin; j <= jMax; j++) {
+                        const gx = panX + k * spacing;
+                        const gy = panY + j * spacing;
+                        
+                        const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
+                        const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
+                        
+                        const x = gx + rx;
+                        const y = gy + ry;
+                        
+                        if (x < -spacing || x > W + spacing || y < -spacing || y > H + spacing) continue;
+                        
+                        const bg = getBackgroundColorAt(x, y, coordScale);
+                        if (!bg) continue;
+                        
+                        const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
+                        
+                        let t = (lum - 100) / 80;
+                        t = Math.max(0, Math.min(1, t));
+                        t = t * t * (3 - 2 * t);
+                        
+                        const sR = Math.round(255 * (1 - t));
+                        let sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult;
+                        let drawSize = (size * coordScale) / 2;
+                        
+                        if (allowBlazing && zoomOutTime > 0) {
+                            // Blazing interval: 30 to 50 seconds
+                            const cycleDuration = 30000 + hash2D(k * seed + 555, j * seed + 999) * 20000;
+                            const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
+                            const phase = (now + offset) % cycleDuration;
+                            
+                            if (phase < 1000) { // Blaze lasts 1 second
+                                let blazeT = phase / 1000;
+                                let blazeIntensity = Math.sin(blazeT * Math.PI); // 0 to 1 to 0
+                                
+                                drawSize = drawSize * (1 + 9 * blazeIntensity); // Expand up to 10 times
+                                sA = Math.min(1, sA + 0.5 * blazeIntensity);
+                                
+                                // Blazing Glow
+                                const glow = ctx.createRadialGradient(x, y, 0, x, y, drawSize * 3);
+                                glow.addColorStop(0, `rgba(255, 255, 240, ${0.8 * blazeIntensity})`);
+                                glow.addColorStop(0.5, `rgba(150, 200, 255, ${0.4 * blazeIntensity})`);
+                                glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                                ctx.fillStyle = glow;
+                                ctx.beginPath();
+                                ctx.arc(x, y, drawSize * 3, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
+                        }
+                        
+                        ctx.fillStyle = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
+                        ctx.beginPath();
+                        ctx.arc(x, y, drawSize, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
             }
 
             // ──── IDW Gradient ────
@@ -2682,10 +2794,25 @@
                 ctx.restore();
 
                 if (grid) {
-                    traceHexPath(ctx, cx, cy, rSz);
-                    ctx.strokeStyle = COLORS.gridLine;
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
+                    let gridAlpha = 1.0;
+                    const fadeStartSz = HEX_R * 0.30; // Zoom 30%
+                    const fadeEndSz = HEX_R * 0.20;   // Zoom 20%
+                    
+                    if (sz <= fadeEndSz) {
+                        gridAlpha = 0.0; // Completely hidden
+                    } else if (sz < fadeStartSz) {
+                        let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+                        gridAlpha = t * t * (3 - 2 * t); // Smoothstep
+                    }
+
+                    if (gridAlpha > 0) {
+                        traceHexPath(ctx, cx, cy, rSz);
+                        ctx.globalAlpha = gridAlpha;
+                        ctx.strokeStyle = COLORS.gridLine;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1.0; // Reset alpha
+                    }
                 }
             }
 
@@ -2802,6 +2929,10 @@
             let starPanX2 = 0;
             let starPanY2 = 0;
             let starZoom2 = 1; // Zoom state for small stars
+            let starPanX3 = 0;
+            let starPanY3 = 0;
+            let starZoom3 = 1; // Zoom state for huge blazing stars
+            let zoomOutStartTime = 0;
             const visibleHexesArray = []; // Pre-allocated array to avoid per-frame GC pauses
             let currentUnassignedEdges = new Set();
             let previousUnassignedEdges = new Set();
@@ -2833,9 +2964,10 @@
                 ctx.fillStyle = COLORS.bg;
                 ctx.fillRect(0, 0, W, H);
                 drawIDWGradient(W, H);
-                drawBackgroundStars(W, H, 1, starPanX5, starPanY5, starPanX2, starPanY2);
+                drawBackgroundStars(W, H, 1, starPanX5, starPanY5, starPanX2, starPanY2, starPanX3, starPanY3, now, zoom, zoomOutStartTime);
 
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
+                if (showBgStars && zoom <= 0.20) keepRendering = true;
 
                 // Reset edge animation flag for this frame
                 edgeColorAnimating = false;
@@ -2880,38 +3012,36 @@
                 // Flow physics: inertia and drift
                 let driftX = 0, driftY = 0;
                 if (flowEnabled && !isExporting) {
+                    let speedMult = (zoom <= 0.20) ? 10.0 : 1.0;
+                    let angleLerp = (zoom <= 0.20) ? 0.015 : 0.03; // Halved angle rotation speed
+                    
                     if (hoveredQ !== null && hoveredR !== null) {
-                        // Nudge flow AWAY from the mouse, strength based on distance from center
                         const cx = W / 2;
                         const cy = H / 2;
                         const dx = mouseScreenX - cx;
                         const dy = mouseScreenY - cy;
                         const dist = Math.sqrt(dx * dx + dy * dy);
                         
-                        // Max distance is half the smaller screen dimension
                         const maxDist = Math.min(W, H) / 2;
                         const strength = Math.min(1, dist / maxDist);
                         
-                        driftTargetAngle = Math.atan2(dy, dx) + Math.PI; // Add 180° to reverse direction
-                        driftTargetSpeed = strength * 0.35; // Up to 0.35 speed
-                        driftTimer = 0; // Pause the random timer while hovering
+                        driftTargetAngle = Math.atan2(dy, dx) + Math.PI;
+                        driftTargetSpeed = strength * 0.35 * speedMult; // 10x speed
+                        driftTimer = 0;
                     } else {
-                        // Random drift variations when not hovering
                         driftTimer++;
                         if (driftTimer > 120 + Math.random() * 180) { 
                             driftTargetAngle = Math.random() * Math.PI * 2;
-                            driftTargetSpeed = 0.05 + Math.random() * 0.15; 
+                            driftTargetSpeed = (0.05 + Math.random() * 0.15) * speedMult; // 10x speed
                             driftTimer = 0;
                         }
                     }
                     
-                    // Smoothly interpolate angle (faster transition for mouse responsiveness)
                     let angleDiff = driftTargetAngle - driftAngle;
                     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                    driftAngle += angleDiff * 0.02;
+                    driftAngle += angleDiff * angleLerp;
 
-                    // Smoothly interpolate speed
                     driftSpeed += (driftTargetSpeed - driftSpeed) * 0.02;
 
                     driftX = Math.cos(driftAngle) * driftSpeed;
@@ -2922,12 +3052,18 @@
                 if (!isEmbedMode && inertiaEnabled && !isDrag) {
                     panX += panVX;
                     panY += panVY;
-                    starPanX5 += panVX * 0.08; // Inertia parallax
+                    starPanX5 += panVX * 0.08; 
                     starPanY5 += panVY * 0.08;
                     starPanX2 += panVX * 0.04;
                     starPanY2 += panVY * 0.04;
-                    panVX *= 0.95; // Smooth decay
-                    panVY *= 0.95;
+                    starPanX3 += panVX * 0.015;
+                    starPanY3 += panVY * 0.015;
+                    
+                    // Weaken inertia damping 5 times when zoomed out (<30%)
+                    let damping = (zoom < 0.30) ? 0.99 : 0.95; 
+                    panVX *= damping; 
+                    panVY *= damping;
+                    
                     if (Math.abs(panVX) < 0.01) panVX = 0;
                     if (Math.abs(panVY) < 0.01) panVY = 0;
                     if (panVX !== 0 || panVY !== 0) keepRendering = true;
@@ -2937,22 +3073,30 @@
                 if (flowEnabled && (!isDrag || isEmbedMode)) {
                     panX += driftX;
                     panY += driftY;
-                    starPanX5 += driftX * 0.08; // Flow parallax
+                    starPanX5 += driftX * 0.08; 
                     starPanY5 += driftY * 0.08;
                     starPanX2 += driftX * 0.04;
                     starPanY2 += driftY * 0.04;
+                    starPanX3 += driftX * 0.015;
+                    starPanY3 += driftY * 0.015;
                     keepRendering = true; 
                 }
 
                 // Smooth zoom interpolation
                 if (Math.abs(targetZoom - zoom) > 0.0001) {
-                    let lerpFactor = (zoom < 0.30) ? 0.0375 : 0.15; // 0.25 * 0.15 = 0.0375
+                    let lerpFactor = 0.15; 
                     let step = (targetZoom - zoom) * lerpFactor;
                     if (Math.abs(step) < 0.0005) step = targetZoom - zoom; // Snap if very close
                     setZoom(zoom + step, zoomCx, zoomCy);
                     keepRendering = true;
                 }
 
+                // Track when user zoomed out past 30% for blazing star delay
+                if (zoom < 0.30) {
+                    if (zoomOutStartTime === 0) zoomOutStartTime = now;
+                } else {
+                    zoomOutStartTime = 0;
+                }
                 let hexes = visibleHexes(z, px, py, W, H); // Moved up
                 
                 // Sort hexes by distance from screen center so tracing radiates outward
@@ -2988,7 +3132,7 @@
                 }
 
                 // ── Second pass: draw hover stroke on top ──
-                if (lod >= 1 && hoveredQ !== null && hoveredR !== null && !isExporting) {
+                if (lod >= 1 && zoom > 0.20 && hoveredQ !== null && hoveredR !== null && !isExporting) {
                     // Calculate screen position directly instead of searching the hexes array
                     const p = hexToPix(hoveredQ, hoveredR, z, px, py);
                     const targetHX = p.x;
@@ -3103,6 +3247,9 @@
                         starPanY2 = panY;
                         starZoom5 = Math.pow(zoom, 0.4 / 1.5);
                         starZoom2 = Math.pow(zoom, 0.15 / 1.5);
+                        starPanX3 = panX;
+                        starPanY3 = panY;
+                        starZoom3 = Math.pow(zoom, 0.05 / 1.7);
                         isInitialized = true;
 
                         if (gradientMarkers.length === 0) {
@@ -3155,12 +3302,18 @@
                     if (zoom !== oz) {
                         const odz5 = starZoom5;
                         const odz2 = starZoom2;
+                        const odz3 = starZoom3;
+
                         starZoom5 = Math.pow(zoom, 0.4 / 1.7);
                         starZoom2 = Math.pow(zoom, 0.15 / 1.7);
+                        starZoom3 = Math.pow(zoom, 0.05 / 1.7);
+                        
                         starPanX5 = cx - (cx - starPanX5) * (starZoom5 / odz5);
                         starPanY5 = cy - (cy - starPanY5) * (starZoom5 / odz5);
                         starPanX2 = cx - (cx - starPanX2) * (starZoom2 / odz2);
                         starPanY2 = cy - (cy - starPanY2) * (starZoom2 / odz2);
+                        starPanX3 = cx - (cx - starPanX3) * (starZoom3 / odz3);
+                        starPanY3 = cy - (cy - starPanY3) * (starZoom3 / odz3);
                     }
                     
                     if (isDrag) {
@@ -3172,6 +3325,141 @@
                 }
                 dom.zoomLabel.textContent = Math.round(zoom * 100) + '%';
             }
+
+            // ──── Touch / Mobile Pinch Zoom & Pan ────
+            let touchState = {
+                mode: 'none', // 'pan', 'pinch'
+                startX: 0, startY: 0,
+                startPanX: 0, startPanY: 0,
+                startDist: 0,
+                startZoom: 0,
+                pinchCenterX: 0,
+                pinchCenterY: 0
+            };
+
+            dom.cvs.addEventListener('touchstart', e => {
+                if (e.touches.length === 1) {
+                    touchState.mode = 'pan';
+                    const r = dom.cvs.getBoundingClientRect();
+                    const tx = e.touches[0].clientX - r.left;
+                    const ty = e.touches[0].clientY - r.top;
+                    
+                    touchState.startX = tx;
+                    touchState.startY = ty;
+                    touchState.startPanX = panX;
+                    touchState.startPanY = panY;
+                    
+                    isDrag = true; dragMoved = false;
+                    dragSX = tx; dragSY = ty;
+                    dragPX = panX; dragPY = panY;
+                    embedDragLastTile = null;
+                    panVX = 0; panVY = 0;
+                } else if (e.touches.length === 2) {
+                    touchState.mode = 'pinch';
+                    isDrag = false; // Stop panning immediately when pinching
+                    
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    touchState.startDist = Math.hypot(dx, dy);
+                    touchState.startZoom = targetZoom;
+                    
+                    const r = dom.cvs.getBoundingClientRect();
+                    touchState.pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left;
+                    touchState.pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top;
+                    
+                    zoomCx = touchState.pinchCenterX;
+                    zoomCy = touchState.pinchCenterY;
+                    zoomOutBlockedUntil = 0; // Bypass 1s block for fluid pinch zooming
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            dom.cvs.addEventListener('touchmove', e => {
+                const r = dom.cvs.getBoundingClientRect();
+                
+                if (touchState.mode === 'pan' && e.touches.length === 1) {
+                    const tx = e.touches[0].clientX - r.left;
+                    const ty = e.touches[0].clientY - r.top;
+                    const dx = tx - touchState.startX;
+                    const dy = ty - touchState.startY;
+                    
+                    if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
+                        if (!dragMoved) dragMoved = true;
+                    }
+                    
+                    if (isEmbedMode && dragMoved) {
+                        // Drag-rotate in embed mode
+                        const h = pixToHex(tx, ty, zoom, panX, panY);
+                        const hk = hexKey(h.q, h.r);
+                        if (hk !== embedDragLastTile) {
+                            embedDragLastTile = hk;
+                            rotateTile(h.q, h.r);
+                        }
+                    } else if (!isEmbedMode) {
+                        // Normal camera panning
+                        let targetPanX = touchState.startPanX + dx;
+                        let targetPanY = touchState.startPanY + dy;
+                        
+                        const dPanX = targetPanX - panX;
+                        const dPanY = targetPanY - panY;
+                        
+                        if (inertiaEnabled) {
+                            panVX = dPanX;
+                            panVY = dPanY;
+                        } else {
+                            panVX = 0;
+                            panVY = 0;
+                        }
+                        
+                        panX = targetPanX;
+                        panY = targetPanY;
+                        
+                        starPanX5 += dPanX * 0.08;
+                        starPanY5 += dPanY * 0.08;
+                        starPanX2 += dPanX * 0.04;
+                        starPanY2 += dPanY * 0.04;
+                        starPanX3 += dPanX * 0.015;
+                        starPanY3 += dPanY * 0.015;
+                    }
+                    requestRender();
+                } else if (touchState.mode === 'pinch' && e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const newDist = Math.hypot(dx, dy);
+                    
+                    let scale = newDist / Math.max(1, touchState.startDist);
+                    let newTargetZoom = touchState.startZoom * scale;
+                    
+                    // Apply 0.333x speed debuff if zooming out below 30%
+                    if (targetZoom < 0.30 && newTargetZoom < targetZoom) {
+                        let delta = newTargetZoom - targetZoom;
+                        newTargetZoom = targetZoom + delta * 0.333;
+                    }
+                    
+                    targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, newTargetZoom));
+                    
+                    checkIfSolved();
+                    requestRender();
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            dom.cvs.addEventListener('touchend', e => {
+                if (touchState.mode === 'pan') {
+                    if (!dragMoved) {
+                        // Single tap - act as click (rotate tile)
+                        const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
+                        rotateTile(h.q, h.r);
+                    } else {
+                        // Pan release - check solved
+                        checkIfSolved();
+                    }
+                }
+                touchState.mode = 'none';
+                isDrag = false;
+                requestRender();
+                e.preventDefault();
+            }, { passive: false });
 
             dom.cvs.addEventListener('wheel', e => {
                 if (isEmbedMode) return;
@@ -3194,7 +3482,7 @@
                     }
                     // 0.25x speed multiplier while below 30%
                     if (targetZoom < 0.30) {
-                        delta = 1 + (delta - 1) * 0.25;
+                        delta = 1 + (delta - 1) * 0.333;
                     }
                 } else { // Zooming in
                     // Reset block timer if returning above 30%
@@ -3328,12 +3616,14 @@
 
                         panX = targetPanX;
                         panY = targetPanY;
-
-                        // Apply parallax: 0.08x for large stars, 0.04x for small stars
+                        
+                        // Apply parallax: 0.08x for large stars, 0.04x for small stars, 0.015x for huge stars
                         starPanX5 += dPanX * 0.08;
                         starPanY5 += dPanY * 0.08;
                         starPanX2 += dPanX * 0.04;
                         starPanY2 += dPanY * 0.04;
+                        starPanX3 += dPanX * 0.015;
+                        starPanY3 += dPanY * 0.015;
                     }
                 }
                 requestRender();
@@ -4202,11 +4492,14 @@
                     const expStarPanY5 = (starPanY5 - fy) * scale;
                     const expStarPanX2 = (starPanX2 - fx) * scale;
                     const expStarPanY2 = (starPanY2 - fy) * scale;
+                    const expStarPanX3 = (starPanX3 - fx) * scale;
+                    const expStarPanY3 = (starPanY3 - fy) * scale;
                     
-                    const spacing5 = 90 * starZoom5 * scale;
-                    const spacing2 = 60 * starZoom2 * scale;
+                    const spacing5 = 80 * starZoom5 * scale;
+                    const spacing2 = 50 * starZoom2 * scale;
+                    const spacing3 = 250 * starZoom3 * scale;
 
-                    function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale) {
+                    function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime) {
                         if (spacing < 5) return;
                         const kMin = Math.floor((0 - panX) / spacing) - 2;
                         const kMax = Math.ceil((eW - panX) / spacing) + 2;
@@ -4231,23 +4524,40 @@
                                 
                                 const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
                                 
-                                // Smoothly transition between bright and dark stars
                                 let t = (lum - 100) / 80;
                                 t = Math.max(0, Math.min(1, t));
                                 t = t * t * (3 - 2 * t);
                                 
                                 const sR = Math.round(255 * (1 - t));
-                                const sA = (0.6 * (1 - t) + 0.5 * t).toFixed(3);
-                                const fill = `rgba(${sR},${sR},${sR},${sA})`;
-                                const r = (size * coordScale) / 2;
+                                let sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult;
+                                let r = (size * coordScale) / 2;
                                 
+                                if (allowBlazing && zoomOutTime > 0) {
+                                    const cycleDuration = 30000 + hash2D(k * seed + 555, j * seed + 999) * 20000;
+                                    const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
+                                    const phase = (now + offset) % cycleDuration;
+                                    if (phase < 1000) {
+                                        let blazeT = phase / 1000;
+                                        let blazeIntensity = Math.sin(blazeT * Math.PI);
+                                        r = r * (1 + 9 * blazeIntensity); // Expand 10 times
+                                        sA = Math.min(1, sA + 0.5 * blazeIntensity);
+                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(r * 2).toFixed(2)}" fill="rgba(255, 255, 240, ${(0.4 * blazeIntensity).toFixed(3)})"/>`;
+                                    }
+                                }
+                                
+                                const fill = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
                                 svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
                             }
                         }
                     }
                     
-                    addStars(spacing5, 4, 1, expStarPanX5, expStarPanY5, eW, eH, scale);
-                    addStars(spacing2, 2, 2, expStarPanX2, expStarPanY2, eW, eH, scale);
+                    addStars(spacing5, 7, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0);
+                    addStars(spacing2, 4, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0);
+                    
+                    let l3Alpha = Math.max(0, Math.min(1, (0.30 - (eZoom / scale)) / 0.20));
+                    if (l3Alpha > 0) {
+                        addStars(spacing3, 2, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, true, l3Alpha, now - 11000);
+                    }
                 }
 
                 const eSz = HEX_R * eZoom;
@@ -4339,7 +4649,16 @@
                 }
 
                 if (gridPaths.length > 0) {
-                    svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none"/>`;
+                    let gridAlpha = 1.0;
+                    if (eSz <= HEX_R * 0.20) gridAlpha = 0.0;
+                    else if (eSz < HEX_R * 0.30) {
+                        let t = (eSz - HEX_R * 0.20) / (HEX_R * 0.30 - HEX_R * 0.20);
+                        gridAlpha = t * t * (3 - 2 * t);
+                    }
+                    
+                    if (gridAlpha > 0) {
+                        svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-opacity="${gridAlpha.toFixed(3)}"/>`;
+                    }
                 }
 
                 svg += `</svg>`;
@@ -4584,7 +4903,11 @@
                 const expStarPanY5 = (starPanY5 - fy) * scale;
                 const expStarPanX2 = (starPanX2 - fx) * scale;
                 const expStarPanY2 = (starPanY2 - fy) * scale;
-                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2);
+                const expStarPanX3 = (starPanX3 - fx) * scale;
+                const expStarPanY3 = (starPanY3 - fy) * scale;
+                
+                // We pass `now - 11000` so exports can capture blazing stars if they happen to be in phase
+                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, now - 11000);
 
                 const eSz = HEX_R * eZoom;
                 for (const h of hexes) {
