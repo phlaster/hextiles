@@ -24,6 +24,7 @@
             overflow: hidden;
             height: 100vh;
             display: flex;
+            touch-action: none;
         }
 
         #canvas-wrap {
@@ -35,7 +36,11 @@
         #hexCanvas {
             display: block;
             cursor: grab;
-            touch-action: none; 
+            touch-action: none;
+        }
+        
+        .sidebar {
+            touch-action: pan-y;
         }
 
         #hexCanvas:active {
@@ -3328,22 +3333,57 @@
 
             // ──── Touch / Mobile Pinch Zoom & Pan ────
             let touchState = {
-                mode: 'none', // 'pan', 'pinch'
+                mode: 'none', // 'pan', 'pinch', 'marker_wait', 'marker_drag'
                 startX: 0, startY: 0,
                 startPanX: 0, startPanY: 0,
                 startDist: 0,
                 startZoom: 0,
                 pinchCenterX: 0,
-                pinchCenterY: 0
+                pinchCenterY: 0,
+                markerIdx: -1,
+                timer: null
             };
 
             dom.cvs.addEventListener('touchstart', e => {
                 if (e.touches.length === 1) {
-                    touchState.mode = 'pan';
                     const r = dom.cvs.getBoundingClientRect();
                     const tx = e.touches[0].clientX - r.left;
                     const ty = e.touches[0].clientY - r.top;
-                    
+
+                    // 1. Check for Marker Long Press (1 second)
+                    if (!isEmbedMode && markersVisible) {
+                        let clickedMarkerIdx = -1;
+                        for (let i = 0; i < gradientMarkers.length; i++) {
+                            const m = gradientMarkers[i];
+                            const dx = tx - m.x;
+                            const dy = ty - m.y;
+                            if (dx * dx + dy * dy < 900) { // 30px radius
+                                clickedMarkerIdx = i;
+                                break;
+                            }
+                        }
+                        if (clickedMarkerIdx !== -1) {
+                            touchState.mode = 'marker_wait';
+                            touchState.markerIdx = clickedMarkerIdx;
+                            touchState.startX = tx;
+                            touchState.startY = ty;
+                            touchState.timer = setTimeout(() => {
+                                if (touchState.mode === 'marker_wait') {
+                                    touchState.mode = 'marker_drag';
+                                    isDragMarker = true;
+                                    draggedMarkerIndex = touchState.markerIdx;
+                                    dragMarkerOffsetX = touchState.startX - gradientMarkers[touchState.markerIdx].x;
+                                    dragMarkerOffsetY = touchState.startY - gradientMarkers[touchState.markerIdx].y;
+                                    if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+                                }
+                            }, 1000); // 1 second delay
+                            e.preventDefault();
+                            return;
+                        }
+                    }
+
+                    // 2. Normal Pan / Draw
+                    touchState.mode = 'pan';
                     touchState.startX = tx;
                     touchState.startY = ty;
                     touchState.startPanX = panX;
@@ -3355,6 +3395,9 @@
                     embedDragLastTile = null;
                     panVX = 0; panVY = 0;
                 } else if (e.touches.length === 2) {
+                    if (touchState.mode === 'marker_wait') {
+                        clearTimeout(touchState.timer);
+                    }
                     touchState.mode = 'pinch';
                     isDrag = false; // Stop panning immediately when pinching
                     
@@ -3377,7 +3420,20 @@
             dom.cvs.addEventListener('touchmove', e => {
                 const r = dom.cvs.getBoundingClientRect();
                 
-                if (touchState.mode === 'pan' && e.touches.length === 1) {
+                if (touchState.mode === 'marker_drag' && e.touches.length === 1) {
+                    const tx = e.touches[0].clientX - r.left;
+                    const ty = e.touches[0].clientY - r.top;
+                    gradientMarkers[draggedMarkerIndex].x = tx - dragMarkerOffsetX;
+                    gradientMarkers[draggedMarkerIndex].y = ty - dragMarkerOffsetY;
+                    if (gradientMarkersRGB[draggedMarkerIndex]) {
+                        gradientMarkersRGB[draggedMarkerIndex].x = gradientMarkers[draggedMarkerIndex].x;
+                        gradientMarkersRGB[draggedMarkerIndex].y = gradientMarkers[draggedMarkerIndex].y;
+                    }
+                    isGradientDirty = true;
+                    requestRender();
+                    e.preventDefault();
+                    return;
+                } else if (touchState.mode === 'pan' && e.touches.length === 1) {
                     const tx = e.touches[0].clientX - r.left;
                     const ty = e.touches[0].clientY - r.top;
                     const dx = tx - touchState.startX;
@@ -3388,7 +3444,6 @@
                     }
                     
                     if (isEmbedMode && dragMoved) {
-                        // Drag-rotate in embed mode
                         const h = pixToHex(tx, ty, zoom, panX, panY);
                         const hk = hexKey(h.q, h.r);
                         if (hk !== embedDragLastTile) {
@@ -3396,7 +3451,6 @@
                             rotateTile(h.q, h.r);
                         }
                     } else if (!isEmbedMode) {
-                        // Normal camera panning
                         let targetPanX = touchState.startPanX + dx;
                         let targetPanY = touchState.startPanY + dy;
                         
@@ -3430,14 +3484,12 @@
                     let scale = newDist / Math.max(1, touchState.startDist);
                     let newTargetZoom = touchState.startZoom * scale;
                     
-                    // Apply 0.333x speed debuff if zooming out below 30%
                     if (targetZoom < 0.30 && newTargetZoom < targetZoom) {
                         let delta = newTargetZoom - targetZoom;
-                        newTargetZoom = targetZoom + delta * 0.333;
+                        newTargetZoom = targetZoom + delta * 0.25;
                     }
                     
                     targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, newTargetZoom));
-                    
                     checkIfSolved();
                     requestRender();
                 }
@@ -3445,7 +3497,12 @@
             }, { passive: false });
 
             dom.cvs.addEventListener('touchend', e => {
-                if (touchState.mode === 'pan') {
+                if (touchState.mode === 'marker_wait') {
+                    clearTimeout(touchState.timer);
+                } else if (touchState.mode === 'marker_drag') {
+                    isDragMarker = false;
+                    draggedMarkerIndex = -1;
+                } else if (touchState.mode === 'pan') {
                     if (!dragMoved) {
                         // Single tap - act as click (rotate tile)
                         const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
@@ -4692,6 +4749,20 @@
             };
 
             dom.exportBackdrop.onclick = closeExportOverlay;
+
+            // ── Mobile Touch Support for Export Frame ──
+            function simulateMouseEvent(e) {
+                if (e.touches.length > 1) return; // Ignore multi-touch
+                const t = e.touches[0] || e.changedTouches[0];
+                const type = { touchstart: 'mousedown', touchmove: 'mousemove', touchend: 'mouseup' }[e.type];
+                if (!type) return;
+                const evt = new MouseEvent(type, { clientX: t.clientX, clientY: t.clientY, bubbles: true, cancelable: true });
+                e.target.dispatchEvent(evt);
+                e.preventDefault();
+            }
+            dom.exportOverlay.addEventListener('touchstart', simulateMouseEvent, { passive: false });
+            dom.exportOverlay.addEventListener('touchmove', simulateMouseEvent, { passive: false });
+            dom.exportOverlay.addEventListener('touchend', simulateMouseEvent, { passive: false });
 
             // ── Frame dragging & resizing ──
             dom.exportFrame.addEventListener('mousedown', e => {
