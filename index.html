@@ -37,6 +37,9 @@
             display: block;
             cursor: grab;
             touch-action: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            user-select: none;
         }
         
         .sidebar {
@@ -579,6 +582,7 @@
         /* ── Export overlay ── */
         .export-overlay {
             position: fixed; inset: 0; z-index: 500; display: none;
+            touch-action: none;
         }
         .export-overlay.active { display: block; }
         .export-backdrop {
@@ -855,8 +859,8 @@
     <aside class="sidebar">
         <div class="sb-header">
             <div class="title-wrap">
-                <h2>Hex Tiles</h2>
-                <p>Infinite tiled canvas with per-tile rotation</p>
+                <h2>Hextiles</h2>
+                <p>Infinite canvas with colorful curves on gradients</p>
             </div>
             <button class="export-btn" id="exportBtn" title="Export"><i class="fas fa-share-from-square"></i></button>
         </div>
@@ -1213,6 +1217,8 @@
             let zoomCx = 0,
                 zoomCy = 0;
             let zoomOutBlockedUntil = 0;
+            let isTouchDevice = false;
+            let touchOutlines = [];
             let isDrag = false,
                 dragSX = 0,
                 dragSY = 0,
@@ -3137,30 +3143,54 @@
                 }
 
                 // ── Second pass: draw hover stroke on top ──
-                if (lod >= 1 && zoom > 0.20 && hoveredQ !== null && hoveredR !== null && !isExporting) {
-                    // Calculate screen position directly instead of searching the hexes array
-                    const p = hexToPix(hoveredQ, hoveredR, z, px, py);
-                    const targetHX = p.x;
-                    const targetHY = p.y;
-                    
-                    // Initialize visual position if null
-                    if (visHoverX === null) {
-                        visHoverX = targetHX;
-                        visHoverY = targetHY;
-                    } else {
-                        // Smoothly glide towards the target tile
-                        visHoverX += (targetHX - visHoverX) * 0.40; // 0.40 = glide speed
-                        visHoverY += (targetHY - visHoverY) * 0.40;
+                if (lod >= 1 && zoom > 0.20 && !isExporting) {
+                    // Standard Mouse Hover
+                    if (!isTouchDevice && hoveredQ !== null && hoveredR !== null) {
+                        const p = hexToPix(hoveredQ, hoveredR, z, px, py);
+                        const targetHX = p.x;
+                        const targetHY = p.y;
                         
-                        // Keep rendering until we are perfectly centered
-                        if (Math.abs(targetHX - visHoverX) > 0.5 || Math.abs(targetHY - visHoverY) > 0.5) {
-                            keepRendering = true;
-                        } else {
+                        if (visHoverX === null) {
                             visHoverX = targetHX;
                             visHoverY = targetHY;
+                        } else {
+                            visHoverX += (targetHX - visHoverX) * 0.40; 
+                            visHoverY += (targetHY - visHoverY) * 0.40;
+                            
+                            if (Math.abs(targetHX - visHoverX) > 0.5 || Math.abs(targetHY - visHoverY) > 0.5) {
+                                keepRendering = true;
+                            } else {
+                                visHoverX = targetHX;
+                                visHoverY = targetHY;
+                            }
+                        }
+                        drawHoverStroke(visHoverX, visHoverY, sz, grid);
+                    }
+                    
+                    // Touch Tap Outlines (Multiple can exist and fade out simultaneously)
+                    if (touchOutlines.length > 0) {
+                        keepRendering = true; // Keep rendering until all fades complete
+                        for (let i = touchOutlines.length - 1; i >= 0; i--) {
+                            const t = touchOutlines[i];
+                            t.alpha -= 0.035; // Fade out speed
+                            if (t.alpha <= 0) {
+                                touchOutlines.splice(i, 1);
+                                continue;
+                            }
+                            const p = hexToPix(t.q, t.r, z, px, py);
+                            ctx.save();
+                            traceHexPath(ctx, p.x, p.y, grid ? sz * 0.95 : sz);
+                            ctx.globalAlpha = t.alpha;
+                            ctx.lineWidth = 6;
+                            ctx.strokeStyle = COLORS.black;
+                            ctx.stroke();
+                            ctx.lineWidth = 3;
+                            ctx.strokeStyle = COLORS.white;
+                            ctx.stroke();
+                            ctx.globalAlpha = 1.0;
+                            ctx.restore();
                         }
                     }
-                    drawHoverStroke(visHoverX, visHoverY, sz, grid);
                 }
 
                 if (markersVisible) {
@@ -3344,13 +3374,19 @@
                 timer: null
             };
 
+            // Touchstart remains on the canvas so we only initiate if touching the canvas
             dom.cvs.addEventListener('touchstart', e => {
+                isTouchDevice = true;
+                hoveredQ = null;
+                hoveredR = null;
+                visHoverX = null;
+                visHoverY = null;
                 if (e.touches.length === 1) {
                     const r = dom.cvs.getBoundingClientRect();
                     const tx = e.touches[0].clientX - r.left;
                     const ty = e.touches[0].clientY - r.top;
 
-                    // 1. Check for Marker Long Press (1 second)
+                    // 1. Check for Marker Long Press (500ms)
                     if (!isEmbedMode && markersVisible) {
                         let clickedMarkerIdx = -1;
                         for (let i = 0; i < gradientMarkers.length; i++) {
@@ -3376,7 +3412,7 @@
                                     dragMarkerOffsetY = touchState.startY - gradientMarkers[touchState.markerIdx].y;
                                     if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
                                 }
-                            }, 1000); // 1 second delay
+                            }, 500); // 500ms feels much more responsive
                             e.preventDefault();
                             return;
                         }
@@ -3417,7 +3453,10 @@
                 e.preventDefault();
             }, { passive: false });
 
-            dom.cvs.addEventListener('touchmove', e => {
+            // touchmove and touchend go on window so we don't lose the drag 
+            // if the finger moves over the sidebar or off-screen
+            window.addEventListener('touchmove', e => {
+                if (touchState.mode === 'none') return; // Ignore if not initiated by canvas
                 const r = dom.cvs.getBoundingClientRect();
                 
                 if (touchState.mode === 'marker_drag' && e.touches.length === 1) {
@@ -3496,7 +3535,9 @@
                 e.preventDefault();
             }, { passive: false });
 
-            dom.cvs.addEventListener('touchend', e => {
+            window.addEventListener('touchend', e => {
+                if (touchState.mode === 'none') return;
+                
                 if (touchState.mode === 'marker_wait') {
                     clearTimeout(touchState.timer);
                 } else if (touchState.mode === 'marker_drag') {
@@ -3507,16 +3548,27 @@
                         // Single tap - act as click (rotate tile)
                         const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
                         rotateTile(h.q, h.r);
+                        touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); // Add fading outline
                     } else {
                         // Pan release - check solved
                         checkIfSolved();
                     }
                 }
-                touchState.mode = 'none';
-                isDrag = false;
+                
+                // Reset state if all fingers are lifted
+                if (e.touches.length === 0) {
+                    touchState.mode = 'none';
+                    isDrag = false;
+                } else if (touchState.mode === 'pinch' && e.touches.length === 1) {
+                    // Lifted one finger from pinch, stop tracking to avoid jumps
+                    touchState.mode = 'none';
+                    isDrag = false;
+                }
+                
                 requestRender();
                 e.preventDefault();
             }, { passive: false });
+
 
             dom.cvs.addEventListener('wheel', e => {
                 if (isEmbedMode) return;
@@ -3626,22 +3678,26 @@
                 mouseScreenY = my;
 
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-                // Sidebar is hidden in embed mode too — full canvas is usable
                 const sidebarHidden = isCollapsed || isEmbedMode;
                 const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - 310);
 
                 // Always compute hex coords under the cursor so drag-rotate can use them
                 const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
 
-                // Don't update hover if the mouse is over the (visible) sidebar
-                if (!sidebarHidden && mx > effectiveW) {
+                // Suppress mouse hover on touch devices to prevent sticky outlines
+                if (isTouchDevice) {
                     hoveredQ = null;
                     hoveredR = null;
                 } else {
-                    hoveredQ = h.q;
-                    hoveredR = h.r;
+                    // Don't update hover if the mouse is over the (visible) sidebar
+                    if (!sidebarHidden && mx > effectiveW) {
+                        hoveredQ = null;
+                        hoveredR = null;
+                    } else {
+                        hoveredQ = h.q;
+                        hoveredR = h.r;
+                    }
                 }
-
                 if (isDrag) {
                     const dx = mx - dragSX, dy = my - dragSY;
                     if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
@@ -4752,11 +4808,15 @@
 
             // ── Mobile Touch Support for Export Frame ──
             function simulateMouseEvent(e) {
-                if (e.touches.length > 1) return; // Ignore multi-touch
+                if (e.type === 'touchmove' && e.touches.length > 1) return; // Ignore pinch
                 const t = e.touches[0] || e.changedTouches[0];
+                if (!t) return;
                 const type = { touchstart: 'mousedown', touchmove: 'mousemove', touchend: 'mouseup' }[e.type];
                 if (!type) return;
-                const evt = new MouseEvent(type, { clientX: t.clientX, clientY: t.clientY, bubbles: true, cancelable: true });
+                const evt = new MouseEvent(type, { 
+                    clientX: t.clientX, clientY: t.clientY, 
+                    bubbles: true, cancelable: true 
+                });
                 e.target.dispatchEvent(evt);
                 e.preventDefault();
             }
