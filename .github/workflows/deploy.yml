@@ -26,9 +26,9 @@ jobs:
 
       - name: Inject Deploy Info
         run: |
-          COMMIT_HASH=$(git rev-parse --short HEAD)
+          COMMIT_HASH=$(git rev-parse HEAD)
           DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          REPLACE_STR="Deployed: ${DEPLOY_DATE} (SHA: ${COMMIT_HASH})"
+          REPLACE_STR="Deployed: ${DEPLOY_DATE}\n${COMMIT_HASH}"
           echo "Replacing placeholder with: $REPLACE_STR"
           sed -i "s|__DEPLOY_INFO__|$REPLACE_STR|g" index.html
           echo "Verification:"
