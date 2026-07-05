@@ -23,6 +23,7 @@
             color: var(--col-fg);
             overflow: hidden;
             height: 100vh;
+            height: 100dvh; /* Dynamic viewport height fixes mobile browser UI overlap */
             display: flex;
         }
 
@@ -39,10 +40,6 @@
             -webkit-user-select: none;
             -webkit-touch-callout: none;
             user-select: none;
-        }
-        
-        .sidebar {
-            touch-action: pan-y;
         }
 
         #hexCanvas:active {
@@ -102,6 +99,7 @@
 
         .sidebar {
             position: relative;
+            touch-action: pan-y;
             z-index: 20;
             margin-left: auto;
             width: 310px;
@@ -111,8 +109,9 @@
             flex-direction: column;
             overflow-y: auto;
             overflow-x: hidden;
-            transition: margin-right .3s cubic-bezier(.4,0,.2,1);
+            transition: transform .3s cubic-bezier(.4,0,.2,1);
             flex-shrink: 0;
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         .sidebar::-webkit-scrollbar {
@@ -792,8 +791,8 @@
         .sidebar-toggle {
             position: fixed;
             top: 26px;
-            right: 310px; /* Sits exactly on the sidebar border */
-            transform: translateX(50%); /* Centers it on the border */
+            right: 310px;
+            transform: translateX(50%);
             z-index: 1000;
             width: 28px;
             height: 28px;
@@ -3708,6 +3707,14 @@
                 hoveredR = null;
                 visHoverX = null;
                 visHoverY = null;
+
+                // Auto-hide sidebar on canvas interaction
+                if (!isEmbedMode && !sidebar.classList.contains('collapsed')) {
+                    sidebar.classList.add('collapsed');
+                    document.body.classList.add('sidebar-collapsed');
+                    sidebarToggle.classList.add('collapsed');
+                }
+
                 if (e.touches.length === 1) {
                     const r = dom.cvs.getBoundingClientRect();
                     const tx = e.touches[0].clientX - r.left;
@@ -3909,7 +3916,10 @@
                     clearTimeout(touchState.timer);
                     const now = Date.now();
                     if (now - lastTapTime < 300) {
-                        // Double tap on empty space
+                        // Double tap on empty space toggles markers
+                        markersVisible = !markersVisible;
+                        dom.markersToggle.checked = markersVisible;
+                        requestRender();
                         lastTapTime = 0;
                     } else {
                         lastTapTime = now;
@@ -4172,8 +4182,33 @@
                 const mx = e.clientX - r.left;
                 const my = e.clientY - r.top;
 
-                if (!markersVisible) return;
-                removeMarkerAt(mx, my);
+                if (!markersVisible) {
+                    markersVisible = true;
+                    dom.markersToggle.checked = true;
+                    requestRender();
+                    return;
+                }
+
+                let clickedMarkerIdx = -1;
+                for (let i = 0; i < gradientMarkers.length; i++) {
+                    const m = gradientMarkers[i];
+                    const dx = mx - m.x;
+                    const dy = my - m.y;
+                    const hitR = CONFIG.MARKER_HIT_RADIUS;
+                    if (dx * dx + dy * dy < hitR * hitR) {
+                        clickedMarkerIdx = i;
+                        break;
+                    }
+                }
+
+                if (clickedMarkerIdx !== -1) {
+                    removeMarkerAt(mx, my);
+                } else {
+                    // Double click on empty space toggles markers
+                    markersVisible = !markersVisible;
+                    dom.markersToggle.checked = markersVisible;
+                    requestRender();
+                }
             });
 
             function rotateTile(q, r) {
