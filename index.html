@@ -1361,6 +1361,7 @@
             let gradientMarkers = [];
             let gradientMarkersRGB = []; // Cached RGB values for gradient markers
             let fadingMarkersRGB = []; // Cached RGB values for markers currently fading out
+            let currentAvgR = 0, currentAvgG = 0, currentAvgB = 0;
             let draggedMarkerIndex = -1;
             let isDragMarker = false;
             let dragMarkerOffsetX = 0;
@@ -1731,7 +1732,7 @@
                 
                 let layer3Alpha = 0;
                 let canBlaze = false;
-                if (currentZoom < CONFIG.ZOOM_BLAZE_FADE_START) {
+                if (currentZoom < CONFIG.ZOOM_BLAZE_FADE_START + 0.001) {
                     layer3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - currentZoom) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
                     if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > CONFIG.STAR_BLAZE_DELAY) {
                         canBlaze = true;
@@ -1799,14 +1800,13 @@
                 }
                 for (let i = 0; i < fadingMarkersRGB.length; i++) {
                     const m = fadingMarkersRGB[i];
-                    const w = Math.max(0, Math.min(1, m.weight !== undefined ? m.weight : 0));
                     allMarkers.push({
                         x: (m.x - offsetX) * coordScale,
                         y: (m.y - offsetY) * coordScale,
-                        r: avgR + (m.r - avgR) * w,
-                        g: avgG + (m.g - avgG) * w,
-                        b: avgB + (m.b - avgB) * w,
-                        weight: w
+                        r: m.r, // Already blended in render()
+                        g: m.g,
+                        b: m.b,
+                        weight: 1
                     });
                 }
 
@@ -2147,7 +2147,7 @@
                     const dx = x - mx;
                     const dy = y - my;
                     const distSq = dx * dx + dy * dy + 0.5;
-                    const weight = (1 / (distSq * distSq)) * (m.weight || 0);
+                    const weight = (1 / (distSq * distSq));
                     totalWeight += weight;
                     r += m.r * weight;
                     g += m.g * weight;
@@ -2635,6 +2635,7 @@
                                     x: removedMarker.x,
                                     y: removedMarker.y,
                                     r: cached.r, g: cached.g, b: cached.b,
+                                    origR: cached.r, origG: cached.g, origB: cached.b,
                                     weight: cached.weight || 1
                                 });
                             }
@@ -2973,6 +2974,9 @@
                 const grid = showGrid,
                     img = texImg,
                     tf = texTf;
+                
+                // Use original editor zoom for visual fades in embed mode
+                const visZoom = (isEmbedMode && embedData && embedData.origZoom) ? embedData.origZoom : z;
 
                 for (const [k, a] of animMap) {
                     if (now - a.start >= a.duration) animMap.delete(k);
@@ -2981,10 +2985,10 @@
                 ctx.fillStyle = COLORS.bg;
                 ctx.fillRect(0, 0, W, H);
                 drawIDWGradient(W, H);
-                drawBackgroundStars(W, H, 1, starPanX5, starPanY5, starPanX2, starPanY2, starPanX3, starPanY3, now, zoom, zoomOutStartTime);
+                drawBackgroundStars(W, H, 1, starPanX5, starPanY5, starPanX2, starPanY2, starPanX3, starPanY3, now, visZoom, zoomOutStartTime);
 
                 let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
-                if (showBgStars && zoom <= CONFIG.ZOOM_FADE_MID) keepRendering = true;
+                if (showBgStars && visZoom <= CONFIG.ZOOM_FADE_MID) keepRendering = true;
                 
                 if (isExporting) keepRendering = false;
 
@@ -2994,6 +2998,26 @@
                 currentUnassignedEdges.clear();
 
                 if (!isExporting) {
+                    // 1. Calculate target average color of ACTIVE markers
+                    let avgR = 0, avgG = 0, avgB = 0, avgW = 0;
+                    for (let i = 0; i < gradientMarkersRGB.length; i++) {
+                        const m = gradientMarkersRGB[i];
+                        const w = m.weight !== undefined ? m.weight : 1;
+                        avgR += m.tr * w;
+                        avgG += m.tg * w;
+                        avgB += m.tb * w;
+                        avgW += w;
+                    }
+                    if (avgW > 0) {
+                        currentAvgR = avgR / avgW;
+                        currentAvgG = avgG / avgW;
+                        currentAvgB = avgB / avgW;
+                    } else {
+                        currentAvgR = parseInt(COLORS.bg.slice(1, 3), 16);
+                        currentAvgG = parseInt(COLORS.bg.slice(3, 5), 16);
+                        currentAvgB = parseInt(COLORS.bg.slice(5, 7), 16);
+                    }
+
                     for (let i = 0; i < gradientMarkersRGB.length; i++) {
                         const m = gradientMarkersRGB[i];
                         let diff = false;
@@ -3018,9 +3042,14 @@
                         m.weight += (0 - m.weight) * 0.15; // Much faster fade out
                         if (m.weight <= 0.0002) {
                             fadingMarkersRGB.splice(i, 1);
+                            continue;
                         }
-                        // Always set dirty/animating while in this loop, 
-                        // so the final removal frame redraws the canvas without the remnant.
+                        
+                        const fade = m.weight;
+                        m.r = m.origR + (currentAvgR - m.origR) * (1 - fade);
+                        m.g = m.origG + (currentAvgG - m.origG) * (1 - fade);
+                        m.b = m.origB + (currentAvgB - m.origB) * (1 - fade);
+                        
                         gradColorAnimating = true;
                         isGradientDirty = true;
                     }
@@ -3029,9 +3058,9 @@
                 // Flow physics: drift and turn
                 let driftX = 0, driftY = 0;
                 if (flowEnabled && !isExporting) {
-                    let speedMult = (zoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
+                    let speedMult = (visZoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
                     
-                    if (hoveredQ !== null && hoveredR !== null && !isEmbedMode) {
+                    if (hoveredQ !== null && hoveredR !== null) {
                         // Hover detected: target opposite direction from center-screen to cursor
                         const cx = W / 2;
                         const cy = H / 2;
@@ -3104,7 +3133,7 @@
                     starPanX3 += panVX * CONFIG.STAR_PARALLAX_SMALL;
                     starPanY3 += panVY * CONFIG.STAR_PARALLAX_SMALL;
                     
-                    let damping = (zoom < CONFIG.ZOOM_FADE_HIGH) ? CONFIG.INERTIA_DAMPING_LOW : CONFIG.INERTIA_DAMPING_NORMAL; 
+                    let damping = (visZoom < CONFIG.ZOOM_FADE_HIGH) ? CONFIG.INERTIA_DAMPING_LOW : CONFIG.INERTIA_DAMPING_NORMAL; 
                     panVX *= damping; 
                     panVY *= damping;
                     
@@ -3135,31 +3164,27 @@
                     keepRendering = true;
                 }
 
-                // Track when user reaches exactly lowest zoom for blazing star delay
-                if (zoom <= CONFIG.ZOOM_FADE_LOW) { 
+                // Track when user reaches exactly 20% zoom for blazing star delay
+                if (visZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) { 
                     if (zoomOutStartTime === 0) zoomOutStartTime = now;
                 } else {
                     zoomOutStartTime = 0; 
                 }
 
                 const sz = HEX_R * z;
+                const visSz = HEX_R * visZoom;
                 let curveAlpha = 1.0;
                 let gridAlpha = 1.0;
                 const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
                 const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
                 
-                if (sz <= 10) {
-                    gridAlpha = 0.0;
-                } else if (sz < fadeStartSz) {
-                    let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-                    gridAlpha = t * t * (3 - 2 * t);
-                }
-
-                if (sz <= fadeEndSz) {
+                if (visSz <= fadeEndSz + 0.5) { 
                     curveAlpha = 0.0;
-                } else if (sz < fadeStartSz) {
-                    let t = (sz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+                    gridAlpha = 0.0;
+                } else if (visSz < fadeStartSz) {
+                    let t = (visSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
                     curveAlpha = t * t * (3 - 2 * t);
+                    gridAlpha = curveAlpha;
                 }
 
                 let hexes = [];
@@ -3188,14 +3213,14 @@
                     if (didWork) keepRendering = true;
                 }
 
-                const lod = sz > 18 ? 2 : sz > 8 ? 1 : 0;
+                const lod = visSz > 18 ? 2 : visSz > 8 ? 1 : 0;
 
                 for (const h of hexes) {
                     const rot = displayRot(h.q, h.r, now);
                     drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r, now, curveAlpha, gridAlpha);
                 }
 
-                if (lod >= 1 && zoom > CONFIG.ZOOM_FADE_MID && !isExporting) {
+                if (lod >= 1 && visZoom > CONFIG.ZOOM_FADE_MID + 0.001 && !isExporting) {
                     if (!isTouchDevice && hoveredQ !== null && hoveredR !== null) {
                         const p = hexToPix(hoveredQ, hoveredR, z, px, py);
                         const targetHX = p.x;
@@ -3253,7 +3278,7 @@
 
                 if (now - lastStatsUpdate > CONFIG.STATS_UPDATE_INTERVAL) {
                     lastStatsUpdate = now;
-                    if (zoom <= CONFIG.ZOOM_FADE_MID || curveColors.length <= 1) {
+                    if (visZoom <= CONFIG.ZOOM_FADE_MID || curveColors.length <= 1) {
                         dom.statCurvesWrap.style.display = 'none';
                         dom.statColorsWrap.style.display = 'none';
                     } else {
@@ -3313,6 +3338,26 @@
             // ──── Resize ────
             function resize() {
                 isGradientDirty = true;
+                
+                if (isEmbedMode) {
+                    if (embedData) {
+                        dom.cvs.width = embedData.w;
+                        dom.cvs.height = embedData.h;
+                    }
+                    if (!isInitialized) {
+                        isInitialized = true;
+                        if (gradientMarkers.length === 0) {
+                            const pos = getRandomMarkerPosition();
+                            gradientMarkers.push({ x: pos.x, y: pos.y, color: '#cccccc' });
+                            updateGradientMarkersCache();
+                            renderGradientList();
+                            renderCurveList();
+                        }
+                        initializeCentralTile();
+                    }
+                    return;
+                }
+
                 const w = window.innerWidth;
                 const h = window.innerHeight;
                 dom.cvs.width = w;
@@ -3360,13 +3405,13 @@
                 document.body.classList.toggle('sidebar-collapsed');
             });
 
-            if (typeof ResizeObserver !== 'undefined') {
+            if (typeof ResizeObserver !== 'undefined' && !isEmbedMode) {
                 const ro = new ResizeObserver(() => {
                     resize();
                     requestRender();
                 });
                 ro.observe(dom.wrap);
-            } else {
+            } else if (!isEmbedMode) {
                 window.addEventListener('resize', resize);
             }
             
@@ -3829,6 +3874,7 @@
                             x: removedMarker.x,
                             y: removedMarker.y,
                             r: cached.r, g: cached.g, b: cached.b,
+                            origR: cached.r, origG: cached.g, origB: cached.b,
                             weight: cached.weight || 1
                         });
                         
@@ -4633,7 +4679,7 @@
 
             // ── Shared SVG generation function ──
             function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
-                const now = Date.now();
+                const now = exportFreezeTime || Date.now();
                 const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
 
                 let exportBounds = { minQ: Infinity, maxQ: -Infinity, minR: Infinity, maxR: -Infinity };
@@ -4644,7 +4690,19 @@
                     if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
                 }
 
-                if (curveColors.length >= 1) {
+                const origSz = HEX_R * zoom;
+                let eCurveAlpha = 1.0, eGridAlpha = 1.0;
+                const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
+                const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
+                if (origSz <= fadeEndSz + 0.5) { eCurveAlpha = 0; eGridAlpha = 0; }
+                else if (origSz < fadeStartSz) {
+                    let t = (origSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+                    eCurveAlpha = t * t * (3 - 2 * t);
+                    eGridAlpha = eCurveAlpha;
+                }
+
+                // SKIP PROCESS QUEUE IF CURVES ARE INVISIBLE!
+                if (curveColors.length >= 1 && eCurveAlpha > 0) {
                     let safety = 2000;
                     while (safety-- > 0) {
                         processQueue(exportBounds, true);
@@ -4725,30 +4783,36 @@
                                         
                                         // Interpolate star color towards white during blaze
                                         const blazeR = Math.round(sR + (255 - sR) * blazeIntensity);
-                                        
-                                        // Affect gradient around star
                                         const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
-                                        const gradId = `blaze-${k}-${j}-${seed}`;
-                                        svg += `<defs><radialGradient id="${gradId}" cx="50%" cy="50%" r="50%">`;
-                                        svg += `<stop offset="0%" stop-color="rgba(255, 255, 240, ${(0.4 * blazeIntensity).toFixed(3)})"/>`;
-                                        svg += `<stop offset="40%" stop-color="rgba(150, 200, 255, ${(0.2 * blazeIntensity).toFixed(3)})"/>`;
-                                        svg += `<stop offset="100%" stop-color="rgba(0, 0, 0, 0)"/></radialGradient></defs>`;
-                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${glowRadius.toFixed(2)}" fill="url(#${gradId})"/>`;
+                                        
+                                        // Smooth Blue outer glow
+                                        const steps = 90;
+                                        for (let s = steps; s > 0; s--) {
+                                            const stepT = s / steps;
+                                            const stepR = glowRadius * stepT;
+                                            const stepA = (0.02 * blazeIntensity) * Math.pow(1 - stepT, 1.5);
+                                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(150, 200, 255)" fill-opacity="${stepA.toFixed(3)}"/>`;
+                                        }
+                                        // Smooth White inner glow
+                                        const steps2 = 45;
+                                        for (let s = steps2; s > 0; s--) {
+                                            const stepT = s / steps2;
+                                            const stepR = glowRadius * 0.5 * stepT;
+                                            const stepA = (0.04 * blazeIntensity) * Math.pow(1 - stepT, 1.5);
+                                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(255, 255, 240)" fill-opacity="${stepA.toFixed(3)}"/>`;
+                                        }
                                         
                                         // Draw the star core with the white-blended color
-                                        const coreFill = `rgba(${blazeR},${blazeR},${blazeR},${sA.toFixed(3)})`;
-                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${coreFill}"/>`;
+                                        const coreFill = `rgb(${blazeR},${blazeR},${blazeR})`;
+                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${coreFill}" fill-opacity="${sA.toFixed(3)}"/>`;
                                     } else {
-                                        const fill = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
-                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
+                                        const fill = `rgb(${sR},${sR},${sR})`;
+                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}" fill-opacity="${sA.toFixed(3)}"/>`;
                                     }
                                 } else {
-                                    const fill = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
-                                    svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
+                                    const fill = `rgb(${sR},${sR},${sR})`;
+                                    svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}" fill-opacity="${sA.toFixed(3)}"/>`;
                                 }
-                                
-                                const fill = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
-                                svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}"/>`;
                             }
                         }
                     }
@@ -4758,7 +4822,8 @@
                     
                     let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
                     if (l3Alpha > 0) {
-                        addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, true, l3Alpha, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET, fx, fy);
+                        let canBlaze = zoomOutStartTime > 0 && (now - zoomOutStartTime) > CONFIG.STAR_BLAZE_DELAY;
+                        addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, canBlaze, l3Alpha, zoomOutStartTime, fx, fy);
                     }
                 }
 
@@ -4803,43 +4868,44 @@
                     const largeArc = Math.abs(endAngle - startAngle) > Math.PI ? 1 : 0;
                     return `M ${tx1.toFixed(2)} ${ty1.toFixed(2)} A ${r.toFixed(2)} ${r.toFixed(2)} 0 ${largeArc} ${sweep} ${tx2.toFixed(2)} ${ty2.toFixed(2)}`;
                 }
+                if (eCurveAlpha > 0) {
+                    for (const h of exportHexes) {
+                        const rot = tileRot(h.q, h.r);
+                        const k = (rot / 60) % 6;
+                        const alter = isTileAlter(h.q, h.r);
+                        
+                        const rad = rot * Math.PI / 180.0;
+                        const cos = Math.cos(rad);
+                        const sin = Math.sin(rad);
 
-                for (const h of exportHexes) {
-                    const rot = tileRot(h.q, h.r);
-                    const k = (rot / 60) % 6;
-                    const alter = isTileAlter(h.q, h.r);
-                    
-                    const rad = rot * Math.PI / 180.0;
-                    const cos = Math.cos(rad);
-                    const sin = Math.sin(rad);
-
-                    if (texImg) {
-                        // Skip vector logic for texture tiles
-                    } else {
-                        const a = eSz * SQRT3 / 2;
-                        if (alter) {
-                            let c = getSvgEdgeColor(h.q, h.r, (0 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz/2, a, eSz/2, Math.PI - ext, 5 * PI_DIV_3 + ext, false)); }
-                            c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false)); }
-                            c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz/2, -a, eSz/2, PI_DIV_3 - ext, Math.PI + ext, false)); }
+                        if (texImg) {
+                            // Skip vector logic for texture tiles
                         } else {
-                            let c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false)); }
-                            c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, -a, 1.5 * eSz, TWO_PI_DIV_3 - ext, Math.PI + ext, false)); }
-                            c = getSvgEdgeColor(h.q, h.r, (1 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, a, 1.5 * eSz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false)); }
-                        }
-
-                        if (showGrid) {
-                            let hexPath = "M ";
-                            for (let i = 0; i < 6; i++) {
-                                const ang = PI_DIV_3 * i;
-                                const vx = (eSz * 0.95) * Math.cos(ang);
-                                const vy = (eSz * 0.95) * Math.sin(ang);
-                                const tx_v = h.x + vx * cos - vy * sin;
-                                const ty_v = h.y + vx * sin + vy * cos;
-                                hexPath += `${tx_v.toFixed(2)} ${ty_v.toFixed(2)} `;
-                                if (i < 5) hexPath += "L ";
+                            const a = eSz * SQRT3 / 2;
+                            if (alter) {
+                                let c = getSvgEdgeColor(h.q, h.r, (0 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz/2, a, eSz/2, Math.PI - ext, 5 * PI_DIV_3 + ext, false)); }
+                                c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false)); }
+                                c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz/2, -a, eSz/2, PI_DIV_3 - ext, Math.PI + ext, false)); }
+                            } else {
+                                let c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false)); }
+                                c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, -a, 1.5 * eSz, TWO_PI_DIV_3 - ext, Math.PI + ext, false)); }
+                                c = getSvgEdgeColor(h.q, h.r, (1 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, a, 1.5 * eSz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false)); }
                             }
-                            hexPath += "Z";
-                            gridPaths.push(hexPath);
+
+                            if (showGrid) {
+                                let hexPath = "M ";
+                                for (let i = 0; i < 6; i++) {
+                                    const ang = PI_DIV_3 * i;
+                                    const vx = (eSz * 0.95) * Math.cos(ang);
+                                    const vy = (eSz * 0.95) * Math.sin(ang);
+                                    const tx_v = h.x + vx * cos - vy * sin;
+                                    const ty_v = h.y + vx * sin + vy * cos;
+                                    hexPath += `${tx_v.toFixed(2)} ${ty_v.toFixed(2)} `;
+                                    if (i < 5) hexPath += "L ";
+                                }
+                                hexPath += "Z";
+                                gridPaths.push(hexPath);
+                            }
                         }
                     }
                 }
@@ -4849,19 +4915,8 @@
                     svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"/>`;
                 }
 
-                if (gridPaths.length > 0) {
-                    const origSz = HEX_R * zoom;
-                    let gridAlpha = 1.0;
-                    if (origSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) gridAlpha = 0.0;
-                    else if (origSz < HEX_R * CONFIG.ZOOM_FADE_START_MULT) {
-                        let t = (origSz - HEX_R * CONFIG.ZOOM_FADE_END_MULT) /
-                                (HEX_R * CONFIG.ZOOM_FADE_START_MULT - HEX_R * CONFIG.ZOOM_FADE_END_MULT);
-                        gridAlpha = t * t * (3 - 2 * t);
-                    }
-                    
-                    if (gridAlpha > 0) {
-                        svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-opacity="${gridAlpha.toFixed(3)}"/>`;
-                    }
+                if (showGrid && eGridAlpha > 0 && gridPaths.length > 0) {
+                    svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-opacity="${eGridAlpha.toFixed(3)}"/>`;
                 }
 
                 svg += `</svg>`;
@@ -5059,6 +5114,17 @@
                 const ePanX = (panX - fx) * scale;
                 const ePanY = (panY - fy) * (eH / fh);
 
+                const origSz = HEX_R * zoom;
+                let eCurveAlpha = 1.0, eGridAlpha = 1.0;
+                const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
+                const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
+                if (origSz <= fadeEndSz + 0.5) { eCurveAlpha = 0; eGridAlpha = 0; }
+                else if (origSz < fadeStartSz) {
+                    let t = (origSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+                    eCurveAlpha = t * t * (3 - 2 * t);
+                    eGridAlpha = eCurveAlpha;
+                }
+
                 const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
 
                 const centerHex = pixToHex(eW / 2, eH / 2, eZoom, ePanX, ePanY);
@@ -5075,7 +5141,8 @@
                     if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
                 }
 
-                if (curveColors.length >= 1) {
+                // SKIP PROCESS QUEUE IF CURVES ARE INVISIBLE!
+                if (curveColors.length >= 1 && eCurveAlpha > 0) {
                     let safety = 2000;
                     while (safety-- > 0) {
                         processQueue(exportBounds, true); 
@@ -5087,7 +5154,7 @@
 
                 const oldCtx = ctx;
                 ctx = offCtx;
-                const now = Date.now();
+                const now = exportFreezeTime || Date.now();
 
                 offCtx.fillStyle = COLORS.bg;
                 offCtx.fillRect(0, 0, eW, eH);
@@ -5101,20 +5168,9 @@
                 const expStarPanX3 = (starPanX3 - fx) * scale;
                 const expStarPanY3 = (starPanY3 - fy) * scale;
                 
-                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, now - CONFIG.EXPORT_BLAZE_TIME_OFFSET, fx, fy);
+                drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, zoomOutStartTime, fx, fy);
 
                 const eSz = HEX_R * eZoom;
-                const origSz = HEX_R * zoom;
-                let eCurveAlpha = 1.0, eGridAlpha = 1.0;
-                const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
-                const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-                if (origSz <= fadeEndSz) { eCurveAlpha = 0; eGridAlpha = 0; }
-                else if (origSz < fadeStartSz) {
-                    let t = (origSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-                    eCurveAlpha = t * t * (3 - 2 * t);
-                    eGridAlpha = eCurveAlpha;
-                }
-
                 for (const h of hexes) {
                     const rot = tileRot(h.q, h.r);
                     drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r, now, eCurveAlpha, eGridAlpha);
@@ -5183,6 +5239,7 @@
 
                 const data = {
                     w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
+                    origZoom: zoom,
                     showGrid, showUnrenderedDotted, markersVisible: false, showBgStars, flowEnabled, inertiaEnabled,
                     rotMode, randomSeed, rotSeed, curveLineWidth, alterTilesRatio,
                     texTf: { ...texTf },
@@ -5259,6 +5316,7 @@
             if (isEmbedMode && embedData) {
                 // ── Embed mode: load state from data ──
                 zoom = embedData.zoom;
+                targetZoom = zoom;
                 panX = embedData.panX;
                 panY = embedData.panY;
                 showGrid = embedData.showGrid;
@@ -5305,6 +5363,12 @@
                     curveMap.clear(); edgeRgbMap.clear();
                     curves.clear(); queue = [];
                     initializeCentralTile();
+                    
+                    // Kickstart blazing stars if the embed is at 20% zoom
+                    if (embedData.origZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
+                        zoomOutStartTime = Date.now() - CONFIG.STAR_BLAZE_DELAY - 1000;
+                    }
+                    
                     render();
                 }
 
