@@ -1208,6 +1208,8 @@
             let dragMarkerOffsetX = 0;
             let dragMarkerOffsetY = 0;
             let gradientCanvas = null;
+            let curveCanvas = document.createElement('canvas');
+            let curveCtx = curveCanvas.getContext('2d');
             let markersVisible = true;
 
             let curveColors = ['#444444']; // Target colors
@@ -3162,9 +3164,42 @@
 
                 const lod = visSz > CONFIG.LOD_HIGH_SZ ? 2 : (visSz > CONFIG.LOD_MED_SZ ? 1 : 0);
 
-                for (const h of hexes) {
-                    const rot = displayRot(h.q, h.r, now);
-                    drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r, now, curveAlpha, gridAlpha);
+                if (img) {
+                    // Textures: draw directly (textures don't fade)
+                    for (const h of hexes) {
+                        const rot = displayRot(h.q, h.r, now);
+                        drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r, now, curveAlpha, gridAlpha);
+                    }
+                } else if (curveAlpha > 0.01 || gridAlpha > 0.01) {
+                    if (curveAlpha < 0.99 || gridAlpha < 0.99) {
+                        // Fading curves/grid: render to offscreen canvas to avoid per-tile alpha blending
+                        if (curveCanvas.width !== W || curveCanvas.height !== H) {
+                            curveCanvas.width = W;
+                            curveCanvas.height = H;
+                        }
+                        curveCtx.clearRect(0, 0, W, H);
+                        
+                        // Swap context to offscreen
+                        const oldCtx = ctx;
+                        ctx = curveCtx;
+                        
+                        for (const h of hexes) {
+                            const rot = displayRot(h.q, h.r, now);
+                            drawTile(h.x, h.y, sz, rot, grid, null, tf, h.q, h.r, now, 1.0, 1.0);
+                        }
+                        
+                        // Restore main context and draw the single composited image with alpha
+                        ctx = oldCtx;
+                        ctx.globalAlpha = curveAlpha;
+                        ctx.drawImage(curveCanvas, 0, 0);
+                        ctx.globalAlpha = 1.0;
+                    } else {
+                        // Fully opaque: draw directly (fastest path)
+                        for (const h of hexes) {
+                            const rot = displayRot(h.q, h.r, now);
+                            drawTile(h.x, h.y, sz, rot, grid, null, tf, h.q, h.r, now, 1.0, 1.0);
+                        }
+                    }
                 }
 
                 if (lod >= 1 && visZoom > CONFIG.ZOOM_FADE_MID + 0.001 && !isExporting) {
