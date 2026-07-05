@@ -1641,8 +1641,8 @@
                 return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
             }
 
-            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime, offsetX = 0, offsetY = 0) {
-                if (spacing < CONFIG.STAR_MIN_SPACING) return; 
+            function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime, offsetX = 0, offsetY = 0, blazeFade = 1.0) {
+                if (spacing < CONFIG.STAR_MIN_SPACING) return;
                 
                 const kMin = Math.floor((0 - panX) / spacing) - 2;
                 const kMax = Math.ceil((W - panX) / spacing) + 2;
@@ -1686,28 +1686,30 @@
                             
                             if (phase < blazeDuration) { 
                                 let blazeT = phase / blazeDuration;
-                                let blazeIntensity = Math.sin(blazeT * Math.PI); 
+                                let blazeIntensity = Math.sin(blazeT * Math.PI) * blazeFade; // <-- APPLY FADE HERE
                                 
-                                drawSize = drawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeIntensity); 
-                                sA = Math.min(1, sA + 0.5 * blazeIntensity);
-                                
-                                // Affect gradient around star with a generous radius
-                                const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale; // 180px to 300px
-                                const glow = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
-                                glow.addColorStop(0, `rgba(255, 255, 240, ${0.4 * blazeIntensity})`);
-                                glow.addColorStop(0.4, `rgba(150, 200, 255, ${0.2 * blazeIntensity})`);
-                                glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                                
-                                ctx.save();
-                                ctx.globalCompositeOperation = 'lighter'; // Additive blending to affect gradient
-                                ctx.fillStyle = glow;
-                                ctx.beginPath();
-                                ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
-                                ctx.fill();
-                                ctx.restore();
-                                
-                                // Interpolate star color towards white during blaze
-                                sR = Math.round(sR + (255 - sR) * blazeIntensity);
+                                if (blazeIntensity > 0) {
+                                    drawSize = drawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeIntensity); 
+                                    sA = Math.min(1, sA + 0.5 * blazeIntensity);
+                                    
+                                    // Affect gradient around star with a generous radius
+                                    const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale; // 180px to 300px
+                                    const glow = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
+                                    glow.addColorStop(0, `rgba(255, 255, 240, ${0.4 * blazeIntensity})`);
+                                    glow.addColorStop(0.4, `rgba(150, 200, 255, ${0.2 * blazeIntensity})`);
+                                    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                                    
+                                    ctx.save();
+                                    ctx.globalCompositeOperation = 'lighter'; // Additive blending to affect gradient
+                                    ctx.fillStyle = glow;
+                                    ctx.beginPath();
+                                    ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+                                    ctx.fill();
+                                    ctx.restore();
+                                    
+                                    // Interpolate star color towards white during blaze
+                                    sR = Math.round(sR + (255 - sR) * blazeIntensity);
+                                }
                             }
                         }
                         
@@ -1724,24 +1726,35 @@
                 
                 ctx.save();
                 
+                // Layer 1: Size 7, medium spacing, fastest parallax
                 const spacing5 = CONFIG.STAR_SPACING_LARGE * starZoom5 * coordScale;
                 drawDotLayer(W, H, spacing5, CONFIG.STAR_SIZE_LARGE, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0, offsetX, offsetY);
                 
+                // Layer 2: Size 4, densest spacing, medium parallax
                 const spacing2 = CONFIG.STAR_SPACING_MED * starZoom2 * coordScale;
                 drawDotLayer(W, H, spacing2, CONFIG.STAR_SIZE_MED, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0, offsetX, offsetY);
                 
+                // Layer 3: Size 2, least dense, slowest parallax. Fades in at low zoom.
                 let layer3Alpha = 0;
                 let canBlaze = false;
+                let blazeFade = 1.0;
                 if (currentZoom < CONFIG.ZOOM_BLAZE_FADE_START + 0.001) {
+                    // Fade in smoothly
                     layer3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - currentZoom) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
+                    // Allow blazing only if delay has passed
                     if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > CONFIG.STAR_BLAZE_DELAY) {
                         canBlaze = true;
+                        // Calculate global fade-in for blazing effect (3 seconds)
+                        const fadeInDur = 3000;
+                        let fadeT = (now - zoomOutTime - CONFIG.STAR_BLAZE_DELAY) / fadeInDur;
+                        blazeFade = Math.max(0, Math.min(1, fadeT));
+                        blazeFade = blazeFade * blazeFade * (3 - 2 * blazeFade); // Smoothstep
                     }
                 }
                 
                 if (layer3Alpha > 0) {
                     const spacing3 = CONFIG.STAR_SPACING_SMALL * starZoom3 * coordScale;
-                    drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime, offsetX, offsetY);
+                    drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime, offsetX, offsetY, blazeFade);
                 }
                 
                 ctx.restore();
@@ -3059,61 +3072,63 @@
                 let driftX = 0, driftY = 0;
                 if (flowEnabled && !isExporting) {
                     let speedMult = (visZoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
+                    let isHovering = hoveredQ !== null && hoveredR !== null;
                     
-                    if (hoveredQ !== null && hoveredR !== null) {
-                        // Hover detected: target opposite direction from center-screen to cursor
-                        const cx = W / 2;
-                        const cy = H / 2;
-                        const dx = mouseScreenX - cx;
-                        const dy = mouseScreenY - cy;
-                        
-                        driftTargetAngle = Math.atan2(dy, dx) + Math.PI;
-                        
-                        // Slowly turn towards the target angle
-                        let angleDiff = driftTargetAngle - driftAngle;
-                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                        driftAngle += angleDiff * 0.03;
-                    } else {
-                        if (now > flowStateEndTime) {
-                            if (flowState === 'drift') {
-                                // Transition to turning
-                                flowState = 'turn';
-                                flowStateEndTime = now + CONFIG.FLOW_TURN_DURATION;
-                                
-                                // Pick new angle using a cardioid-like distribution (peaked forward)
-                                let turnAmount = 0;
-                                while (true) {
-                                    let theta = (Math.random() - 0.5) * Math.PI * 2; // -PI to PI
-                                    let y = Math.random();
-                                    // The cardioid probability function (1 + cos(theta)) / 2
-                                    if (y <= (1 + Math.cos(theta)) / 2) {
-                                        turnAmount = theta;
-                                        break;
-                                    }
-                                }
-                                driftTargetAngle = driftAngle + turnAmount;
-                            } else {
-                                // Transition back to drifting
-                                flowState = 'drift';
-                                driftAngle = driftTargetAngle; // Snap to target to prevent residual drift
-                                flowStateEndTime = now + CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE;
-                                
-                                // Set new base speed for this drift segment
-                                driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult;
+                    // If hovering started during a long drift, interrupt it so the new angle picks quickly (within 2s)
+                    if (isHovering && flowState === 'drift' && (flowStateEndTime - now) > 2000) {
+                        flowStateEndTime = now + 2000;
+                    }
+                    
+                    if (now > flowStateEndTime) {
+                        if (flowState === 'drift') {
+                            // Transition to turning
+                            flowState = 'turn';
+                            // 1s turn while hovering, normal 3s turn otherwise
+                            flowStateEndTime = now + (isHovering ? 1000 : CONFIG.FLOW_TURN_DURATION);
+                            
+                            // Determine base angle: opposite of mouse vector if hovering, else current drift
+                            let baseAngle = driftAngle;
+                            if (isHovering) {
+                                const cx = W / 2;
+                                const cy = H / 2;
+                                const dx = mouseScreenX - cx;
+                                const dy = mouseScreenY - cy;
+                                baseAngle = Math.atan2(dy, dx) + Math.PI; // Opposite of mouse vector
                             }
-                        }
-                        
-                        if (flowState === 'turn') {
-                            // Slow rotation of velocity vector
-                            let angleDiff = driftTargetAngle - driftAngle;
-                            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                            driftAngle += angleDiff * 0.03; 
+                            
+                            // Pick new angle using a cardioid-like distribution around the baseAngle
+                            let turnAmount = 0;
+                            while (true) {
+                                let theta = (Math.random() - 0.5) * Math.PI * 2; // -PI to PI
+                                let y = Math.random();
+                                // The cardioid probability function (1 + cos(theta)) / 2
+                                if (y <= (1 + Math.cos(theta)) / 2) {
+                                    turnAmount = theta;
+                                    break;
+                                }
+                            }
+                            driftTargetAngle = baseAngle + turnAmount;
+                        } else {
+                            // Transition back to drifting
+                            flowState = 'drift';
+                            driftAngle = driftTargetAngle; // Snap to target to prevent residual drift
+                            // 5s drift while hovering, normal 10-20s drift otherwise
+                            flowStateEndTime = now + (isHovering ? 5000 : (CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE));
+                            
+                            // Set new base speed for this drift segment
+                            driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult;
                         }
                     }
                     
-                    // Random fluctuations of absolute speed during drift (applies to both hover and normal)
+                    if (flowState === 'turn') {
+                        // Slow rotation of velocity vector
+                        let angleDiff = driftTargetAngle - driftAngle;
+                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                        driftAngle += angleDiff * 0.03; 
+                    }
+                    
+                    // Random fluctuations of absolute speed during drift
                     let fluctuation = Math.sin(now / 800) * 0.2 + Math.sin(now / 350) * 0.1;
                     let currentTargetSpeed = driftTargetSpeed + (driftTargetSpeed * fluctuation);
                     driftSpeed += (currentTargetSpeed - driftSpeed) * 0.02;
@@ -4734,7 +4749,7 @@
                     const spacing2 = CONFIG.STAR_SPACING_MED * starZoom2 * scale;
                     const spacing3 = CONFIG.STAR_SPACING_SMALL * starZoom3 * scale;
 
-                    function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime, offsetX, offsetY) {
+                    function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime, offsetX, offsetY, blazeFade = 1.0) {
                         if (spacing < CONFIG.STAR_MIN_SPACING) return;
                         const kMin = Math.floor((0 - panX) / spacing) - 2;
                         const kMax = Math.ceil((eW - panX) / spacing) + 2;
@@ -4777,41 +4792,44 @@
                                     
                                     if (phase < blazeDuration) {
                                         let blazeT = phase / blazeDuration;
-                                        let blazeIntensity = Math.sin(blazeT * Math.PI);
-                                        r = r * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeIntensity); 
-                                        sA = Math.min(1, sA + 0.5 * blazeIntensity);
+                                        let blazeIntensity = Math.sin(blazeT * Math.PI) * blazeFade;
                                         
-                                        // Interpolate star color towards white during blaze
-                                        const blazeR = Math.round(sR + (255 - sR) * blazeIntensity);
-                                        const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
-                                        
-                                        // Smooth Blue outer glow
-                                        const steps = 90;
-                                        for (let s = steps; s > 0; s--) {
-                                            const stepT = s / steps;
-                                            const stepR = glowRadius * stepT;
-                                            const stepA = (0.02 * blazeIntensity) * Math.pow(1 - stepT, 1.5);
-                                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(150, 200, 255)" fill-opacity="${stepA.toFixed(3)}"/>`;
+                                        if (blazeIntensity > 0) {
+                                            r = r * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeIntensity); 
+                                            sA = Math.min(1, sA + 0.5 * blazeIntensity);
+                                            
+                                            // Interpolate star color towards white during blaze
+                                            const blazeR = Math.round(sR + (255 - sR) * blazeIntensity);
+                                            const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
+                                            
+                                            // Smooth Blue outer glow
+                                            const steps = 25;
+                                            for (let s = steps; s > 0; s--) {
+                                                const stepT = s / steps;
+                                                const stepR = glowRadius * stepT;
+                                                const stepA = (0.2 * blazeIntensity) * Math.pow(1 - stepT, 1.5);
+                                                svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(150, 200, 255)" fill-opacity="${stepA.toFixed(3)}"/>`;
+                                            }
+                                            // Smooth White inner glow
+                                            const steps2 = 15;
+                                            for (let s = steps2; s > 0; s--) {
+                                                const stepT = s / steps2;
+                                                const stepR = glowRadius * 0.5 * stepT;
+                                                const stepA = (0.4 * blazeIntensity) * Math.pow(1 - stepT, 1.5);
+                                                svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(255, 255, 240)" fill-opacity="${stepA.toFixed(3)}"/>`;
+                                            }
+                                            
+                                            // Draw the star core with the white-blended color
+                                            const coreFill = `rgb(${blazeR},${blazeR},${blazeR})`;
+                                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${coreFill}" fill-opacity="${sA.toFixed(3)}"/>`;
+                                        } else {
+                                            const fill = `rgb(${sR},${sR},${sR})`;
+                                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}" fill-opacity="${sA.toFixed(3)}"/>`;
                                         }
-                                        // Smooth White inner glow
-                                        const steps2 = 45;
-                                        for (let s = steps2; s > 0; s--) {
-                                            const stepT = s / steps2;
-                                            const stepR = glowRadius * 0.5 * stepT;
-                                            const stepA = (0.04 * blazeIntensity) * Math.pow(1 - stepT, 1.5);
-                                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(255, 255, 240)" fill-opacity="${stepA.toFixed(3)}"/>`;
-                                        }
-                                        
-                                        // Draw the star core with the white-blended color
-                                        const coreFill = `rgb(${blazeR},${blazeR},${blazeR})`;
-                                        svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${coreFill}" fill-opacity="${sA.toFixed(3)}"/>`;
                                     } else {
                                         const fill = `rgb(${sR},${sR},${sR})`;
                                         svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}" fill-opacity="${sA.toFixed(3)}"/>`;
                                     }
-                                } else {
-                                    const fill = `rgb(${sR},${sR},${sR})`;
-                                    svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${fill}" fill-opacity="${sA.toFixed(3)}"/>`;
                                 }
                             }
                         }
@@ -4823,7 +4841,7 @@
                     let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
                     if (l3Alpha > 0) {
                         let canBlaze = zoomOutStartTime > 0 && (now - zoomOutStartTime) > CONFIG.STAR_BLAZE_DELAY;
-                        addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, canBlaze, l3Alpha, zoomOutStartTime, fx, fy);
+                        addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, canBlaze, l3Alpha, zoomOutStartTime, fx, fy, 1.0);
                     }
                 }
 
