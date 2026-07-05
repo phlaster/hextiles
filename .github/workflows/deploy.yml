@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
@@ -27,20 +27,12 @@ jobs:
       - name: Inject Deploy Info
         run: |
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          DEPLOY_DATE=$(date -u +"%Y-%m-%d")
+          DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           REPLACE_STR="Deployed: ${DEPLOY_DATE} (SHA: ${COMMIT_HASH})"
-          echo "Attempting to replace placeholder with: $REPLACE_STR"
-          
-          if grep -q "__DEPLOY_INFO__" index.html; then
-            echo "Placeholder found in index.html. Replacing..."
-            sed -i "s|__DEPLOY_INFO__|${REPLACE_STR}|g" index.html
-          else
-            echo "ERROR: Placeholder __DEPLOY_INFO__ NOT found in index.html!"
-          fi
-          
-          echo "----- Verification (last 10 lines of index.html) -----"
-          tail -n 10 index.html
-          echo "-----------------------------------------------------"
+          echo "Replacing placeholder with: $REPLACE_STR"
+          sed -i "s|__DEPLOY_INFO__|$REPLACE_STR|g" index.html
+          echo "Verification:"
+          grep "Deployed:" index.html || echo "Warning: Placeholder not found!"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
