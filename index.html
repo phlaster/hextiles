@@ -3479,12 +3479,18 @@
             let sbDragging = false;
             
             sidebar.addEventListener('touchstart', e => {
-                if (!sidebar.classList.contains('collapsed')) {
-                    sbTouchStartX = e.touches[0].clientX;
-                    sbTouchStartY = e.touches[0].clientY;
-                    sbDragging = false;
-                    sidebar.style.transition = 'none';
+                if (sidebar.classList.contains('collapsed')) return;
+                
+                const targetTag = e.target.tagName;
+                if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'BUTTON' || targetTag === 'SELECT') {
+                    sbTouchStartX = null; 
+                    return;
                 }
+                
+                sbTouchStartX = e.touches[0].clientX;
+                sbTouchStartY = e.touches[0].clientY;
+                sbDragging = false;
+                sidebar.style.transition = 'none';
             }, { passive: true });
             
             sidebar.addEventListener('touchmove', e => {
