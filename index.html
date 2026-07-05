@@ -2510,17 +2510,9 @@
                     });
                     colorInput.addEventListener('change', (e) => {
                         const newColor = e.target.value.toLowerCase();
-                        const isDuplicate = gradientMarkers.some((mm, idx) =>
-                            idx !== i && mm.color.toLowerCase() === newColor);
-                        if (isDuplicate) {
-                            gradientMarkers[i].color = originalColor;
-                            e.target.value = originalColor;
-                            hexInput.value = originalColor.toUpperCase();
-                            toast('Color already exists in gradient');
-                        } else {
-                            originalColor = e.target.value;
-                            updateGradientMarkersCache();
-                        }
+                        gradientMarkers[i].color = newColor;
+                        originalColor = newColor;
+                        updateGradientMarkersCache();
                     });
                     colorInput.addEventListener('click', (e) => e.stopPropagation());
 
@@ -2534,21 +2526,14 @@
                         if (!val.startsWith('#')) val = '#' + val;
                         if (/^#[0-9A-F]{6}$/i.test(val)) {
                             const newColor = val.toLowerCase();
-                            const isDuplicate = gradientMarkers.some((mm, idx) =>
-                                idx !== i && mm.color.toLowerCase() === newColor);
-                            if (isDuplicate) {
-                                toast('Color already exists in gradient');
-                                e.target.value = m.color.toUpperCase();
-                            } else {
-                                gradientMarkers[i].color = newColor;
-                                originalColor = newColor;
-                                updateGradientMarkersCache();
-                                colorInput.value = newColor;
-                                e.target.value = newColor.toUpperCase();
-                            }
+                            gradientMarkers[i].color = newColor;
+                            originalColor = newColor;
+                            updateGradientMarkersCache();
+                            colorInput.value = newColor;
+                            e.target.value = newColor.toUpperCase();
                         } else {
                             toast('Invalid hex color (e.g. #FF0000)');
-                            e.target.value = m.color.toUpperCase();
+                            e.target.value = gradientMarkers[i].color.toUpperCase();
                         }
                     });
                     hexInput.addEventListener('click', (e) => e.stopPropagation());
@@ -2616,8 +2601,10 @@
                             e.target.value = originalColor;
                             hexInput.value = originalColor.toUpperCase();
                             toast('Color already exists in curve palette');
+                            updateCurveColorsCache(); // Must revert target RGB!
                         } else {
-                            originalColor = e.target.value;
+                            curveColors[i] = newColor; // Explicitly set
+                            originalColor = newColor;
                             updateCurveColorsCache();
                         }
                     });
@@ -2637,7 +2624,7 @@
                                 idx !== i && mm.toLowerCase() === newColor);
                             if (isDuplicate) {
                                 toast('Color already exists in curve palette');
-                                e.target.value = m.toUpperCase();
+                                e.target.value = curveColors[i].toUpperCase();
                             } else {
                                 curveColors[i] = newColor;
                                 originalColor = newColor;
@@ -2647,7 +2634,7 @@
                             }
                         } else {
                             toast('Invalid hex color (e.g. #FF0000)');
-                            e.target.value = m.toUpperCase();
+                            e.target.value = curveColors[i].toUpperCase();
                         }
                     });
                     hexInput.addEventListener('click', (e) => e.stopPropagation());
