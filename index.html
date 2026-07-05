@@ -780,11 +780,11 @@
 
         /* ── Sidebar Transition ── */
         .sidebar {
-            transition: margin-right .3s cubic-bezier(.4,0,.2,1);
+            transition: transform .3s cubic-bezier(.4,0,.2,1);
             flex-shrink: 0;
         }
         .sidebar.collapsed {
-            margin-right: -310px; /* Pulls sidebar completely off-screen */
+            transform: translateX(calc(100% + 10px));
             overflow: hidden;
         }
 
@@ -3457,6 +3457,7 @@
             // ──── Sidebar Toggle & Resize Handling ────
             const sidebarToggle = document.getElementById('sidebarToggle');
             const sidebar = document.querySelector('.sidebar');
+            
             sidebarToggle.addEventListener('click', () => {
                 sidebar.classList.toggle('collapsed');
                 sidebarToggle.classList.toggle('collapsed');
@@ -3472,10 +3473,10 @@
             } else if (!isEmbedMode) {
                 window.addEventListener('resize', resize);
             }
-            
+
             // ──── Sidebar Swipe to Collapse ────
-            let sbTouchStartX = 0;
-            let sbTouchStartY = 0;
+            let sbTouchStartX = null;
+            let sbTouchStartY = null;
             let sbDragging = false;
             
             sidebar.addEventListener('touchstart', e => {
@@ -3483,20 +3484,20 @@
                     sbTouchStartX = e.touches[0].clientX;
                     sbTouchStartY = e.touches[0].clientY;
                     sbDragging = false;
+                    sidebar.style.transition = 'none';
                 }
             }, { passive: true });
             
             sidebar.addEventListener('touchmove', e => {
-                if (sbTouchStartX === 0) return;
+                if (sbTouchStartX === null) return;
                 const dx = e.touches[0].clientX - sbTouchStartX;
                 const dy = e.touches[0].clientY - sbTouchStartY;
                 
                 if (!sbDragging) {
                     if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
                         sbDragging = true;
-                        sidebar.style.transition = 'none';
                     } else if (Math.abs(dy) > 10) {
-                        sbTouchStartX = 0; // Vertical scroll, abort swipe
+                        sbTouchStartX = null; // Vertical scroll, abort swipe
                         return;
                     }
                 }
@@ -3512,20 +3513,125 @@
             }, { passive: false });
             
             sidebar.addEventListener('touchend', e => {
-                if (sbTouchStartX === 0) return;
+                if (sbTouchStartX === null) return;
                 const dx = e.changedTouches[0].clientX - sbTouchStartX;
                 
-                sidebar.style.transition = '';
-                sidebar.style.transform = '';
+                sidebar.style.transition = ''; // Re-enable transition
                 
                 if (sbDragging && dx > 80) {
+                    // Close it
                     sidebar.classList.add('collapsed');
                     document.body.classList.add('sidebar-collapsed');
-                    document.getElementById('sidebarToggle').classList.add('collapsed');
+                    sidebarToggle.classList.add('collapsed');
+                    // Explicitly animate to target to prevent snap
+                    sidebar.style.transform = 'translateX(calc(100% + 10px))';
+                    setTimeout(() => { sidebar.style.transform = ''; }, 300);
+                } else {
+                    // Snap back to open
+                    sidebar.style.transform = '';
                 }
                 
-                sbTouchStartX = 0;
+                sbTouchStartX = null;
                 sbDragging = false;
+            });
+
+            // ──── Chevron Button Drag (Open/Close) ────
+            let sbToggleDragging = false;
+            let sbToggleStartX = 0;
+            let sbToggleCurrentX = 0;
+
+            sidebarToggle.addEventListener('touchstart', e => {
+                if (e.touches.length !== 1) return;
+                sbToggleDragging = true;
+                sbToggleStartX = e.touches[0].clientX;
+                sbToggleCurrentX = e.touches[0].clientX;
+                
+                sidebar.style.transition = 'none';
+                sidebarToggle.style.transition = 'none';
+                e.preventDefault();
+            }, { passive: false });
+
+            sidebarToggle.addEventListener('touchmove', e => {
+                if (!sbToggleDragging) return;
+                sbToggleCurrentX = e.touches[0].clientX;
+                let dx = sbToggleCurrentX - sbToggleStartX;
+                let isCollapsed = sidebar.classList.contains('collapsed');
+
+                if (isCollapsed) {
+                    if (dx < 0) {
+                        let moveX = Math.max(dx, -CONFIG.SIDEBAR_WIDTH);
+                        sidebar.style.transform = `translateX(calc(100% + 10px + ${moveX}px))`;
+                        sidebarToggle.style.transform = `translateX(${moveX}px)`;
+                    }
+                } else {
+                    if (dx > 0) {
+                        let moveX = Math.min(dx, CONFIG.SIDEBAR_WIDTH);
+                        sidebar.style.transform = `translateX(${moveX}px)`;
+                        sidebarToggle.style.transform = `translateX(calc(50% + ${moveX}px))`;
+                    }
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            sidebarToggle.addEventListener('touchend', e => {
+                if (!sbToggleDragging) return;
+                sbToggleDragging = false;
+                let dx = sbToggleCurrentX - sbToggleStartX;
+                let isCollapsed = sidebar.classList.contains('collapsed');
+
+                // Restore transitions
+                sidebar.style.transition = '';
+                sidebarToggle.style.transition = '';
+
+                // Handle as a tap if barely moved
+                if (Math.abs(dx) < 10) {
+                    if (isCollapsed) {
+                        sidebar.classList.remove('collapsed');
+                        document.body.classList.remove('sidebar-collapsed');
+                        sidebarToggle.classList.remove('collapsed');
+                    } else {
+                        sidebar.classList.add('collapsed');
+                        document.body.classList.add('sidebar-collapsed');
+                        sidebarToggle.classList.add('collapsed');
+                    }
+                    sidebar.style.transform = '';
+                    sidebarToggle.style.transform = '';
+                } else if (isCollapsed) {
+                    if (dx < -80) {
+                        // Open it
+                        sidebar.classList.remove('collapsed');
+                        document.body.classList.remove('sidebar-collapsed');
+                        sidebarToggle.classList.remove('collapsed');
+                        sidebar.style.transform = '';
+                        sidebarToggle.style.transform = '';
+                    } else {
+                        // Snap back to closed
+                        sidebar.style.transform = 'translateX(calc(100% + 10px))';
+                        sidebarToggle.style.transform = 'translateX(0)';
+                        setTimeout(() => {
+                            sidebar.style.transform = '';
+                            sidebarToggle.style.transform = '';
+                        }, 300);
+                    }
+                } else {
+                    if (dx > 80) {
+                        // Close it
+                        sidebar.classList.add('collapsed');
+                        document.body.classList.add('sidebar-collapsed');
+                        sidebarToggle.classList.add('collapsed');
+                        sidebar.style.transform = 'translateX(calc(100% + 10px))';
+                        sidebarToggle.style.transform = 'translateX(0)';
+                        setTimeout(() => {
+                            sidebar.style.transform = '';
+                            sidebarToggle.style.transform = '';
+                        }, 300);
+                    } else {
+                        // Snap back to open
+                        sidebar.style.transform = '';
+                        sidebarToggle.style.transform = '';
+                    }
+                }
+                e.preventDefault();
             });
 
             function scheduleMagnetZoom() {
@@ -3797,16 +3903,23 @@
                 } else if (touchState.mode === 'marker_drag') {
                     isDragMarker = false;
                     draggedMarkerIndex = -1;
-                } else if (touchState.mode === 'pan') {
-                    if (!dragMoved) {
+                } else if (touchState.mode === 'pan_wait') {
+                    clearTimeout(touchState.timer);
+                    const now = Date.now();
+                    if (now - lastTapTime < 300) {
+                        // Double tap on empty space (ignored)
+                        lastTapTime = 0;
+                    } else {
+                        lastTapTime = now;
+                        // Single tap on empty grid - Rotate tile!
                         const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
                         rotateTile(h.q, h.r);
                         touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); 
-                    } else {
+                    }
+                } else if (touchState.mode === 'pan') {
+                    if (dragMoved) {
                         checkIfSolved();
                     }
-                } else if (touchState.mode === 'pan_wait') {
-                    clearTimeout(touchState.timer);
                 } else if (touchState.mode === 'draw') {
                     panVX = 0; panVY = 0;
                 }
