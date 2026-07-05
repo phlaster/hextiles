@@ -769,6 +769,32 @@
             opacity: 1;
             color: var(--col-accent);
         }
+                .fullscreen-btn {
+            position: absolute;
+            top: 12px;
+            left: 10px;
+            width: 34px;
+            height: 34px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(19, 19, 42, 0.5);
+            color: rgba(230, 230, 240, 0.8);
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s;
+            z-index: 10;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .fullscreen-btn:hover {
+            background: var(--col-accent);
+            color: #fff;
+            transform: scale(1.08);
+        }
 
         /* ── Mobile: Hide zoom controls ── */
         @media (max-width: 768px) {
@@ -842,6 +868,7 @@
 
     <div id="canvas-wrap">
         <canvas id="hexCanvas"></canvas>
+        <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle Fullscreen"><i class="fas fa-expand"></i></button>
         <div class="zoom-bar">
             <button id="zoomOut" title="Zoom out"><i class="fas fa-minus"></i></button>
             <span class="zlabel" id="zoomLabel">100%</span>
@@ -1508,6 +1535,53 @@
                 flowToggle: document.getElementById('flowToggle'),
                 inertiaToggle: document.getElementById('inertiaToggle'),
             };
+
+            // ──── Fullscreen Toggle ────
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            
+            fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        toast('Fullscreen mode not allowed');
+                    });
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                }
+            });
+
+            let wasSidebarOpenBeforeFullscreen = false;
+
+            document.addEventListener('fullscreenchange', () => {
+                const icon = fullscreenBtn.querySelector('i');
+                if (document.fullscreenElement) {
+                    icon.classList.remove('fa-expand');
+                    icon.classList.add('fa-compress');
+                    
+                    // Save sidebar state and hide it
+                    wasSidebarOpenBeforeFullscreen = !sidebar.classList.contains('collapsed');
+                    if (wasSidebarOpenBeforeFullscreen) {
+                        sidebar.classList.add('collapsed');
+                        document.body.classList.add('sidebar-collapsed');
+                        sidebarToggle.classList.add('collapsed');
+                    }
+                } else {
+                    icon.classList.remove('fa-compress');
+                    icon.classList.add('fa-expand');
+                    
+                    // Restore sidebar if it was open before fullscreen
+                    if (wasSidebarOpenBeforeFullscreen) {
+                        sidebar.classList.remove('collapsed');
+                        document.body.classList.remove('sidebar-collapsed');
+                        sidebarToggle.classList.remove('collapsed');
+                    }
+                }
+                
+                // Force a resize check so the canvas fills the new screen size
+                resize();
+                requestRender();
+            });
 
             let ctx = dom.cvs.getContext('2d');
 
