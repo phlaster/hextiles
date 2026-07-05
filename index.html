@@ -1221,6 +1221,9 @@
             let isDragMarker = false;
             let dragMarkerOffsetX = 0;
             let dragMarkerOffsetY = 0;
+            let interactionFade = 1.0;
+            let targetInteractionFade = 1.0;
+            let targetMarkerTouchScale = 1.0;
             let gradientCanvas = null;
             let curveCanvas = document.createElement('canvas');
             let curveCtx = curveCanvas.getContext('2d');
@@ -3157,6 +3160,12 @@
                     gridAlpha = curveAlpha;
                 }
 
+                interactionFade += (targetInteractionFade - interactionFade) * 0.2;
+                if (Math.abs(targetInteractionFade - interactionFade) > 0.001) keepRendering = true;
+
+                curveAlpha *= interactionFade;
+                gridAlpha *= interactionFade;
+
                 let hexes = [];
                 if (img || curveAlpha > 0 || gridAlpha > 0) {
                     hexes = visibleHexes(z, px, py, W, H); 
@@ -3275,7 +3284,13 @@
                     for (let i = 0; i < gradientMarkers.length; i++) {
                         const m = gradientMarkers[i];
                         const outline = getContrastColor(m.color);
-                        drawSunMarker(ctx, m.x, m.y, m.color, outline, 1);
+                        let scale = 1.0;
+                        if (touchState.mode === 'marker_wait' && i === touchState.markerIdx && touchState.startTime) {
+                            const progress = Math.min(1, (now - touchState.startTime) / CONFIG.LONG_PRESS_DUR);
+                            scale = 1.0 + 2.0 * progress;
+                            keepRendering = true;
+                        }
+                        drawSunMarker(ctx, m.x, m.y, m.color, outline, scale);
                     }
                 }
 
@@ -3650,6 +3665,7 @@
                 pinchCenterX: 0,
                 pinchCenterY: 0,
                 markerIdx: -1,
+                startTime: 0,
                 timer: null
             };
 
@@ -3688,6 +3704,7 @@
                             touchState.markerIdx = clickedMarkerIdx;
                             touchState.startX = tx;
                             touchState.startY = ty;
+                            touchState.startTime = Date.now();
                             touchState.timer = setTimeout(() => {
                                 if (touchState.mode === 'marker_wait') {
                                     touchState.mode = 'marker_drag';
@@ -3695,10 +3712,13 @@
                                     draggedMarkerIndex = touchState.markerIdx;
                                     dragMarkerOffsetX = touchState.startX - gradientMarkers[touchState.markerIdx].x;
                                     dragMarkerOffsetY = touchState.startY - gradientMarkers[touchState.markerIdx].y;
+                                    targetInteractionFade = 0.0; // Hide grid/curves ONLY when long-press completes
                                     if (navigator.vibrate) navigator.vibrate(CONFIG.HAPTIC_DUR); 
+                                    requestRender();
                                 }
-                            }, CONFIG.LONG_PRESS_DUR); 
+                            }, CONFIG.LONG_PRESS_DUR);
                             e.preventDefault();
+                            requestRender();
                             return;
                         }
                     }
@@ -3708,8 +3728,9 @@
                     touchState.startY = ty;
                     touchState.startPanX = panX;
                     touchState.startPanY = panY;
+                    touchState.startTime = Date.now();
                     
-                    isDrag = false; 
+                    isDrag = false;
                     dragMoved = false;
                     dragSX = tx; dragSY = ty;
                     embedDragLastTile = null;
@@ -3732,6 +3753,11 @@
                 } else if (e.touches.length === 2) {
                     if (touchState.mode === 'marker_wait' || touchState.mode === 'pan_wait') {
                         clearTimeout(touchState.timer);
+                    }
+                    targetInteractionFade = 1.0; // Restore grid/curves for pinch
+                    if (touchState.mode === 'marker_drag') {
+                        isDragMarker = false;
+                        draggedMarkerIndex = -1;
                     }
                     touchState.mode = 'pinch';
                     isDrag = false; 
@@ -3772,19 +3798,20 @@
                     requestRender();
                     e.preventDefault();
                     return;
-                } else if (touchState.mode === 'draw' && e.touches.length === 1) {
+                } else if (touchState.mode === 'marker_wait' && e.touches.length === 1) {
                     const tx = e.touches[0].clientX - r.left;
                     const ty = e.touches[0].clientY - r.top;
-                    const h = pixToHex(tx, ty, zoom, panX, panY);
-                    const hk = hexKey(h.q, h.r);
-                    if (hk !== embedDragLastTile) {
-                        embedDragLastTile = hk;
-                        rotateTile(h.q, h.r);
+                    const dx = tx - touchState.startX;
+                    const dy = ty - touchState.startY;
+                    
+                    if (Math.abs(dx) > CLICK_THRESH || Math.abs(dy) > CLICK_THRESH) {
+                        // Finger slid away, cancel marker hold and ignore the rest of the touch
+                        clearTimeout(touchState.timer);
+                        touchState.mode = 'cancelled';
                     }
-                    requestRender();
                     e.preventDefault();
                     return;
-                } else if ((touchState.mode === 'pan' || touchState.mode === 'pan_wait') && e.touches.length === 1) {
+                } else if (touchState.mode === 'draw' && e.touches.length === 1) {
                     const tx = e.touches[0].clientX - r.left;
                     const ty = e.touches[0].clientY - r.top;
                     const dx = tx - touchState.startX;
@@ -3798,6 +3825,7 @@
                         clearTimeout(touchState.timer);
                         touchState.mode = 'pan';
                         isDrag = true; 
+                        targetInteractionFade = 0.0; // Hide grid/curves when pan starts
                     }
                     
                     if (touchState.mode === 'pan') {
@@ -3866,20 +3894,11 @@
                     draggedMarkerIndex = -1;
                 } else if (wasMode === 'pan_wait') {
                     clearTimeout(touchState.timer);
-                    const now = Date.now();
-                    if (now - lastTapTime < 300) {
-                        // Double tap on empty space toggles markers
-                        markersVisible = !markersVisible;
-                        dom.markersToggle.checked = markersVisible;
-                        requestRender();
-                        lastTapTime = 0;
-                    } else {
-                        lastTapTime = now;
-                        // Single tap on empty grid - Rotate tile!
-                        const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
-                        rotateTile(h.q, h.r);
-                        touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); 
-                    }
+                    
+                    // Single tap on empty grid - Rotate tile!
+                    const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
+                    rotateTile(h.q, h.r);
+                    touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); 
                 } else if (wasMode === 'pan') {
                     if (dragMoved) {
                         checkIfSolved();
@@ -3892,6 +3911,7 @@
                 if (e.touches.length === 0) {
                     touchState.mode = 'none';
                     isDrag = false;
+                    targetInteractionFade = 1.0; // Bring back grid/curves
                     // Only kill inertia if we weren't panning
                     if (wasMode !== 'pan') {
                         panVX = 0; panVY = 0;
@@ -3899,6 +3919,7 @@
                 } else if (wasMode === 'pinch' && e.touches.length === 1) {
                     touchState.mode = 'none';
                     isDrag = false;
+                    targetInteractionFade = 1.0; // Bring back grid/curves
                     panVX = 0; panVY = 0; // Kill inertia when transitioning from pinch
                 }
                 
@@ -3976,6 +3997,7 @@
                         draggedMarkerIndex = clickedMarkerIdx;
                         dragMarkerOffsetX = mx - gradientMarkers[clickedMarkerIdx].x;
                         dragMarkerOffsetY = my - gradientMarkers[clickedMarkerIdx].y;
+                        requestRender();
                         return;
                     }
                 }
@@ -4004,6 +4026,7 @@
                         gradientMarkersRGB[draggedMarkerIndex].y = gradientMarkers[draggedMarkerIndex].y;
                     }
                     isGradientDirty = true;
+                    targetInteractionFade = 0.0; // Hide grid/curves as soon as mouse drag starts
                     requestRender();
                     return;
                 }
@@ -4031,7 +4054,10 @@
                 }
                 if (isDrag) {
                     const dx = mx - dragSX, dy = my - dragSY;
-                    if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
+                    if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { 
+                        if (!dragMoved) dragMoved = true; 
+                        targetInteractionFade = 0.0; // Hide grid/curves as soon as pan starts
+                    }
 
                     if (isEmbedMode) {
                         if (dragMoved) {
@@ -4073,6 +4099,7 @@
                 if (isDragMarker) {
                     isDragMarker = false;
                     draggedMarkerIndex = -1;
+                    targetInteractionFade = 1.0; // Bring back grid/curves
                     requestRender();
                     return;
                 }
@@ -4083,6 +4110,7 @@
                         checkIfSolved();
                     }
                     isDrag = false;
+                    targetInteractionFade = 1.0; // Bring back grid/curves
                 }
                 requestRender();
             });
@@ -4134,13 +4162,6 @@
                 const mx = e.clientX - r.left;
                 const my = e.clientY - r.top;
 
-                if (!markersVisible) {
-                    markersVisible = true;
-                    dom.markersToggle.checked = true;
-                    requestRender();
-                    return;
-                }
-
                 let clickedMarkerIdx = -1;
                 for (let i = 0; i < gradientMarkers.length; i++) {
                     const m = gradientMarkers[i];
@@ -4155,11 +4176,6 @@
 
                 if (clickedMarkerIdx !== -1) {
                     removeMarkerAt(mx, my);
-                } else {
-                    // Double click on empty space toggles markers
-                    markersVisible = !markersVisible;
-                    dom.markersToggle.checked = markersVisible;
-                    requestRender();
                 }
             });
 
