@@ -1906,7 +1906,13 @@
                 for (let id of source.edges) {
                     curveMap.set(id, target.id);
                     target.edges.add(id);
-                    edgeRgbMap.delete(id);
+                    
+                    let edgeData = edgeRgbMap.get(id);
+                    if (edgeData) {
+                        edgeData.targetCurveID = target.id;
+                        edgeData.rippleActive = false;
+                        edgeData.colorStr = ''; // Force string rebuild
+                    }
                 }
                 target.size = target.edges.size;
                 if (source.locked) target.locked = true;
