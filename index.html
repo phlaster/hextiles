@@ -115,7 +115,7 @@
             left: 10px;
             width: 34px;
             height: 34px;
-            border: none;
+            border: 1px solid var(--col-border);
             border-radius: 8px;
             background: rgba(19, 19, 42, 0.5);
             color: rgba(230, 230, 240, 0.8);
@@ -196,13 +196,13 @@
 
         .sidebar-toggle {
             position: fixed;
-            top: 12px; /* Aligned with fullscreen button */
+            top: 12px; 
             right: 310px; 
             transform: translateX(50%); 
             z-index: 1000;
             width: 34px;
             height: 34px;
-            border: none;
+            border: 1px solid var(--col-border);
             border-radius: 8px;
             background: rgba(19, 19, 42, 0.5);
             color: rgba(230, 230, 240, 0.8);
@@ -570,7 +570,9 @@
 
         .export-menu {
             position: absolute;
-            background: var(--col-card);
+            background: rgba(19, 19, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--col-border);
             border-radius: 12px;
             padding: 16px;
