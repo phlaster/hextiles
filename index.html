@@ -423,7 +423,7 @@
         .slider-row .s-top .s-val { font-size: 12px; color: var(--col-accent); font-weight: 600; min-width: 40px; text-align: right; }
 
         .upload-zone {
-            border: 2px dashed var(--col-border); /* Dashed preserved */
+            border: 2px dashed var(--col-border);
             border-radius: 12px;
             padding: 22px 12px;
             text-align: center;
@@ -853,18 +853,18 @@
             
             <div class="size-row">
                 <div class="size-input">
-                    <span>Width (px)</span>
+                    <span>Frame width</span>
                     <input type="number" id="exportW" value="800" min="50" max="8000" />
                 </div>
                 <button class="aspect-lock-btn" id="aspectLockBtn" title="Lock aspect ratio"><i class="fas fa-link"></i></button>
                 <div class="size-input">
-                    <span>Height (px)</span>
+                    <span>Frame height</span>
                     <input type="number" id="exportH" value="600" min="50" max="8000" />
                 </div>
             </div>
             
             <div class="size-input" style="margin-bottom: 14px;">
-                <span>Exported sidelength (px)</span>
+                <span id="exportSideLabel">Exported sidelength (px)</span>
                 <input type="number" id="exportSide" value="1920" min="50" max="8000" />
             </div>
 
@@ -4820,6 +4820,11 @@
 
                 dom.exportMenu.style.left = mx + 'px';
                 dom.exportMenu.style.top = my + 'px';
+                
+                const sideLabel = document.getElementById('exportSideLabel');
+                if (sideLabel) {
+                    sideLabel.textContent = efRect.w >= efRect.h ? 'Exported width (px)' : 'Exported height (px)';
+                }
             }
 
             function clampFrameToCanvas() {
@@ -5292,6 +5297,17 @@
                 if (efDrag.mode === 'move') {
                     efRect.x = efDrag.x + dx;
                     efRect.y = efDrag.y + dy;
+                    // Resist in all 4 directions (clamp position without shrinking) and slip grab point
+                    if (efRect.w <= cr.width) {
+                        const maxX = cr.left + cr.width - efRect.w;
+                        if (efRect.x < cr.left) { efDrag.x = cr.left - dx; efRect.x = cr.left; }
+                        else if (efRect.x > maxX) { efDrag.x = maxX - dx; efRect.x = maxX; }
+                    } else { efDrag.x = cr.left - dx; efRect.x = cr.left; }
+                    if (efRect.h <= cr.height) {
+                        const maxY = cr.top + cr.height - efRect.h;
+                        if (efRect.y < cr.top) { efDrag.y = cr.top - dy; efRect.y = cr.top; }
+                        else if (efRect.y > maxY) { efDrag.y = maxY - dy; efRect.y = maxY; }
+                    } else { efDrag.y = cr.top - dy; efRect.y = cr.top; }
                 } else if (efDrag.mode === 'draw') {
                     let rawW = Math.abs(e.clientX - efDrag.startX);
                     let rawH = Math.abs(e.clientY - efDrag.startY);
@@ -5337,8 +5353,8 @@
                     
                     dom.exportW.value = Math.round(efRect.w);
                     dom.exportH.value = Math.round(efRect.h);
+                    clampFrameToCanvas();
                 }
-                clampFrameToCanvas();
                 updateExportFrameDOM();
             });
 
