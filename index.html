@@ -820,29 +820,36 @@
             right: 310px;
             transform: translateX(50%);
             z-index: 1000;
-            width: 28px;
-            height: 28px;
-            border: 1px solid var(--col-border);
+            width: 34px;
+            height: 34px;
+            border: none;
             border-radius: 8px;
-            background: var(--col-card2);
-            color: var(--col-accent);
+            background: rgba(19, 19, 42, 0.5);
+            color: rgba(230, 230, 240, 0.8);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
+            font-size: 13px;
             padding: 0;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             transition: right .3s cubic-bezier(.4,0,.2,1), transform .3s cubic-bezier(.4,0,.2,1), background .2s, color .2s;
         }
 
         .sidebar-toggle:hover {
             background: var(--col-accent);
             color: #fff;
+            transform: translateX(50%) scale(1.08); /* Must keep translateX(50%) to stay centered on border */
         }
 
         .sidebar-toggle.collapsed {
             right: 12px; /* Moves to the top right corner when collapsed */
             transform: translateX(0);
+        }
+
+        .sidebar-toggle.collapsed:hover {
+            transform: scale(1.08);
         }
 
         .sidebar-toggle i {
