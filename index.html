@@ -903,9 +903,9 @@
             VISIBLE_BOUND_MULT: 4,
 
             // Zoom & Magnetism
-            MAGNET_DELAY: 500,
+            MAGNET_DELAY: 300,
             MAGNET_SNAP_POINTS: [0.25, 0.20],
-            ZOOM_BLOCK_DELAY_WHEEL: 500,
+            ZOOM_BLOCK_DELAY_WHEEL: 100,
             ZOOM_BLOCK_DELAY_BTN: 1000,
             ZOOM_FADE_HIGH: 0.30,
             ZOOM_FADE_MID: 0.20,
@@ -975,6 +975,13 @@
             MAX_MARKERS: 10,
             MAX_CURVE_COLORS: 10,
             STATS_UPDATE_INTERVAL: 500,
+            
+            // Level of Detail (LOD) Thresholds
+            LOD_HIGH_SZ: 50,       // Tile size (sz) above this is considered "close-up"
+            LOD_MED_SZ: 15,         // Tile size above this is considered "medium"
+            LOD_EXT_HIGH: 0.02,    // Arc extension at high LOD (prevents gaps when zoomed in)
+            LOD_EXT_MED: 0.03,    // Arc extension at medium LOD
+            LOD_EXT_LOW: 0.001,      // Arc extension at low LOD (prevents overlap seams when fading)
         };
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2359,9 +2366,7 @@
                 }
             }
 
-            function applyCurveStyle(q, r, e, sz, now, alphaMult = 1) {
-                if (alphaMult === 0) return false; 
-
+            function applyCurveStyle(q, r, e, sz, now) {
                 ctx.setLineDash([]);
                 const id = edgeID(q, r, e);
                 
@@ -2401,7 +2406,8 @@
                             rippleTime: 0, 
                             rippleQ: 0, 
                             rippleR: 0,
-                            rippleActive: false
+                            rippleActive: false,
+                            colorStr: '' // Cache the string to avoid GC stutter
                         };
                         edgeRgbMap.set(id, edgeData);
                     }
@@ -2412,6 +2418,7 @@
                         edgeData.rippleTime = 0; 
                         edgeData.rippleQ = 0;
                         edgeData.rippleR = 0;
+                        edgeData.colorStr = '';
                     }
                     
                     if (edgeData.targetCurveID !== targetCurveID) {
@@ -2420,6 +2427,7 @@
                         edgeData.rippleQ = lastRipple.q;
                         edgeData.rippleR = lastRipple.r;
                         edgeData.rippleActive = true;
+                        edgeData.colorStr = '';
                     }
                     
                     let canTransition = true;
@@ -2448,20 +2456,29 @@
                         
                         if (diff) {
                             edgeColorAnimating = true;
+                            edgeData.colorStr = ''; // Invalidate cache
                         } else {
                             edgeData.rippleActive = false;
                         }
                     }
                     
-                    const finalAlpha = (edgeData.alpha * alphaMult).toFixed(3);
-                    ctx.strokeStyle = `rgba(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])},${finalAlpha})`;
+                    // Only rebuild string if color or alpha changed
+                    if (!edgeData.colorStr) {
+                        if (edgeData.alpha > 0.99) {
+                            edgeData.colorStr = `rgb(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])})`;
+                        } else {
+                            edgeData.colorStr = `rgba(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])},${edgeData.alpha.toFixed(3)})`;
+                        }
+                    }
+                    
+                    ctx.strokeStyle = edgeData.colorStr;
                     ctx.lineWidth = sz / 3 * curveLineWidth;
                     return true;
                 }
 
                 currentUnassignedEdges.add(id);
                 if (showUnrenderedDotted) {
-                    ctx.strokeStyle = `rgba(110, 110, 144, ${(0.55 * alphaMult).toFixed(3)})`;
+                    ctx.strokeStyle = `rgba(110, 110, 144, 0.55)`;
                     ctx.lineWidth = Math.max(1, (sz / 10) * curveLineWidth);
                     const dash = Math.max(2, sz / 8);
                     ctx.setLineDash([dash, dash]);
@@ -2687,53 +2704,57 @@
 
                     const a = sz * SQRT3 / 2;
                     ctx.lineCap = 'butt'; 
-                    const ext = 0.012; 
+                    
+                    // LOD: Use CONFIG thresholds for arc extension
+                    const ext = sz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : (sz > CONFIG.LOD_MED_SZ ? CONFIG.LOD_EXT_MED : CONFIG.LOD_EXT_LOW);
                     
                     const logicalRot = tileRot(hq, hr);
                     const k = (logicalRot / 60) % 6;
 
-                    if (curveAlpha > 0) {
+                    if (curveAlpha > 0.01) {
+                        ctx.globalAlpha = curveAlpha; // Use hardware acceleration for fade
                         const alter = isTileAlter(hq, hr);
                         if (alter) {
-                            if (applyCurveStyle(hq, hr, (0 + k) % 6, sz, now, curveAlpha)) {
+                            if (applyCurveStyle(hq, hr, (0 + k) % 6, sz, now)) {
                                 ctx.beginPath();
                                 ctx.arc(sz/2, a, sz/2, Math.PI - ext, 5 * PI_DIV_3 + ext, false);
                                 ctx.stroke();
                             }
-                            if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now, curveAlpha)) {
+                            if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
                                 ctx.beginPath();
                                 ctx.arc(-sz, 0, sz/2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
                                 ctx.stroke();
                             }
-                            if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now, curveAlpha)) {
+                            if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
                                 ctx.beginPath();
                                 ctx.arc(sz/2, -a, sz/2, PI_DIV_3 - ext, Math.PI + ext, false);
                                 ctx.stroke();
                             }
                         } else {
-                            if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now, curveAlpha)) {
+                            if (applyCurveStyle(hq, hr, (2 + k) % 6, sz, now)) {
                                 ctx.beginPath();
                                 ctx.arc(-sz, 0, sz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false);
                                 ctx.stroke();
                             }
-                            if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now, curveAlpha)) {
+                            if (applyCurveStyle(hq, hr, (4 + k) % 6, sz, now)) {
                                 ctx.beginPath();
                                 ctx.arc(1.5 * sz, -a, 1.5 * sz, TWO_PI_DIV_3 - ext, Math.PI + ext, false);
                                 ctx.stroke();
                             }
-                            if (applyCurveStyle(hq, hr, (1 + k) % 6, sz, now, curveAlpha)) {
+                            if (applyCurveStyle(hq, hr, (1 + k) % 6, sz, now)) {
                                 ctx.beginPath();
                                 ctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false);
                                 ctx.stroke();
                             }
                         }
                         ctx.setLineDash([]);
+                        ctx.globalAlpha = 1.0;
                     }
                 }
 
                 ctx.restore();
 
-                if (grid && gridAlpha > 0) {
+                if (grid && gridAlpha > 0.01) {
                     traceHexPath(ctx, cx, cy, rSz);
                     ctx.globalAlpha = gridAlpha;
                     ctx.strokeStyle = COLORS.gridLine;
@@ -3135,7 +3156,7 @@
                     });
                 }
 
-                if (curveColors.length >= 1 && curveAlpha > 0 && hexes.length > 0) {
+                if (curveColors.length >= 1 && curveAlpha > 0.01 && hexes.length > 0) {
                     let startTime = performance.now();
                     let didWork = true;
                     while (didWork && performance.now() - startTime < 16) {
@@ -3150,7 +3171,7 @@
                     if (didWork) keepRendering = true;
                 }
 
-                const lod = visSz > 18 ? 2 : visSz > 8 ? 1 : 0;
+                const lod = visSz > CONFIG.LOD_HIGH_SZ ? 2 : (visSz > CONFIG.LOD_MED_SZ ? 1 : 0);
 
                 for (const h of hexes) {
                     const rot = displayRot(h.q, h.r, now);
@@ -5051,7 +5072,9 @@
                 const eSz = HEX_R * eZoom;
                 const pathsByColor = {};
                 const gridPaths = [];
-                const ext = 0.012; 
+
+                // LOD match for SVG export
+                const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : (eSz > CONFIG.LOD_MED_SZ ? CONFIG.LOD_EXT_MED : CONFIG.LOD_EXT_LOW);
 
                 function getSvgEdgeColor(q, r, e) {
                     if (curveColors.length === 1) {
