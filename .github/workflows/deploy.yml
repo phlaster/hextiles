@@ -28,7 +28,11 @@ jobs:
         run: |
           COMMIT_HASH=$(git rev-parse --short HEAD)
           DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          sed -i "s/__DEPLOY_INFO__/Deployed: ${DEPLOY_DATE} (SHA: ${COMMIT_HASH})/" index.html
+          REPLACE_STR="Deployed: ${DEPLOY_DATE} (SHA: ${COMMIT_HASH})"
+          echo "Replacing placeholder with: $REPLACE_STR"
+          sed -i "s|__DEPLOY_INFO__|$REPLACE_STR|g" index.html
+          echo "Verification (should show the new text):"
+          grep "Deployed:" index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
