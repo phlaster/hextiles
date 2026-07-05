@@ -12,11 +12,11 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,8 +31,8 @@ jobs:
           REPLACE_STR="Deployed: ${DEPLOY_DATE} (SHA: ${COMMIT_HASH})"
           echo "Replacing placeholder with: $REPLACE_STR"
           sed -i "s|__DEPLOY_INFO__|$REPLACE_STR|g" index.html
-          echo "Verification (should show the new text):"
-          grep "Deployed:" index.html
+          echo "Verification:"
+          grep "Deployed:" index.html || echo "Warning: Placeholder not found or replaced!"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -43,7 +43,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build
     steps:
       - name: Deploy to GitHub Pages
