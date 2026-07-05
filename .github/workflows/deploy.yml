@@ -26,17 +26,21 @@ jobs:
 
       - name: Inject Deploy Info
         run: |
-          node -e "
-          const fs = require('fs');
-          const commit = process.env.GITHUB_SHA.substring(0, 7);
-          const date = new Date().toISOString().split('T')[0];
-          const str = 'Deployed: ' + date + ' (SHA: ' + commit + ')';
-          let html = fs.readFileSync('index.html', 'utf8');
-          html = html.replace('__DEPLOY_INFO__', str);
-          fs.writeFileSync('index.html', html);
-          console.log('Injected: ' + str);
-          console.log('Verification:', fs.readFileSync('index.html', 'utf8').includes(str));
-          "
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          DEPLOY_DATE=$(date -u +"%Y-%m-%d")
+          REPLACE_STR="Deployed: ${DEPLOY_DATE} (SHA: ${COMMIT_HASH})"
+          echo "Attempting to replace placeholder with: $REPLACE_STR"
+          
+          if grep -q "__DEPLOY_INFO__" index.html; then
+            echo "Placeholder found in index.html. Replacing..."
+            sed -i "s|__DEPLOY_INFO__|${REPLACE_STR}|g" index.html
+          else
+            echo "ERROR: Placeholder __DEPLOY_INFO__ NOT found in index.html!"
+          fi
+          
+          echo "----- Verification (last 10 lines of index.html) -----"
+          tail -n 10 index.html
+          echo "-----------------------------------------------------"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
