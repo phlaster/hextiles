@@ -932,14 +932,14 @@
             ZOOM_BLAZE_FADE_RANGE: 0.005,
             
             // Zoom Controls
-            WHEEL_DELTA_IN: 1.11,
-            WHEEL_DELTA_OUT: 0.90,
+            WHEEL_DELTA_IN: 1.05,
+            WHEEL_DELTA_OUT: 0.95,
             WHEEL_SLOW_MULT: 0.333,
-            BTN_DELTA_IN: 1.25,
-            BTN_DELTA_OUT: 0.80,
-            BTN_SLOW_MULT: 0.25,
-            KEY_DELTA_IN: 1.15,
-            KEY_DELTA_OUT: 0.85,
+            BTN_DELTA_IN: 1.1,
+            BTN_DELTA_OUT: 0.9,
+            BTN_SLOW_MULT: 0.333,
+            KEY_DELTA_IN: 1.1,
+            KEY_DELTA_OUT: 0.9,
 
             // Background Stars & Parallax
             STAR_PARALLAX_LARGE: 0.08,
@@ -1181,6 +1181,7 @@
                 dragPX = 0,
                 dragPY = 0,
                 dragMoved = false;
+            let isExporting = false;
             let embedDragLastTile = null;
             let mouseScreenX = -9999,
                 mouseScreenY = -9999;
@@ -1227,6 +1228,7 @@
             let gradientCanvas = null;
             let curveCanvas = document.createElement('canvas');
             let curveCtx = curveCanvas.getContext('2d');
+            const starColorCache = new Map();
             let markersVisible = true;
 
             let curveColors = ['#444444']; // Target colors
@@ -1600,28 +1602,28 @@
                                 
                                 if (blazeT < 0.25) {
                                     // Phase 1: Grow to white
-                                    let t = blazeT / 0.25;
-                                    drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t * blazeFade);
-                                    sR = Math.round(origSR + (255 - origSR) * t * blazeFade);
-                                    sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t * blazeFade;
-                                    blazeGlow = t * blazeFade;
+                                    let t2 = blazeT / 0.25;
+                                    drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
+                                    sR = Math.round(origSR + (255 - origSR) * t2 * blazeFade);
+                                    sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2 * blazeFade;
+                                    blazeGlow = t2 * blazeFade;
                                 } else if (blazeT < 0.55) {
                                     // Phase 2: Stay full size, keep white, fade alpha to 0
-                                    let t = (blazeT - 0.25) / 0.30;
+                                    let t2 = (blazeT - 0.25) / 0.30;
                                     drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeFade);
                                     sR = Math.round(origSR + (255 - origSR) * blazeFade);
-                                    sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t);
-                                    blazeGlow = (1 - t) * blazeFade;
+                                    sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t2);
+                                    blazeGlow = (1 - t2) * blazeFade;
                                 } else if (blazeT < 0.65) {
                                     // Phase 3: Invisible
                                     sA = 0;
                                     blazeGlow = 0;
                                 } else {
                                     // Phase 4: Slowly put the little dot back
-                                    let t = (blazeT - 0.65) / 0.35;
+                                    let t2 = (blazeT - 0.65) / 0.35;
                                     drawSize = origDrawSize;
                                     sR = origSR;
-                                    sA = origSA * t;
+                                    sA = origSA * t2;
                                     blazeGlow = 0;
                                 }
                                 
@@ -1644,7 +1646,15 @@
                             }
                         }
                         
-                        ctx.fillStyle = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
+                        // Cache fill style string to avoid GC stutter
+                        let fillKey = `${sR},${sA.toFixed(3)}`;
+                        let fillStyle = starColorCache.get(fillKey);
+                        if (!fillStyle) {
+                            fillStyle = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
+                            starColorCache.set(fillKey, fillStyle);
+                        }
+                        ctx.fillStyle = fillStyle;
+                        
                         ctx.beginPath();
                         ctx.arc(x, y, drawSize, 0, Math.PI * 2);
                         ctx.fill();
@@ -1905,6 +1915,8 @@
                 let curve2 = curves.get(c2);
                 if (!curve1 || !curve2) return;
                 let target, source;
+                
+                // Union by size: iterate the smaller set
                 if (curve1.size > curve2.size) {
                     target = curve1;
                     source = curve2;
@@ -1920,19 +1932,18 @@
                         source = curve1;
                     }
                 }
+                
                 for (let id of source.edges) {
                     curveMap.set(id, target.id);
                     target.edges.add(id);
-                    
-                    let edgeData = edgeRgbMap.get(id);
-                    if (edgeData) {
-                        edgeData.targetCurveID = target.id;
-                        edgeData.rippleActive = false;
-                        edgeData.colorStr = ''; // Force string rebuild
-                    }
                 }
                 target.size = target.edges.size;
                 if (source.locked) target.locked = true;
+                
+                // Explicitly clear the Set so the GC reclaims the memory immediately
+                source.edges.clear(); 
+                source.edges = null; 
+                
                 curves.delete(source.id);
             }
 
@@ -2022,6 +2033,7 @@
             }
 
             function initializeCentralTile() {
+                if (curveColors.length <= 1) return;
                 if (curveMap.size > 0) return;
                 let center = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, zoom, panX, panY);
                 recalculateTile(center.q, center.r);
@@ -2112,6 +2124,7 @@
 
             function pickColorForNewCurve(adjColors, avoidColor = -1, seed1 = 0, seed2 = 0, bgColor = null) {
                 if (curveColors.length === 1) return 0;
+                if (!adjColors) adjColors = new Set();
                 
                 const candidates = [];
                 for (let i = 0; i < curveColors.length; i++) {
@@ -2199,12 +2212,50 @@
                     for (let i = 1; i < components.length; i++) {
                         let newID = nextCurveID++;
                         let compSet = new Set(components[i]);
-                        let adjColors = getAdjacentColors(compSet, curve.id);
+                        let adjColors = (curveColors.length <= 1) ? null : getAdjacentColors(compSet, curve.id);
                         
                         const [eq, er, ee] = decodeEdgeID(components[i][0]);
                         const p = hexToPix(eq, er, zoom, panX, panY);
                         const bgColor = getBackgroundColorAt(p.x, p.y);
-                        let newColor = pickColorForNewCurve(adjColors, curve.color, components[i][0], components[i][1], bgColor);
+                        
+                        let newColor;
+                        if (curveColors.length > 1) {
+                            // 1. Find candidates that aren't adjacent and aren't the original color
+                            let validCandidates = [];
+                            
+                            // Safely get original color index in case array size changed
+                            const origColorIdx = (typeof curve.color === 'number') ? (curve.color % curveColors.length) : 0;
+                            
+                            for (let i = 0; i < curveColors.length; i++) {
+                                if (!adjColors.has(i) && i !== origColorIdx) {
+                                    validCandidates.push(i);
+                                }
+                            }
+                            // 2. Fallback if all colors are adjacent
+                            if (validCandidates.length === 0) {
+                                for (let i = 0; i < curveColors.length; i++) {
+                                    if (!adjColors.has(i)) validCandidates.push(i);
+                                }
+                            }
+                            // 3. Ultimate fallback (guarantees a different color)
+                            newColor = (origColorIdx + 1) % curveColors.length;
+                            
+                            // 4. Pick the candidate with the maximum color distance from the original
+                            if (validCandidates.length > 0) {
+                                let maxDist = -1;
+                                const origRgb = hexToRgb(curveColors[origColorIdx]);
+                                for (const cIdx of validCandidates) {
+                                    const cRgb = hexToRgb(curveColors[cIdx]);
+                                    const dist = colorDistance(origRgb, cRgb);
+                                    if (dist > maxDist) {
+                                        maxDist = dist;
+                                        newColor = cIdx;
+                                    }
+                                }
+                            }
+                        } else {
+                            newColor = 0;
+                        }
                         
                         let newCurve = {
                             id: newID, color: newColor, size: components[i].length, locked: false,
@@ -2214,8 +2265,8 @@
                         for (let id of newCurve.edges) curveMap.set(id, newID);
                     }
                 } else if (components.length === 1) {
-                    curve.edges = new Set(components[0]);
-                    curve.size = curve.edges.size;
+                    // Edges are still connected; existing Set and size are already correct.
+                    // No need to allocate a new Set.
                 } else {
                     curves.delete(curveID);
                 }
@@ -2238,11 +2289,6 @@
                     }
                     if (allEdgesSame) return;
                 }
-                let availableColors = [];
-                for (let cid of affectedCurves) {
-                    let curve = curves.get(cid); if (curve) availableColors.push(curve.color);
-                }
-                if (availableColors.length === 0) availableColors.push(0);
                 
                 for (let i = 0; i < 6; i++) {
                     let id = ids[i];
@@ -2317,7 +2363,7 @@
                         queue.push({ q: n1.q, r: n1.r, e: n1.edge });
                     } else {
                         let tempSet = new Set([id1, id2]);
-                        let adjColors = getAdjacentColors(tempSet, -1);
+                        let adjColors = (curveColors.length <= 1) ? null : getAdjacentColors(tempSet, -1);
                         
                         const p = hexToPix(q, r, zoom, panX, panY);
                         const bgColor = getBackgroundColorAt(p.x, p.y);
@@ -2373,7 +2419,7 @@
                     } else {
                         let curveID = nextCurveID++;
                         let tempSet = new Set([id1, id2]);
-                        let adjColors = getAdjacentColors(tempSet, -1);
+                        let adjColors = (curveColors.length <= 1) ? null : getAdjacentColors(tempSet, -1);
                         const p = hexToPix(q, r, zoom, panX, panY);
                         const bgColor = getBackgroundColorAt(p.x, p.y);
                         let color = pickColorForNewCurve(adjColors, -1, q, r * 6 + e1, bgColor);
@@ -2435,62 +2481,77 @@
                             rippleQ: 0, 
                             rippleR: 0,
                             rippleActive: false,
-                            colorStr: '' // Cache the string to avoid GC stutter
+                            colorStr: '' 
                         };
                         edgeRgbMap.set(id, edgeData);
                     }
                     
-                    if (previousUnassignedEdges.has(id)) {
-                        edgeData.alpha = 0;
-                        edgeData.rippleActive = true;
-                        edgeData.rippleTime = 0; 
-                        edgeData.rippleQ = 0;
-                        edgeData.rippleR = 0;
+                    if (isExporting) {
+                        edgeData.rgb[0] = targetRgb.r;
+                        edgeData.rgb[1] = targetRgb.g;
+                        edgeData.rgb[2] = targetRgb.b;
+                        edgeData.alpha = 1.0;
+                        edgeData.rippleActive = false;
                         edgeData.colorStr = '';
-                    }
-                    
-                    if (edgeData.targetCurveID !== targetCurveID) {
-                        edgeData.targetCurveID = targetCurveID;
-                        edgeData.rippleTime = lastRipple.time;
-                        edgeData.rippleQ = lastRipple.q;
-                        edgeData.rippleR = lastRipple.r;
-                        edgeData.rippleActive = true;
-                        edgeData.colorStr = '';
-                    }
-                    
-                    let canTransition = true;
-                    if (edgeData.rippleActive && edgeData.rippleTime > 0) {
-                        const [eq, er] = decodeEdgeID(id);
-                        const dist = hexDistance(eq, er, edgeData.rippleQ, edgeData.rippleR);
-                        const delay = dist * 35; 
-                        if (now - edgeData.rippleTime < delay) {
-                            canTransition = false;
-                            edgeColorAnimating = true; 
-                        }
-                    }
-                    
-                    if (canTransition) {
-                        let diff = false;
-                        const targets = [targetRgb.r, targetRgb.g, targetRgb.b];
-                        for (let i = 0; i < 3; i++) {
-                            const newVal = edgeData.rgb[i] + (targets[i] - edgeData.rgb[i]) * 0.08;
-                            if (Math.abs(targets[i] - newVal) > 0.5) diff = true;
-                            edgeData.rgb[i] = newVal;
+                    } else {
+                        if (previousUnassignedEdges.has(id)) {
+                            edgeData.alpha = 0;
+                            edgeData.rippleActive = true;
+                            edgeData.rippleTime = 0; 
+                            edgeData.rippleQ = 0;
+                            edgeData.rippleR = 0;
+                            edgeData.colorStr = '';
                         }
                         
-                        const newAlpha = edgeData.alpha + (1 - edgeData.alpha) * 0.1;
-                        if (Math.abs(1 - newAlpha) > 0.01) diff = true;
-                        edgeData.alpha = newAlpha;
+                        if (edgeData.targetCurveID !== targetCurveID) {
+                            edgeData.targetCurveID = targetCurveID;
+                            
+                            let needsRipple = Math.abs(targetRgb.r - edgeData.rgb[0]) > 5 || 
+                                               Math.abs(targetRgb.g - edgeData.rgb[1]) > 3 || 
+                                               Math.abs(targetRgb.b - edgeData.rgb[2]) > 5;
+                            
+                            if (needsRipple && lastRipple.time > 0 && (now - lastRipple.time < 3000)) {
+                                edgeData.rippleTime = lastRipple.time;
+                                edgeData.rippleQ = lastRipple.q;
+                                edgeData.rippleR = lastRipple.r;
+                                edgeData.rippleActive = true;
+                                edgeData.colorStr = '';
+                            }
+                        }
                         
-                        if (diff) {
-                            edgeColorAnimating = true;
-                            edgeData.colorStr = ''; // Invalidate cache
-                        } else {
-                            edgeData.rippleActive = false;
+                        let canTransition = true;
+                        if (edgeData.rippleActive && edgeData.rippleTime > 0) {
+                            const [eq, er] = decodeEdgeID(id);
+                            const dist = hexDistance(eq, er, edgeData.rippleQ, edgeData.rippleR);
+                            const delay = dist * 35; 
+                            if (now - edgeData.rippleTime < delay) {
+                                canTransition = false;
+                                edgeColorAnimating = true; 
+                            }
+                        }
+                        
+                        if (canTransition) {
+                            let diff = false;
+                            const targets = [targetRgb.r, targetRgb.g, targetRgb.b];
+                            for (let i = 0; i < 3; i++) {
+                                const newVal = edgeData.rgb[i] + (targets[i] - edgeData.rgb[i]) * 0.08;
+                                if (Math.abs(targets[i] - newVal) > 0.5) diff = true;
+                                edgeData.rgb[i] = newVal;
+                            }
+                            
+                            const newAlpha = edgeData.alpha + (1 - edgeData.alpha) * 0.1;
+                            if (Math.abs(1 - newAlpha) > 0.01) diff = true;
+                            edgeData.alpha = newAlpha;
+                            
+                            if (diff) {
+                                edgeColorAnimating = true;
+                                edgeData.colorStr = ''; // Invalidate cache
+                            } else {
+                                edgeData.rippleActive = false;
+                            }
                         }
                     }
                     
-                    // Only rebuild string if color or alpha changed
                     if (!edgeData.colorStr) {
                         if (edgeData.alpha > 0.99) {
                             edgeData.colorStr = `rgb(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])})`;
@@ -3106,7 +3167,7 @@
                     starPanX3 += panVX * CONFIG.STAR_PARALLAX_SMALL;
                     starPanY3 += panVY * CONFIG.STAR_PARALLAX_SMALL;
                     
-                    let damping = (visZoom < CONFIG.ZOOM_FADE_HIGH) ? CONFIG.INERTIA_DAMPING_LOW : CONFIG.INERTIA_DAMPING_NORMAL; 
+                    let damping = (visZoom < CONFIG.ZOOM_FADE_START_MULT) ? CONFIG.INERTIA_DAMPING_LOW : CONFIG.INERTIA_DAMPING_NORMAL;
                     panVX *= damping; 
                     panVY *= damping;
                     
@@ -3177,7 +3238,7 @@
                     });
                 }
 
-                if (curveColors.length >= 1 && curveAlpha > 0.01 && hexes.length > 0) {
+                if (curveColors.length > 1 && curveAlpha > 0.01 && hexes.length > 0) {
                     let startTime = performance.now();
                     let didWork = true;
                     while (didWork && performance.now() - startTime < 16) {
@@ -3329,7 +3390,7 @@
                     
                     if (curveAlpha === 0) {
                         edgeRgbMap.clear();
-                    } else if (edgeRgbMap.size > 10000) {
+                    } else {
                         const visibleEdgeIDs = new Set();
                         for (const h of hexes) {
                             for (let e = 0; e < 6; e++) {
@@ -4199,7 +4260,22 @@
 
                 const target = nearestTarget(curDisplay, nextLogical);
                 animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
-                updateLocalCurves(q, r);
+                
+                // Only calculate curves if they are actually visible to prevent memory leaks
+                const visZoom = (isEmbedMode && embedData && embedData.origZoom) ? embedData.origZoom : zoom;
+                const visSz = HEX_R * visZoom;
+                const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
+                
+                if (visSz > fadeEndSz) {
+                    if (curveColors.length > 1) {
+                        updateLocalCurves(q, r);
+                    }
+                } else {
+                    queue.length = 0;
+                    curveMap.clear();
+                    curves.clear();
+                    edgeRgbMap.clear();
+                }
 
                 checkIfSolved();
                 requestRender();
@@ -4305,7 +4381,7 @@
                     curveMap.clear();
                     edgeRgbMap.clear();
                     curves.clear();
-                    queue = [];
+                    queue.length = 0;
                     initializeCentralTile();
                 }
                 requestRender();
@@ -4334,7 +4410,7 @@
                 curveMap.clear();
                 edgeRgbMap.clear();
                 curves.clear();
-                queue = [];
+                queue.length = 0;
                 initializeCentralTile();
                 checkIfSolved();
             }
@@ -4692,7 +4768,7 @@
                 renderCurveList();
                 curveMap.clear();
                 curves.clear();
-                queue = [];
+                queue.length = 0;
                 initializeCentralTile();
                 checkIfSolved();
             };
@@ -4732,12 +4808,67 @@
             // ── Frame state ──
             let efRect = { x: 0, y: 0, w: 0, h: 0 };
             let efDrag = null;
-            let isExporting = false;
             let aspectLocked = false;
             let targetRatio = 1;
             let sidebarWasCollapsed = false;
 
             function openExportOverlay() {
+                // 1. Finish processing the queue instantly so all curves are generated
+                let safety = 10000;
+                while (safety-- > 0 && queue.length > 0) {
+                    processQueue();
+                }
+                
+                // 2. Force all edges to their final target colors instantly (no ripples)
+                for (const [id, edgeData] of edgeRgbMap.entries()) {
+                    let targetCurveID = -1;
+                    let targetRgb = null;
+                    
+                    if (curveColors.length === 1) {
+                        const c = curveColorsRGB[0];
+                        if (c) targetRgb = { r: c.tr !== undefined ? c.tr : c.r, g: c.tg !== undefined ? c.tg : c.g, b: c.tb !== undefined ? c.tb : c.b };
+                        targetCurveID = -2;
+                    } else if (curveMap.has(id)) {
+                        targetCurveID = curveMap.get(id);
+                        const curve = curves.get(targetCurveID);
+                        if (curve) {
+                            let c = curve.color;
+                            if (typeof c === 'number') {
+                                const cc = curveColorsRGB[c % curveColorsRGB.length];
+                                targetRgb = { r: cc.tr !== undefined ? cc.tr : cc.r, g: cc.tg !== undefined ? cc.tg : cc.g, b: cc.tb !== undefined ? cc.tb : cc.b };
+                            } else {
+                                const rgb = hexToRgb(c); 
+                                targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
+                            }
+                        }
+                    }
+                    
+                    if (targetRgb) {
+                        if (!edgeData) {
+                            edgeRgbMap.set(id, { 
+                                rgb: [targetRgb.r, targetRgb.g, targetRgb.b], 
+                                alpha: 1, 
+                                targetCurveID: targetCurveID, 
+                                rippleTime: 0, 
+                                rippleQ: 0, 
+                                rippleR: 0,
+                                rippleActive: false,
+                                colorStr: '' 
+                            });
+                        } else {
+                            edgeData.rgb[0] = targetRgb.r;
+                            edgeData.rgb[1] = targetRgb.g;
+                            edgeData.rgb[2] = targetRgb.b;
+                            edgeData.alpha = 1.0;
+                            edgeData.targetCurveID = targetCurveID;
+                            edgeData.rippleActive = false;
+                            edgeData.colorStr = '';
+                        }
+                    } else {
+                        edgeRgbMap.delete(id);
+                    }
+                }
+
                 const cr = dom.cvs.getBoundingClientRect();
                 const fw = cr.width / 2, fh = cr.height / 2;
                 targetRatio = fw / fh;
@@ -5713,7 +5844,7 @@
                     dom.cvs.height = embedData.h;
                     isInitialized = true;
                     curveMap.clear(); edgeRgbMap.clear();
-                    curves.clear(); queue = [];
+                    curves.clear(); queue.length = 0;
                     initializeCentralTile();
                     
                     // Kickstart blazing stars if the embed is at 20% zoom
