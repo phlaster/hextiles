@@ -693,6 +693,73 @@
             <span id="statCurvesWrap" style="display:none">Curves: <strong id="statCurves">0</strong></span>
             <span id="statColorsWrap" style="display:none">Colors: <strong id="statColors">0</strong></span>
         </div>
+
+        
+        <!-- Just in case <div id="lod-tuner">
+            <h3>LOD Tuner</h3>
+            <div class="lod-row">
+                <div class="lod-top"><span>High SZ</span><span class="s-val" id="vLodHighSz">50</span></div>
+                <input type="range" id="lodHighSz" min="10" max="200" step="1" value="50" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Med SZ</span><span class="s-val" id="vLodMedSz">15</span></div>
+                <input type="range" id="lodMedSz" min="1" max="100" step="1" value="15" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Ext High</span><span class="s-val" id="vLodExtHigh">0.02</span></div>
+                <input type="range" id="lodExtHigh" min="0" max="0.2" step="0.001" value="0.02" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Ext Med</span><span class="s-val" id="vLodExtMed">0.03</span></div>
+                <input type="range" id="lodExtMed" min="0" max="0.2" step="0.001" value="0.03" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Ext Low</span><span class="s-val" id="vLodExtLow">0.001</span></div>
+                <input type="range" id="lodExtLow" min="0" max="0.05" step="0.0001" value="0.001" />
+            </div>
+            <button class="btn btn-accent" id="lodApplyBtn" style="margin-top: 5px;">Apply LOD</button>
+        </div>
+        <style>
+            #lod-tuner {
+                position: absolute;
+                top: 50px;
+                left: 10px;
+                background: rgba(19, 19, 42, 0.85);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                border: 1px solid var(--col-border);
+                border-radius: 10px;
+                padding: 12px;
+                z-index: 100;
+                color: var(--col-fg);
+                font-family: 'Space Grotesk', sans-serif;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 180px;
+            }
+            #lod-tuner h3 {
+                margin: 0 0 5px 0;
+                font-size: 12px;
+                color: var(--col-accent);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                text-align: center;
+            }
+            #lod-tuner .lod-row { display: flex; flex-direction: column; gap: 3px; }
+            #lod-tuner .lod-top { display: flex; justify-content: space-between; align-items: center; }
+            #lod-tuner .lod-top span { font-size: 11px; color: var(--col-muted); }
+            #lod-tuner .lod-top .s-val { font-size: 11px; color: var(--col-accent); font-weight: 600; }
+            #lod-tuner input[type=range] {
+                -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+                background: var(--col-border); border-radius: 2px; outline: none;
+            }
+            #lod-tuner input[type=range]::-webkit-slider-thumb {
+                -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+                background: var(--col-accent); cursor: pointer;
+            }
+        </style> -->
+
     </div>
 
     <aside class="sidebar">
@@ -993,11 +1060,11 @@
             STATS_UPDATE_INTERVAL: 500,
             
             // Level of Detail (LOD) Thresholds
-            LOD_HIGH_SZ: 50,       // Tile size (sz) above this is considered "close-up"
-            LOD_MED_SZ: 15,         // Tile size above this is considered "medium"
-            LOD_EXT_HIGH: 0.02,    // Arc extension at high LOD (prevents gaps when zoomed in)
-            LOD_EXT_MED: 0.03,    // Arc extension at medium LOD
-            LOD_EXT_LOW: 0.001,      // Arc extension at low LOD (prevents overlap seams when fading)
+            LOD_HIGH_SZ: 60,       // Tile size (sz) above this is considered "close-up"
+            LOD_MED_SZ: 16,         // Tile size above this is considered "medium"
+            LOD_EXT_HIGH: 0.004,    // Arc extension at high LOD (prevents gaps when zoomed in)
+            LOD_EXT_MED: 0.035,    // Arc extension at medium LOD
+            LOD_EXT_LOW: 0.02,      // Arc extension at low LOD (prevents overlap seams when fading)
         };
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1371,6 +1438,40 @@
                 flowToggle: document.getElementById('flowToggle'),
                 inertiaToggle: document.getElementById('inertiaToggle'),
             };
+
+            
+            // ──── Temporary LOD Tuner just in case ────
+            // const lodTuner = {
+            //     HighSz: document.getElementById('lodHighSz'),
+            //     MedSz: document.getElementById('lodMedSz'),
+            //     ExtHigh: document.getElementById('lodExtHigh'),
+            //     ExtMed: document.getElementById('lodExtMed'),
+            //     ExtLow: document.getElementById('lodExtLow')
+            // };
+            // const lodLabels = {
+            //     HighSz: document.getElementById('vLodHighSz'),
+            //     MedSz: document.getElementById('vLodMedSz'),
+            //     ExtHigh: document.getElementById('vLodExtHigh'),
+            //     ExtMed: document.getElementById('vLodExtMed'),
+            //     ExtLow: document.getElementById('vLodExtLow')
+            // };
+
+            // // Live label updates
+            // Object.keys(lodTuner).forEach(key => {
+            //     lodTuner[key].addEventListener('input', () => {
+            //         lodLabels[key].textContent = lodTuner[key].value;
+            //     });
+            // });
+
+            // // Apply button logic
+            // document.getElementById('lodApplyBtn').addEventListener('click', () => {
+            //     CONFIG.LOD_HIGH_SZ = +lodTuner.HighSz.value;
+            //     CONFIG.LOD_MED_SZ = +lodTuner.MedSz.value;
+            //     CONFIG.LOD_EXT_HIGH = +lodTuner.ExtHigh.value;
+            //     CONFIG.LOD_EXT_MED = +lodTuner.ExtMed.value;
+            //     CONFIG.LOD_EXT_LOW = +lodTuner.ExtLow.value;
+            //     requestRender(); // Force visual update
+            // });
 
             // ──── Fullscreen Toggle ────
             const fullscreenBtn = document.getElementById('fullscreenBtn');
