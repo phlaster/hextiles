@@ -5058,6 +5058,7 @@
                 dom.imageExportWrap.classList.remove('visible');
                 dom.embedCodeWrap.classList.remove('visible');
 
+                dom.exportMenu.style.display = 'block';
                 updateExportFrameDOM();
             }
 
@@ -5080,6 +5081,14 @@
                 f.style.top = efRect.y + 'px';
                 f.style.width = efRect.w + 'px';
                 f.style.height = efRect.h + 'px';
+                
+                // Hide export menu if the drawn frame is smaller than 50x50
+                if (efRect.w < 50 || efRect.h < 50) {
+                    dom.exportMenu.style.display = 'none';
+                    return;
+                }
+                
+                dom.exportMenu.style.display = 'block';
                 const menuW = 280; // Approximate menu width
                 const menuH = 320; // Approximate menu height
                 let mx = 0, my = 0;
@@ -5671,7 +5680,8 @@
             });
 
             window.addEventListener('mouseup', () => { 
-                if (efDrag && efDrag.mode === 'draw' && (efRect.w < 10 || efRect.h < 10)) {
+                // Exit export mode if the drawn frame is released under 50x50
+                if (efDrag && efDrag.mode === 'draw' && (efRect.w < 50 || efRect.h < 50)) {
                     closeExportOverlay();
                 }
                 efDrag = null; 
