@@ -4190,7 +4190,7 @@
                 const nextLogical = (curLogical + ROT_STEP) % 360;
                 rotOverrides.set(k, nextLogical);
 
-                const target = curDisplay + ROT_STEP;
+                const target = nearestTarget(curDisplay, nextLogical);
                 animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
                 updateLocalCurves(q, r);
 
