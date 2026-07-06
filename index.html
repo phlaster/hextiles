@@ -5618,6 +5618,30 @@
             
 
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  RAM MONITOR & AGGRESSIVE GC
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            setInterval(() => {
+                // performance.memory is Chrome/Edge only
+                if (performance.memory) {
+                    const usedRAM = performance.memory.usedJSHeapSize;
+                    const threshold = 200 * 1024 * 1024; // 200 MB
+                    
+                    if (usedRAM > threshold) {
+                        if (window.gc) {
+                            try { 
+                                window.gc();
+                                console.log("GC has been successfully called");
+                            } catch(e) {
+                                console.log("Couldn't call GC: ", e);
+                            }
+                        } else {
+                            console.log("RAM is above 200MB, but window.gc is not exposed in this browser.");
+                        }
+                    }
+                }
+            }, 15000); // Every 15 seconds
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             //  INITIALIZATION
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
