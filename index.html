@@ -1612,6 +1612,33 @@
                 c.closePath();
             }
 
+            function traceHexPathBatch(c, hexes, sz) {
+                c.beginPath();
+                for (const h of hexes) {
+                    for (let i = 0; i < 6; i++) {
+                        const a = PI_DIV_3 * i;
+                        const vx = h.x + sz * Math.cos(a);
+                        const vy = h.y + sz * Math.sin(a);
+                        i === 0 ? c.moveTo(vx, vy) : c.lineTo(vx, vy);
+                    }
+                    c.closePath();
+                }
+            }
+
+            function traceHexGrid(c, cx, cy, sz) {
+                c.beginPath();
+                for (let i = 0; i < 3; i++) {
+                    const a1 = PI_DIV_3 * i;
+                    const a2 = PI_DIV_3 * (i + 1);
+                    const x1 = cx + sz * Math.cos(a1);
+                    const y1 = cy + sz * Math.sin(a1);
+                    const x2 = cx + sz * Math.cos(a2);
+                    const y2 = cy + sz * Math.sin(a2);
+                    if (i === 0) c.moveTo(x1, y1);
+                    c.lineTo(x2, y2);
+                }
+            }
+
             function visibleHexes(z, px, py, W, H) {
                 const margin = HEX_R * z * VISIBLE_BOUND_MULT;
                 const tl = pixToHex(-margin, -margin, z, px, py);
@@ -2933,7 +2960,7 @@
                 ctx.restore();
 
                 if (grid && gridAlpha > 0.01) {
-                    traceHexPath(ctx, cx, cy, rSz);
+                    traceHexGrid(ctx, cx, cy, sz);
                     ctx.globalAlpha = gridAlpha;
                     ctx.strokeStyle = COLORS.gridLine;
                     ctx.lineWidth = 1;
@@ -2948,12 +2975,12 @@
                 
                 traceHexPath(ctx, cx, cy, rSz);
                 
-                ctx.lineWidth = 6;
-                ctx.strokeStyle = COLORS.black;
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
                 ctx.stroke();
                 
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = COLORS.white;
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
                 ctx.stroke();
                 
                 ctx.restore();
@@ -3380,25 +3407,42 @@
                         }
                         curveCtx.clearRect(0, 0, W, H);
                         
-                        // Swap context to offscreen
                         const oldCtx = ctx;
                         ctx = curveCtx;
                         
+                        // 1. Draw curves only
                         for (const h of hexes) {
                             const rot = displayRot(h.q, h.r, now);
-                            drawTile(h.x, h.y, sz, rot, grid, null, tf, h.q, h.r, now, 1.0, 1.0);
+                            drawTile(h.x, h.y, sz, rot, false, null, tf, h.q, h.r, now, 1.0, 0.0);
                         }
                         
-                        // Restore main context and draw the single composited image with alpha
+                        // 2. Draw grid on top of curves as a single batched path
+                        if (showGrid && gridAlpha > 0.01) {
+                            traceHexPathBatch(ctx, hexes, sz);
+                            ctx.strokeStyle = COLORS.gridLine;
+                            ctx.lineWidth = 1;
+                            ctx.globalAlpha = gridAlpha;
+                            ctx.stroke();
+                            ctx.globalAlpha = 1.0;
+                        }
+                        
                         ctx = oldCtx;
-                        ctx.globalAlpha = curveAlpha;
+                        ctx.globalAlpha = Math.max(curveAlpha, gridAlpha);
                         ctx.drawImage(curveCanvas, 0, 0);
                         ctx.globalAlpha = 1.0;
                     } else {
                         // Fully opaque: draw directly (fastest path)
+                        // 1. Draw curves only
                         for (const h of hexes) {
                             const rot = displayRot(h.q, h.r, now);
-                            drawTile(h.x, h.y, sz, rot, grid, null, tf, h.q, h.r, now, 1.0, 1.0);
+                            drawTile(h.x, h.y, sz, rot, false, null, tf, h.q, h.r, now, 1.0, 0.0);
+                        }
+                        // 2. Draw grid on top
+                        if (showGrid) {
+                            traceHexPathBatch(ctx, hexes, sz);
+                            ctx.strokeStyle = COLORS.gridLine;
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
                         }
                     }
                 }
@@ -3439,12 +3483,14 @@
                             ctx.save();
                             traceHexPath(ctx, p.x, p.y, grid ? sz * 0.95 : sz);
                             ctx.globalAlpha = t.alpha;
-                            ctx.lineWidth = 6;
-                            ctx.strokeStyle = COLORS.black;
-                            ctx.stroke();
+                            
                             ctx.lineWidth = 3;
-                            ctx.strokeStyle = COLORS.white;
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
                             ctx.stroke();
+                            ctx.lineWidth = 1.5;
+                            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                            ctx.stroke();
+                            
                             ctx.globalAlpha = 1.0;
                             ctx.restore();
                         }
@@ -5456,14 +5502,14 @@
                                 let hexPath = "M ";
                                 for (let i = 0; i < 6; i++) {
                                     const ang = PI_DIV_3 * i;
-                                    const vx = (eSz * 0.95) * Math.cos(ang);
-                                    const vy = (eSz * 0.95) * Math.sin(ang);
+                                    const vx = eSz * Math.cos(ang);
+                                    const vy = eSz * Math.sin(ang);
                                     const tx_v = h.x + vx * cos - vy * sin;
                                     const ty_v = h.y + vx * sin + vy * cos;
                                     hexPath += `${tx_v.toFixed(2)} ${ty_v.toFixed(2)} `;
                                     if (i < 5) hexPath += "L ";
                                 }
-                                hexPath += "Z";
+                                hexPath += "Z ";
                                 gridPaths.push(hexPath);
                             }
                         }
@@ -5742,9 +5788,20 @@
                 drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, zoomOutStartTime, fx, fy);
 
                 const eSz = HEX_R * eZoom;
+                // 1. Draw curves only
                 for (const h of hexes) {
                     const rot = tileRot(h.q, h.r);
-                    drawTile(h.x, h.y, eSz, rot, showGrid, texImg, texTf, h.q, h.r, now, eCurveAlpha, eGridAlpha);
+                    drawTile(h.x, h.y, eSz, rot, false, texImg, texTf, h.q, h.r, now, eCurveAlpha, 0.0);
+                }
+                
+                // 2. Draw grid on top
+                if (showGrid && eGridAlpha > 0.01) {
+                    traceHexPathBatch(ctx, hexes, eSz);
+                    ctx.globalAlpha = eGridAlpha;
+                    ctx.strokeStyle = COLORS.gridLine;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
                 }
 
                 ctx = oldCtx;
