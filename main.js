@@ -1,6 +1,8 @@
 import { CONFIG, COLORS, COLOR_THEMES } from './config.js';
 import { hexToRgb, rgbToHex, colorDistance, shuffleArray, generateDistinctThemePool } from './utils.js';
 import { state } from './state.js';
+import { dom } from './dom.js';
+import { toast, renderGradientList, renderCurveList } from './ui.js';
 
 // ─── inject CSS custom properties from COLORS ───
 (function injectColors() {
@@ -169,100 +171,28 @@ import { state } from './state.js';
         isGradientDirty = true;
     }
 
-    let edgeRgbMap = new Map(); // Tracks current animated RGB for each individual edge
-    let edgeColorAnimating = false; // Flag to keep rendering
-    let lastRipple = { q: 0, r: 0, time: 0 }; // Epicenter for color wave
     let activeCurveIndex = 0;
     let nextCurveID = 0;
+
+    state.updateCurveColorsCache = updateCurveColorsCache;
+    state.updateGradientMarkersCache = updateGradientMarkersCache;
+
+    state.gradientMarkers = gradientMarkers;
+    state.gradientMarkersRGB = gradientMarkersRGB;
+    state.fadingMarkersRGB = fadingMarkersRGB;
+    state.curveColors = curveColors;
+    state.curveColorsRGB = curveColorsRGB;
+    state.activeCurveIndex = activeCurveIndex;
+
+    let edgeRgbMap = new Map(); 
+    let edgeColorAnimating = false; 
+    let lastRipple = { q: 0, r: 0, time: 0 }; 
     const curveMap = new Map();
     const curves = new Map();
     let queue = [];
     
     let curveColorPool = { name: '', pool: [] };
     let gradientColorPool = { name: '', pool: [] };
-
-    // ──── DOM Cache ────
-    const dom = {
-        cvs: document.getElementById('hexCanvas'),
-        wrap: document.getElementById('canvas-wrap'),
-
-        zoomLabel: document.getElementById('zoomLabel'),
-        zoomIn: document.getElementById('zoomIn'),
-        zoomOut: document.getElementById('zoomOut'),
-        gridToggle: document.getElementById('gridToggle'),
-        uploadZone: document.getElementById('uploadZone'),
-        fileInput: document.getElementById('fileInput'),
-        fileName: document.getElementById('fileName'),
-        editorPanel: document.getElementById('editorPanel'),
-        resetTexBtn: document.getElementById('resetTexBtn'),
-        resetAllRot: document.getElementById('resetAllRot'),
-        randAnglesBtn: document.getElementById('randAnglesBtn'),
-        randLineColorsBtn: document.getElementById('randLineColorsBtn'),
-        randGradColorsBtn: document.getElementById('randGradColorsBtn'),
-        unrenderedToggle: document.getElementById('unrenderedToggle'),
-        markersToggle: document.getElementById('markersToggle'),
-        cancelEd: document.getElementById('cancelEd'),
-        applyEd: document.getElementById('applyEd'),
-        toast: document.getElementById('toast'),
-        previewCanvas: document.getElementById('previewCanvas'),
-        sRot: document.getElementById('sRot'),
-        sScale: document.getElementById('sScale'),
-        sSX: document.getElementById('sSX'),
-        sSY: document.getElementById('sSY'),
-        sOX: document.getElementById('sOX'),
-        sOY: document.getElementById('sOY'),
-        vRot: document.getElementById('vRot'),
-        vScale: document.getElementById('vScale'),
-        vSX: document.getElementById('vSX'),
-        vSY: document.getElementById('vSY'),
-        vOX: document.getElementById('vOX'),
-        vOY: document.getElementById('vOY'),
-        gradientList: document.getElementById('gradientList'),
-        addMarkerBtn: document.getElementById('addMarkerBtn'),
-        curveList: document.getElementById('curveList'),
-        addCurveBtn: document.getElementById('addCurveBtn'),
-
-        exportBtn: document.getElementById('exportBtn'),
-        exportOverlay: document.getElementById('exportOverlay'),
-        exportFrame: document.getElementById('exportFrame'),
-        exportMenu: document.getElementById('exportMenu'),
-        exportBackdrop: document.getElementById('exportBackdrop'),
-        exportW: document.getElementById('exportW'),
-        exportH: document.getElementById('exportH'),
-        exportPngBtn: document.getElementById('exportPngBtn'),
-        exportEmbedBtn: document.getElementById('exportEmbedBtn'),
-        embedCodeWrap: document.getElementById('embedCodeWrap'),
-        embedCode: document.getElementById('embedCode'),
-        copyEmbedBtn: document.getElementById('copyEmbedBtn'),
-        
-        closeExportBtn: document.getElementById('closeExportBtn'),
-        exportImageBtn: document.getElementById('exportImageBtn'),
-        exportEmbedBtn: document.getElementById('exportEmbedBtn'),
-        imageExportWrap: document.getElementById('imageExportWrap'),
-        fmtPngBtn: document.getElementById('fmtPngBtn'),
-        fmtPdfBtn: document.getElementById('fmtPdfBtn'),
-        fmtSvgBtn: document.getElementById('fmtSvgBtn'),
-        aspectLockBtn: document.getElementById('aspectLockBtn'),
-        exportSide: document.getElementById('exportSide'),
-
-        statCurves: document.getElementById('statCurves'),
-        statColors: document.getElementById('statColors'),
-        statCurvesWrap: document.getElementById('statCurvesWrap'),
-        statColorsWrap: document.getElementById('statColorsWrap'),
-        ghLink: document.getElementById('ghLink'),
-
-        sCurveW: document.getElementById('sCurveW'),
-        vCurveW: document.getElementById('vCurveW'),
-
-        sAlterTiles: document.getElementById('sAlterTiles'),
-        vAlterTiles: document.getElementById('vAlterTiles'),
-
-        unrenderedToggle: document.getElementById('unrenderedToggle'),
-        bgStarsToggle: document.getElementById('bgStarsToggle'),
-        markersToggle: document.getElementById('markersToggle'),
-        flowToggle: document.getElementById('flowToggle'),
-        inertiaToggle: document.getElementById('inertiaToggle'),
-    };
 
     // ──── Fullscreen Toggle ────
     const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -1493,187 +1423,6 @@ import { state } from './state.js';
             return true;
         }
         return false;
-    }
-
-    // ──── Gradient List UI ────
-    function renderGradientList() {
-        const list = dom.gradientList;
-        list.innerHTML = '';
-        const canRemove = gradientMarkers.length > 1;
-
-        gradientMarkers.forEach((m, i) => {
-            const item = document.createElement('div');
-            item.className = 'grad-item';
-
-            const colorInput = document.createElement('input');
-            colorInput.type = 'color';
-            colorInput.value = m.color;
-            let originalColor = m.color;
-            colorInput.addEventListener('input', (e) => {
-                gradientMarkers[i].color = e.target.value;
-                updateGradientMarkersCache();
-                hexInput.value = e.target.value.toUpperCase();
-            });
-            colorInput.addEventListener('change', (e) => {
-                const newColor = e.target.value.toLowerCase();
-                gradientMarkers[i].color = newColor;
-                originalColor = newColor;
-                updateGradientMarkersCache();
-            });
-            colorInput.addEventListener('click', (e) => e.stopPropagation());
-
-            const hexInput = document.createElement('input');
-            hexInput.type = 'text';
-            hexInput.className = 'hex-input';
-            hexInput.value = m.color.toUpperCase();
-            hexInput.maxLength = 7;
-            hexInput.addEventListener('change', (e) => {
-                let val = e.target.value.trim();
-                if (!val.startsWith('#')) val = '#' + val;
-                if (/^#[0-9A-F]{6}$/i.test(val)) {
-                    const newColor = val.toLowerCase();
-                    gradientMarkers[i].color = newColor;
-                    originalColor = newColor;
-                    updateGradientMarkersCache();
-                    colorInput.value = newColor;
-                    e.target.value = newColor.toUpperCase();
-                } else {
-                    toast('Invalid hex color (e.g. #FF0000)');
-                    e.target.value = gradientMarkers[i].color.toUpperCase();
-                }
-            });
-            hexInput.addEventListener('click', (e) => e.stopPropagation());
-
-            item.appendChild(colorInput);
-            item.appendChild(hexInput);
-
-            if (canRemove) {
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'grad-remove-btn';
-                removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                removeBtn.title = 'Remove marker';
-                removeBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    
-                    const removedMarker = gradientMarkers[i];
-                    const cached = gradientMarkersRGB[i];
-                    if (cached) {
-                        fadingMarkersRGB.push({
-                            x: removedMarker.x,
-                            y: removedMarker.y,
-                            r: cached.r, g: cached.g, b: cached.b,
-                            origR: cached.r, origG: cached.g, origB: cached.b,
-                            weight: cached.weight || 1
-                        });
-                    }
-                    
-                    gradientMarkers.splice(i, 1);
-                    gradientMarkersRGB.splice(i, 1); 
-                    renderGradientList();
-                    updateGradientMarkersCache();
-                });
-                item.appendChild(removeBtn);
-            }
-
-            list.appendChild(item);
-        });
-    }
-
-    // ──── Curve List UI ────
-    function renderCurveList() {
-        const list = dom.curveList;
-        list.innerHTML = '';
-        const canRemove = curveColors.length > 1;
-
-        curveColors.forEach((m, i) => {
-            const item = document.createElement('div');
-            item.className = 'grad-item';
-
-            const colorInput = document.createElement('input');
-            colorInput.type = 'color';
-            colorInput.value = m;
-            let originalColor = m;
-            colorInput.addEventListener('input', (e) => {
-                curveColors[i] = e.target.value;
-                updateCurveColorsCache();
-                hexInput.value = e.target.value.toUpperCase();
-            });
-            colorInput.addEventListener('change', (e) => {
-                const newColor = e.target.value.toLowerCase();
-                const isDuplicate = curveColors.some((mm, idx) =>
-                    idx !== i && mm.toLowerCase() === newColor);
-                if (isDuplicate) {
-                    curveColors[i] = originalColor;
-                    e.target.value = originalColor;
-                    hexInput.value = originalColor.toUpperCase();
-                    toast('Color already exists in curve palette');
-                    updateCurveColorsCache(); // Must revert target RGB!
-                } else {
-                    curveColors[i] = newColor; // Explicitly set
-                    originalColor = newColor;
-                    updateCurveColorsCache();
-                }
-            });
-            colorInput.addEventListener('click', (e) => e.stopPropagation());
-
-            const hexInput = document.createElement('input');
-            hexInput.type = 'text';
-            hexInput.className = 'hex-input';
-            hexInput.value = m.toUpperCase();
-            hexInput.maxLength = 7;
-            hexInput.addEventListener('change', (e) => {
-                let val = e.target.value.trim();
-                if (!val.startsWith('#')) val = '#' + val;
-                if (/^#[0-9A-F]{6}$/i.test(val)) {
-                    const newColor = val.toLowerCase();
-                    const isDuplicate = curveColors.some((mm, idx) =>
-                        idx !== i && mm.toLowerCase() === newColor);
-                    if (isDuplicate) {
-                        toast('Color already exists in curve palette');
-                        e.target.value = curveColors[i].toUpperCase();
-                    } else {
-                        curveColors[i] = newColor;
-                        originalColor = newColor;
-                        updateCurveColorsCache();
-                        colorInput.value = newColor;
-                        e.target.value = newColor.toUpperCase();
-                    }
-                } else {
-                    toast('Invalid hex color (e.g. #FF0000)');
-                    e.target.value = curveColors[i].toUpperCase();
-                }
-            });
-            hexInput.addEventListener('click', (e) => e.stopPropagation());
-
-            item.appendChild(colorInput);
-            item.appendChild(hexInput);
-
-            if (canRemove) {
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'grad-remove-btn';
-                removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                removeBtn.title = 'Remove color';
-                removeBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    curveColors.splice(i, 1);
-                    if (activeCurveIndex === i) {
-                        activeCurveIndex = Math.min(i, curveColors.length - 1);
-                    } else if (activeCurveIndex > i) {
-                        activeCurveIndex--;
-                    }
-                    updateCurveColorsCache();
-                    renderCurveList();
-                });
-                item.appendChild(removeBtn);
-            }
-
-            item.addEventListener('click', () => {
-                activeCurveIndex = i;
-                renderCurveList();
-            });
-
-            list.appendChild(item);
-        });
     }
 
     // ──── drawTile ────
@@ -3604,15 +3353,7 @@ import { state } from './state.js';
         return url; 
     }
 
-    let toastTimer = null;
     let lastTapTime = 0;
-
-    function toast(msg) {
-        dom.toast.textContent = msg;
-        dom.toast.classList.add('show');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => dom.toast.classList.remove('show'), CONFIG.TOAST_DUR);
-    }
 
     function pickNewMarkerColor() {
         const existing = new Set(gradientMarkers.map(m => m.color.toLowerCase()));
@@ -4091,7 +3832,7 @@ import { state } from './state.js';
         if (curveColors.length >= 1 && eCurveAlpha > 0) {
             let safety = 2000;
             while (safety-- > 0) {
-                processQueue(exportBounds, true);
+                processQueue(exportBounds, false);
                 if (queue.length === 0) {
                     if (!findUncoloredTileInHexes(exportHexes)) break;
                 }
@@ -4562,7 +4303,7 @@ import { state } from './state.js';
         if (curveColors.length >= 1 && eCurveAlpha > 0) {
             let safety = 2000;
             while (safety-- > 0) {
-                processQueue(exportBounds, true); 
+                processQueue(exportBounds, false); 
                 if (queue.length === 0) {
                     if (!findUncoloredTileInHexes(hexes)) break;
                 }
@@ -4784,9 +4525,11 @@ import { state } from './state.js';
         inertiaEnabled = embedData.inertiaEnabled !== undefined ? embedData.inertiaEnabled : true;
         dom.inertiaToggle.checked = inertiaEnabled;
         texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
-        curveColors = embedData.curveColors && embedData.curveColors.length > 0
-            ? [...embedData.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']; 
-        gradientMarkers = (embedData.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({ ...m }));
+        curveColors.length = 0;
+        curveColors.push(...(embedData.curveColors && embedData.curveColors.length > 0
+            ? [...embedData.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']));
+        gradientMarkers.length = 0;
+        gradientMarkers.push(...(embedData.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({ ...m })));
         markersVisible = false; 
 
         updateCurveColorsCache();
@@ -4845,7 +4588,8 @@ import { state } from './state.js';
         alterTilesRatio = +dom.sAlterTiles.value || 0;
         dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
 
-        curveColors = ['#444444']; 
+        curveColors.length = 0; 
+        curveColors.push('#444444');
         updateCurveColorsCache();
         updateGradientMarkersCache(); 
 
