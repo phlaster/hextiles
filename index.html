@@ -1264,6 +1264,7 @@
             let flowEnabled = false;
             let inertiaEnabled = true;
             let panVX = 0, panVY = 0;
+            let lastPanMoveTime = 0;
             let driftAngle = Math.random() * Math.PI * 2;
             let driftTargetAngle = driftAngle;
             let flowState = 'drift';
@@ -3257,6 +3258,14 @@
                     driftY = Math.sin(driftAngle) * driftSpeed;
                 }
 
+                // Dampen residual velocity if the user holds the mouse/touch still before releasing
+                if ((isDrag || touchState.mode === 'pan' || touchState.mode === 'pan_wait') && Date.now() - lastPanMoveTime > 60) {
+                    panVX *= 0.6;
+                    panVY *= 0.6;
+                    if (Math.abs(panVX) < 0.5) panVX = 0;
+                    if (Math.abs(panVY) < 0.5) panVY = 0;
+                }
+
                 // Apply inertia ONLY in normal mode and when not dragging
                 if (!isEmbedMode && inertiaEnabled && !isDrag && !isExporting) {
                     panX += panVX;
@@ -4011,6 +4020,7 @@
                         if (inertiaEnabled) {
                             panVX = dPanX;
                             panVY = dPanY;
+                            lastPanMoveTime = Date.now();
                         } else {
                             panVX = 0;
                             panVY = 0;
@@ -4246,6 +4256,7 @@
                         if (inertiaEnabled) {
                             panVX = dPanX;
                             panVY = dPanY;
+                            lastPanMoveTime = Date.now();
                         } else {
                             panVX = 0;
                             panVY = 0;
