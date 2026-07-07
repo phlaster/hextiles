@@ -51,7 +51,7 @@ export const dom = {
     embedCodeWrap: document.getElementById('embedCodeWrap'),
     embedCode: document.getElementById('embedCode'),
     copyEmbedBtn: document.getElementById('copyEmbedBtn'),
-    
+
     closeExportBtn: document.getElementById('closeExportBtn'),
     exportImageBtn: document.getElementById('exportImageBtn'),
     exportEmbedBtn: document.getElementById('exportEmbedBtn'),
@@ -79,4 +79,8 @@ export const dom = {
     markersToggle: document.getElementById('markersToggle'),
     flowToggle: document.getElementById('flowToggle'),
     inertiaToggle: document.getElementById('inertiaToggle'),
+
+    sidebar: document.querySelector('.sidebar'),
+    sidebarToggle: document.getElementById('sidebarToggle'),
+    fullscreenBtn: document.getElementById('fullscreenBtn'),
 };

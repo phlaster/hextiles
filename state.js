@@ -1,11 +1,19 @@
-// state.js
-import { CONFIG, COLORS, COLOR_THEMES } from './config.js';
+import {
+    CONFIG,
+    COLORS,
+    COLOR_THEMES
+} from './config.js';
 
 export const state = {
     CONFIG,
     COLORS,
     COLOR_THEMES,
-    
+
+    // App context
+    isEmbedMode: false,
+    embedData: null,
+    ctx: null,
+
     // View & Pan
     zoom: 1,
     targetZoom: 1,
@@ -14,8 +22,22 @@ export const state = {
     zoomCx: 0,
     zoomCy: 0,
     zoomOutBlockedUntil: 0,
-    
+
     // Interaction
+    touchState: {
+        mode: 'none',
+        startX: 0,
+        startY: 0,
+        startPanX: 0,
+        startPanY: 0,
+        startDist: 0,
+        startZoom: 0,
+        pinchCenterX: 0,
+        pinchCenterY: 0,
+        markerIdx: -1,
+        startTime: 0,
+        timer: null
+    },
     isTouchDevice: false,
     isDrag: false,
     isDragMarker: false,
@@ -36,7 +58,7 @@ export const state = {
     touchOutlines: [],
     embedDragLastTile: null,
     lastTapTime: 0,
-    
+
     // Render flags
     showGrid: true,
     showUnrenderedDotted: true,
@@ -48,7 +70,7 @@ export const state = {
     targetInteractionFade: 1.0,
     isExporting: false,
     exportFreezeTime: 0,
-    
+
     // Physics
     panVX: 0,
     panVY: 0,
@@ -59,7 +81,7 @@ export const state = {
     flowStateEndTime: 0,
     driftSpeed: 0.5,
     driftTargetSpeed: 0.5,
-    
+
     // Grid & Rotation
     rotMode: 'hash',
     randomSeed: 0,
@@ -68,12 +90,19 @@ export const state = {
     animMap: new Map(),
     alterTilesRatio: 0,
     curveLineWidth: 1,
-    
+
     // Textures
     texImg: null,
     pendImg: null,
-    texTf: { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 },
-    
+    texTf: {
+        rot: 0,
+        scale: 1,
+        sx: 1,
+        sy: 1,
+        ox: 0,
+        oy: 0
+    },
+
     // Markers & Colors
     gradientMarkers: [],
     gradientMarkersRGB: [],
@@ -84,18 +113,28 @@ export const state = {
     curveColors: ['#444444'],
     curveColorsRGB: [],
     activeCurveIndex: 0,
-    
+
     // Curve Engine State
     curveMap: new Map(),
     curves: new Map(),
     queue: [],
     edgeRgbMap: new Map(),
     edgeColorAnimating: false,
-    lastRipple: { q: 0, r: 0, time: 0 },
+    lastRipple: {
+        q: 0,
+        r: 0,
+        time: 0
+    },
     nextCurveID: 0,
-    curveColorPool: { name: '', pool: [] },
-    gradientColorPool: { name: '', pool: [] },
-    
+    curveColorPool: {
+        name: '',
+        pool: []
+    },
+    gradientColorPool: {
+        name: '',
+        pool: []
+    },
+
     // Star Parallax
     starPanX5: 0,
     starPanY5: 0,
@@ -107,7 +146,7 @@ export const state = {
     starPanY3: 0,
     starZoom3: 1,
     zoomOutStartTime: 0,
-    
+
     // Misc
     isInitialized: false,
     gradientCanvas: null,
@@ -120,15 +159,22 @@ export const state = {
     currentUnassignedEdges: new Set(),
     previousUnassignedEdges: new Set(),
     magnetTimer: null,
-    
+    isRenderScheduled: false,
+    lastStatsUpdate: 0,
+
     // Export State
-    efRect: { x: 0, y: 0, w: 0, h: 0 },
+    efRect: {
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0
+    },
     efDrag: null,
     aspectLocked: false,
     targetRatio: 1,
     sidebarWasCollapsed: false,
-    
-    // Functions (bridged from main.js)
+
+    // Functions (bridged)
     updateGradientMarkersCache: () => {},
     updateCurveColorsCache: () => {},
     requestRender: () => {},
