@@ -3,6 +3,8 @@ import { hexToRgb, rgbToHex, colorDistance, shuffleArray, generateDistinctThemeP
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { toast, renderGradientList, renderCurveList } from './ui.js';
+import { hexToPix, pixToHex, hexDistance, hexKey, tileRot, displayRot, traceHexPath, traceHexPathBatch, traceHexGrid, visibleHexes, hash2D, isTileAlter, baseRot, nearestTarget } from './math.js';
+import { processQueue, findUncoloredTileInHexes, findNextUncoloredTile, getVisibleBounds, initializeCentralTile, splitCurve, updateLocalCurves, recalculateTile, edgeID, decodeEdgeID, getNeighbor, getCurveColorIndex, getAdjacentColors, getBackgroundColorAt, pickColorForNewCurve, mergeCurves, getOtherEdge } from './curves.js';
 
 // ─── inject CSS custom properties from COLORS ───
 (function injectColors() {
@@ -52,147 +54,51 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     const TWO_PI_DIV_3 = CONFIG.TWO_PI_DIV_3;
     const FOUR_PI_DIV_3 = CONFIG.FOUR_PI_DIV_3;
 
-    const TRACE_QUEUE_MARGIN = CONFIG.TRACE_QUEUE_MARGIN;
-    const TRACE_MAX_PER_FRAME = CONFIG.TRACE_MAX_PER_FRAME;
-    const TRACE_SEARCH_MARGIN = CONFIG.TRACE_SEARCH_MARGIN;
-    const VISIBLE_BOUND_MULT = CONFIG.VISIBLE_BOUND_MULT;
-
-    // ──── State ────
-    let zoom = 1,
-        targetZoom = 1,
-        panX = 0,
-        panY = 0;
-    let zoomCx = 0,
-        zoomCy = 0;
-    let zoomOutBlockedUntil = 0; 
-    let magnetTimer = null;
-    let isTouchDevice = false;
-    let touchOutlines = [];
-    let isDrag = false,
-        dragSX = 0,
-        dragSY = 0,
-        dragPX = 0,
-        dragPY = 0,
-        dragMoved = false;
-    let isExporting = false;
-    let embedDragLastTile = null;
-    let mouseScreenX = -9999,
-        mouseScreenY = -9999;
-    let hoveredQ = null,
-        hoveredR = null;
-    let visHoverX = null,
-        visHoverY = null;
-    let showGrid = true;
-    let curveLineWidth = 1;
-    let alterTilesRatio = 0;
-    let showUnrenderedDotted = true;
-    let showBgStars = true;
-    let flowEnabled = false;
-    let inertiaEnabled = true;
-    let panVX = 0, panVY = 0;
-    let lastPanMoveTime = 0;
-    let driftAngle = Math.random() * Math.PI * 2;
-    let driftTargetAngle = driftAngle;
-    let flowState = 'drift';
-    let flowStateEndTime = 0;
-    let driftSpeed = 0.5;
-    let driftTargetSpeed = 0.5;
-    let isInitialized = false;
-    let rotMode = 'hash';
-    let randomSeed = 0;
-    let rotSeed = 0; // Separate seed for rotation randomization
-    let texImg = null;
-    let pendImg = null;
-    let texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
-    const rotOverrides = new Map();
-    const animMap = new Map();
-
-    // ── use COLORS.markers and COLORS.curves directly ──
-    let gradientMarkers = [];
-    let gradientMarkersRGB = []; // Cached RGB values for gradient markers
-    let fadingMarkersRGB = []; // Cached RGB values for markers currently fading out
-    let currentAvgR = 0, currentAvgG = 0, currentAvgB = 0;
-    let draggedMarkerIndex = -1;
-    let isDragMarker = false;
-    let dragMarkerOffsetX = 0;
-    let dragMarkerOffsetY = 0;
-    let interactionFade = 1.0;
-    let targetInteractionFade = 1.0;
-    let targetMarkerTouchScale = 1.0;
-    let gradientCanvas = null;
-    let curveCanvas = document.createElement('canvas');
-    let curveCtx = curveCanvas.getContext('2d');
-    const starColorCache = new Map();
-    let markersVisible = true;
-
-    let curveColors = ['#444444']; // Target colors
-    let curveColorsRGB = []; // Cached RGB arrays for curve colors
-
-    // Pre-parse and cache RGB values to avoid repeated string parsing in render loop
+    // ──── UI Bridge Functions ────
     function updateCurveColorsCache() {
-        while (curveColorsRGB.length < curveColors.length) {
-            const rgb = hexToRgb(curveColors[curveColorsRGB.length]);
-            curveColorsRGB.push({ r: rgb[0], g: rgb[1], b: rgb[2], tr: rgb[0], tg: rgb[1], tb: rgb[2] });
+        while (state.curveColorsRGB.length < state.curveColors.length) {
+            const rgb = hexToRgb(state.curveColors[state.curveColorsRGB.length]);
+            state.curveColorsRGB.push({ r: rgb[0], g: rgb[1], b: rgb[2], tr: rgb[0], tg: rgb[1], tb: rgb[2] });
         }
-        if (curveColorsRGB.length > curveColors.length) {
-            curveColorsRGB.length = curveColors.length;
+        if (state.curveColorsRGB.length > state.curveColors.length) {
+            state.curveColorsRGB.length = state.curveColors.length;
         }
-        for (let i = 0; i < curveColors.length; i++) {
-            const rgb = hexToRgb(curveColors[i]);
-            curveColorsRGB[i].tr = rgb[0];
-            curveColorsRGB[i].tg = rgb[1];
-            curveColorsRGB[i].tb = rgb[2];
+        for (let i = 0; i < state.curveColors.length; i++) {
+            const rgb = hexToRgb(state.curveColors[i]);
+            state.curveColorsRGB[i].tr = rgb[0];
+            state.curveColorsRGB[i].tg = rgb[1];
+            state.curveColorsRGB[i].tb = rgb[2];
         }
     }
 
     function updateGradientMarkersCache() {
-        while (gradientMarkersRGB.length < gradientMarkers.length) {
-            const m = gradientMarkers[gradientMarkersRGB.length];
+        while (state.gradientMarkersRGB.length < state.gradientMarkers.length) {
+            const m = state.gradientMarkers[state.gradientMarkersRGB.length];
             const rgb = hexToRgb(m.color);
-            gradientMarkersRGB.push({ 
+            state.gradientMarkersRGB.push({ 
                 x: m.x, y: m.y, 
                 r: rgb[0], g: rgb[1], b: rgb[2], 
                 tr: rgb[0], tg: rgb[1], tb: rgb[2],
                 weight: 0 // Start at 0 for fade-in
             });
         }
-        if (gradientMarkersRGB.length > gradientMarkers.length) {
-            gradientMarkersRGB.length = gradientMarkers.length;
+        if (state.gradientMarkersRGB.length > state.gradientMarkers.length) {
+            state.gradientMarkersRGB.length = state.gradientMarkers.length;
         }
-        for (let i = 0; i < gradientMarkers.length; i++) {
-            const m = gradientMarkers[i];
-            gradientMarkersRGB[i].x = m.x;
-            gradientMarkersRGB[i].y = m.y;
+        for (let i = 0; i < state.gradientMarkers.length; i++) {
+            const m = state.gradientMarkers[i];
+            state.gradientMarkersRGB[i].x = m.x;
+            state.gradientMarkersRGB[i].y = m.y;
             const rgb = hexToRgb(m.color);
-            gradientMarkersRGB[i].tr = rgb[0];
-            gradientMarkersRGB[i].tg = rgb[1];
-            gradientMarkersRGB[i].tb = rgb[2];
+            state.gradientMarkersRGB[i].tr = rgb[0];
+            state.gradientMarkersRGB[i].tg = rgb[1];
+            state.gradientMarkersRGB[i].tb = rgb[2];
         }
-        isGradientDirty = true;
+        state.isGradientDirty = true;
     }
-
-    let activeCurveIndex = 0;
-    let nextCurveID = 0;
 
     state.updateCurveColorsCache = updateCurveColorsCache;
     state.updateGradientMarkersCache = updateGradientMarkersCache;
-
-    state.gradientMarkers = gradientMarkers;
-    state.gradientMarkersRGB = gradientMarkersRGB;
-    state.fadingMarkersRGB = fadingMarkersRGB;
-    state.curveColors = curveColors;
-    state.curveColorsRGB = curveColorsRGB;
-    state.activeCurveIndex = activeCurveIndex;
-
-    let edgeRgbMap = new Map(); 
-    let edgeColorAnimating = false; 
-    let lastRipple = { q: 0, r: 0, time: 0 }; 
-    const curveMap = new Map();
-    const curves = new Map();
-    let queue = [];
-    
-    let curveColorPool = { name: '', pool: [] };
-    let gradientColorPool = { name: '', pool: [] };
 
     // ──── Fullscreen Toggle ────
     const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -243,162 +149,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     let ctx = dom.cvs.getContext('2d');
 
-    // ──── helpers ────
-    function hexDistance(q1, r1, q2, r2) {
-        return (Math.abs(q1 - q2) + Math.abs(q1 + r1 - q2 - r2) + Math.abs(r1 - r2)) / 2;
-    }
-
-    function hexKey(q, r) { return (q << 16) ^ r; }
-
-    function hashQR(q, r) {
-        let h = (q * 374761393 + r * 668265263 + randomSeed * 1013904223 + 2654435761) | 0;
-        h = Math.imul(h ^ (h >>> 13), 1274126177);
-        return Math.abs(h ^ (h >>> 16));
-    }
-
-    function hashRot(q, r) {
-        let h = (q * 374761393 + r * 668265263 + rotSeed * 1013904223 + 2654435761) | 0;
-        h = Math.imul(h ^ (h >>> 13), 1274126177);
-        return Math.abs(h ^ (h >>> 16));
-    }
-
-    function isTileAlter(q, r) {
-        if (alterTilesRatio <= 0) return false;
-        return (hashQR(q, r) % 10000) / 10000 < alterTilesRatio;
-    }
-
-    function baseRot(q, r) {
-        if (rotMode === 'zero') return 0;
-        return (hashRot(q, r) % ROT_MOD) * ROT_STEP;
-    }
-
-    function tileRot(q, r) {
-        const k = hexKey(q, r);
-        return rotOverrides.has(k) ? rotOverrides.get(k) : baseRot(q, r);
-    }
-
-    function nearestTarget(from, target) {
-        const diff = ((target - from) % 360 + 540) % 360 - 180;
-        return from + diff;
-    }
-
-    function displayRot(q, r, now) {
-        const k = hexKey(q, r);
-        const a = animMap.get(k);
-        if (!a) return tileRot(q, r);
-        const elapsed = now - a.start;
-        if (elapsed >= a.duration) return tileRot(q, r);
-        const t = elapsed / a.duration;
-        const ease = 1 - Math.pow(1 - t, 3);
-        return a.from + (a.to - a.from) * ease;
-    }
-
-    function hexToPix(q, r, z, px, py) {
-        return {
-            x: HEX_R * 1.5 * q * z + px,
-            y: HEX_R * (SQRT3 * 0.5 * q + SQRT3 * r) * z + py
-        };
-    }
-
-    function pixToHex(sx, sy, z, px, py) {
-        const x = (sx - px) / (HEX_R * z);
-        const y = (sy - py) / (HEX_R * z);
-        const fq = x * 2 / 3;
-        const fr = -x / 3 + SQRT3 / 3 * y;
-        return hexRound(fq, fr);
-    }
-
-    function hexRound(fq, fr) {
-        const fs = -fq - fr;
-        let rq = Math.round(fq),
-            rr = Math.round(fr),
-            rs = Math.round(fs);
-        const dq = Math.abs(rq - fq),
-            dr = Math.abs(rr - fr),
-            ds = Math.abs(rs - fs);
-        if (dq > dr && dq > ds) rq = -rr - rs;
-        else if (dr > ds) rr = -rq - rs;
-        return { q: rq, r: rr };
-    }
-
-    function traceHexPath(c, cx, cy, sz) {
-        c.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const a = PI_DIV_3 * i;
-            const vx = cx + sz * Math.cos(a);
-            const vy = cy + sz * Math.sin(a);
-            i === 0 ? c.moveTo(vx, vy) : c.lineTo(vx, vy);
-        }
-        c.closePath();
-    }
-
-    function traceHexPathBatch(c, hexes, sz) {
-        c.beginPath();
-        for (const h of hexes) {
-            for (let i = 0; i < 6; i++) {
-                const a = PI_DIV_3 * i;
-                const vx = h.x + sz * Math.cos(a);
-                const vy = h.y + sz * Math.sin(a);
-                i === 0 ? c.moveTo(vx, vy) : c.lineTo(vx, vy);
-            }
-            c.closePath();
-        }
-    }
-
-    function traceHexGrid(c, cx, cy, sz) {
-        c.beginPath();
-        for (let i = 0; i < 3; i++) {
-            const a1 = PI_DIV_3 * i;
-            const a2 = PI_DIV_3 * (i + 1);
-            const x1 = cx + sz * Math.cos(a1);
-            const y1 = cy + sz * Math.sin(a1);
-            const x2 = cx + sz * Math.cos(a2);
-            const y2 = cy + sz * Math.sin(a2);
-            if (i === 0) c.moveTo(x1, y1);
-            c.lineTo(x2, y2);
-        }
-    }
-
-    function visibleHexes(z, px, py, W, H) {
-        const margin = HEX_R * z * VISIBLE_BOUND_MULT;
-        const tl = pixToHex(-margin, -margin, z, px, py);
-        const tr = pixToHex(W + margin, -margin, z, px, py);
-        const bl = pixToHex(-margin, H + margin, z, px, py);
-        const br = pixToHex(W + margin, H + margin, z, px, py);
-        const minQ = Math.min(tl.q, tr.q, bl.q, br.q);
-        const maxQ = Math.max(tl.q, tr.q, bl.q, br.q);
-        const minR = Math.min(tl.r, tr.r, bl.r, br.r);
-        const maxR = Math.max(tl.r, tr.r, bl.r, br.r);
-        
-        let count = 0;
-        for (let q = minQ; q <= maxQ; q++) {
-            for (let r = minR; r <= maxR; r++) {
-                const p = hexToPix(q, r, z, px, py);
-                if (p.x > -margin && p.x < W + margin && p.y > -margin && p.y < H + margin) {
-                    // Reuse existing object from pool or push a new one if pool is too small
-                    if (count >= visibleHexesArray.length) {
-                        visibleHexesArray.push({ q: 0, r: 0, x: 0, y: 0 });
-                    }
-                    const h = visibleHexesArray[count];
-                    h.q = q;
-                    h.r = r;
-                    h.x = p.x;
-                    h.y = p.y;
-                    count++;
-                }
-            }
-        }
-        // Truncate array length so iterators only see active elements
-        visibleHexesArray.length = count; 
-        return visibleHexesArray;
-    }
-
-    function hash2D(x, y) {
-        let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
-        h = Math.imul(h ^ (h >>> 13), 1274126177);
-        return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-    }
-
+    // ──── IDW Gradient & Stars ────
     function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime, offsetX = 0, offsetY = 0, blazeFade = 1.0) {
         if (spacing < CONFIG.STAR_MIN_SPACING) return;
         
@@ -497,10 +248,10 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 
                 // Cache fill style string to avoid GC stutter
                 let fillKey = `${sR},${sA.toFixed(3)}`;
-                let fillStyle = starColorCache.get(fillKey);
+                let fillStyle = state.starColorCache.get(fillKey);
                 if (!fillStyle) {
                     fillStyle = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
-                    starColorCache.set(fillKey, fillStyle);
+                    state.starColorCache.set(fillKey, fillStyle);
                 }
                 ctx.fillStyle = fillStyle;
                 
@@ -512,19 +263,19 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     }
 
     function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2, dPanX3, dPanY3, now, currentZoom, zoomOutTime, offsetX = 0, offsetY = 0) {
-        if (!showBgStars) return;
+        if (!state.showBgStars) return;
         
         ctx.save();
         
         // Layer 1: Size 7, medium spacing, fastest parallax
-        const spacing5 = CONFIG.STAR_SPACING_LARGE * starZoom5 * coordScale;
+        const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * coordScale;
         drawDotLayer(W, H, spacing5, CONFIG.STAR_SIZE_LARGE, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0, offsetX, offsetY);
         
         // Layer 2: Size 4, densest spacing, medium parallax
-        const spacing2 = CONFIG.STAR_SPACING_MED * starZoom2 * coordScale;
+        const spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * coordScale;
         drawDotLayer(W, H, spacing2, CONFIG.STAR_SIZE_MED, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0, offsetX, offsetY);
         
-        // Layer 3: Size 2, least dense, slowest parallax. Fades in at low zoom.
+        // Layer 3: Size 2, least dense, slowest parallax. Fades in at low state.zoom.
         let layer3Alpha = 0;
         let canBlaze = false;
         let blazeFade = 1.0;
@@ -543,7 +294,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         }
         
         if (layer3Alpha > 0) {
-            const spacing3 = CONFIG.STAR_SPACING_SMALL * starZoom3 * coordScale;
+            const spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * coordScale;
             drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime, offsetX, offsetY, blazeFade);
         }
         
@@ -552,16 +303,16 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     // ──── IDW Gradient ────
     function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offsetY = 0, qualityScale = 0.2) {
-        if (gradientMarkersRGB.length === 0 && fadingMarkersRGB.length === 0) return;
+        if (state.gradientMarkersRGB.length === 0 && state.fadingMarkersRGB.length === 0) return;
         const lowW = Math.max(2, Math.ceil(W * qualityScale));
         const lowH = Math.max(2, Math.ceil(H * qualityScale));
 
-        if (!gradientCanvas) gradientCanvas = document.createElement('canvas');
-        if (gradientCanvas.width !== lowW || gradientCanvas.height !== lowH) {
-            gradientCanvas.width = lowW;
-            gradientCanvas.height = lowH;
+        if (!state.gradientCanvas) state.gradientCanvas = document.createElement('canvas');
+        if (state.gradientCanvas.width !== lowW || state.gradientCanvas.height !== lowH) {
+            state.gradientCanvas.width = lowW;
+            state.gradientCanvas.height = lowH;
         }
-        const gctx = gradientCanvas.getContext('2d');
+        const gctx = state.gradientCanvas.getContext('2d');
         const imgData = gctx.createImageData(lowW, lowH);
         const data = imgData.data;
 
@@ -571,8 +322,8 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         
         // 1. Calculate the weighted average color of active markers
         let avgR = 0, avgG = 0, avgB = 0, avgW = 0;
-        for (let i = 0; i < gradientMarkersRGB.length; i++) {
-            const m = gradientMarkersRGB[i];
+        for (let i = 0; i < state.gradientMarkersRGB.length; i++) {
+            const m = state.gradientMarkersRGB[i];
             const w = m.weight !== undefined ? m.weight : 1;
             avgR += m.r * w;
             avgG += m.g * w;
@@ -589,8 +340,8 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
         // 2. Combine active and fading markers.
         const allMarkers = [];
-        for (let i = 0; i < gradientMarkersRGB.length; i++) {
-            const m = gradientMarkersRGB[i];
+        for (let i = 0; i < state.gradientMarkersRGB.length; i++) {
+            const m = state.gradientMarkersRGB[i];
             const w = Math.max(0, Math.min(1, m.weight !== undefined ? m.weight : 1));
             allMarkers.push({
                 x: (m.x - offsetX) * coordScale,
@@ -601,8 +352,8 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 weight: w
             });
         }
-        for (let i = 0; i < fadingMarkersRGB.length; i++) {
-            const m = fadingMarkersRGB[i];
+        for (let i = 0; i < state.fadingMarkersRGB.length; i++) {
+            const m = state.fadingMarkersRGB[i];
             const w = Math.max(0, Math.min(1, m.weight !== undefined ? m.weight : 0));
             allMarkers.push({
                 x: (m.x - offsetX) * coordScale,
@@ -655,18 +406,18 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     }
     
     function drawIDWGradient(W, H, coordScale = 1, offsetX = 0, offsetY = 0) {
-        if (gradientMarkersRGB.length === 0 && fadingMarkersRGB.length === 0) return;
+        if (state.gradientMarkersRGB.length === 0 && state.fadingMarkersRGB.length === 0) return;
         
         const targetLowW = Math.max(2, Math.ceil(W * 0.2));
         const targetLowH = Math.max(2, Math.ceil(H * 0.2));
-        if (isGradientDirty || coordScale !== 1 || !gradientCanvas || gradientCanvas.width !== targetLowW || gradientCanvas.height !== targetLowH) {
+        if (state.isGradientDirty || coordScale !== 1 || !state.gradientCanvas || state.gradientCanvas.width !== targetLowW || state.gradientCanvas.height !== targetLowH) {
             updateIDWGradientCanvas(W, H, coordScale, offsetX, offsetY);
-            isGradientDirty = false;
+            state.isGradientDirty = false;
         }
         
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(gradientCanvas, 0, 0, gradientCanvas.width, gradientCanvas.height, 0, 0, W, H);
+        ctx.drawImage(state.gradientCanvas, 0, 0, state.gradientCanvas.width, state.gradientCanvas.height, 0, 0, W, H);
     }
 
     function getContrastColor(hex) {
@@ -717,600 +468,28 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         c.restore();
     }
 
-    // ──── Curve Engine ────
-    function getNeighbor(q, r, e) {
-        if (e === 0) return { q: q + 1, r: r, edge: 3 };
-        if (e === 1) return { q: q, r: r + 1, edge: 4 };
-        if (e === 2) return { q: q - 1, r: r + 1, edge: 5 };
-        if (e === 3) return { q: q - 1, r: r, edge: 0 };
-        if (e === 4) return { q: q, r: r - 1, edge: 1 };
-        if (e === 5) return { q: q + 1, r: r - 1, edge: 2 };
-    }
-
-    function edgeID(q, r, e) {
-        const n = getNeighbor(q, r, e);
-        const id1 = (q + 100000) * 10000000 + (r + 100000) * 10 + e;
-        const id2 = (n.q + 100000) * 10000000 + (n.r + 100000) * 10 + n.edge;
-        return id1 < id2 ? id1 : id2;
-    }
-
-    function decodeEdgeID(id) {
-        const e = id % 10;
-        let rem = Math.floor(id / 10);
-        const r = (rem % 1000000) - 100000;      
-        const q = Math.floor(rem / 1000000) - 100000;
-        return [q, r, e];
-    }
-
-    function getOtherEdge(k, e, isAlter = false) {
-        const eb = (e - k + 6) % 6;
-        let ob;
-        if (!isAlter) {
-            if (eb === 2) ob = 3;
-            else if (eb === 3) ob = 2;
-            else if (eb === 4) ob = 0;
-            else if (eb === 0) ob = 4;
-            else if (eb === 1) ob = 5;
-            else if (eb === 5) ob = 1;
-        } else {
-            ob = eb ^ 1; 
-        }
-        return (ob + k) % 6;
-    }
-
-    function mergeCurves(c1, c2) {
-        if (c1 === c2) return;
-        let curve1 = curves.get(c1);
-        let curve2 = curves.get(c2);
-        if (!curve1 || !curve2) return;
-        let target, source;
-        
-        // Union by size: iterate the smaller set
-        if (curve1.size > curve2.size) {
-            target = curve1;
-            source = curve2;
-        } else if (curve2.size > curve1.size) {
-            target = curve2;
-            source = curve1;
-        } else {
-            if (Math.random() < 0.5) {
-                target = curve1;
-                source = curve2;
-            } else {
-                target = curve2;
-                source = curve1;
-            }
-        }
-        
-        for (let id of source.edges) {
-            curveMap.set(id, target.id);
-            target.edges.add(id);
-        }
-        target.size = target.edges.size;
-        if (source.locked) target.locked = true;
-        
-        // Explicitly clear the Set so the GC reclaims the memory immediately
-        source.edges.clear(); 
-        source.edges = null; 
-        
-        curves.delete(source.id);
-    }
-
-    function processQueue(customBounds, noCull = false) {
-        let bounds = customBounds || getVisibleBounds();
-        let margin = noCull ? 1000000 : TRACE_QUEUE_MARGIN;
-        let processed = 0;
-        let maxPerFrame = TRACE_MAX_PER_FRAME;
-        
-        while (queue.length > 0 && processed < maxPerFrame) {
-            let item = queue.pop();
-            processed++;
-            
-            if (!noCull && (item.q < bounds.minQ - margin || item.q > bounds.maxQ + margin ||
-                item.r < bounds.minR - margin || item.r > bounds.maxR + margin)) continue;
-                
-            let id = edgeID(item.q, item.r, item.e);
-            if (!curveMap.has(id)) continue;
-            
-            let curveID = curveMap.get(id);
-            let curve = curves.get(curveID);
-            if (!curve) continue;
-            
-            let k = (tileRot(item.q, item.r) / 60) % 6;
-            let pe = getOtherEdge(k, item.e, isTileAlter(item.q, item.r));
-            let pid = edgeID(item.q, item.r, pe);
-            
-            if (curveMap.has(pid)) {
-                let existingCurve = curveMap.get(pid);
-                if (existingCurve === curveID) curve.locked = true;
-                else mergeCurves(curveID, existingCurve);
-            } else {
-                curveMap.set(pid, curveID);
-                curve.edges.add(pid);
-                curve.size++;
-                let n = getNeighbor(item.q, item.r, pe);
-                queue.push({ q: n.q, r: n.r, e: n.edge });
-            }
-        }
-    }
-
-    function findUncoloredTileInHexes(hexes) {
-        for (const h of hexes) {
-            for (let i = 0; i < 6; i++) {
-                if (!curveMap.has(edgeID(h.q, h.r, i))) {
-                    recalculateTile(h.q, h.r);
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    function findNextUncoloredTile() {
-        let bounds = getVisibleBounds();
-        let margin = TRACE_SEARCH_MARGIN;
-        for (let q = bounds.minQ - margin; q <= bounds.maxQ + margin; q++) {
-            for (let r = bounds.minR - margin; r <= bounds.maxR + margin; r++) {
-                for (let i = 0; i < 6; i++) {
-                    if (!curveMap.has(edgeID(q, r, i))) {
-                        recalculateTile(q, r);
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    function getVisibleBounds() {
-        let W = dom.cvs.width,
-            H = dom.cvs.height;
-        let z = zoom,
-            px = panX,
-            py = panY;
-        let margin = HEX_R * z * VISIBLE_BOUND_MULT;
-        let tl = pixToHex(-margin, -margin, z, px, py);
-        let tr = pixToHex(W + margin, -margin, z, px, py);
-        let bl = pixToHex(-margin, H + margin, z, px, py);
-        let br = pixToHex(W + margin, H + margin, z, px, py);
-        return {
-            minQ: Math.min(tl.q, tr.q, bl.q, br.q),
-            maxQ: Math.max(tl.q, tr.q, bl.q, br.q),
-            minR: Math.min(tl.r, tr.r, bl.r, br.r),
-            maxR: Math.max(tl.r, tr.r, bl.r, br.r)
-        };
-    }
-
-    function initializeCentralTile() {
-        if (curveColors.length <= 1) return;
-        if (curveMap.size > 0) return;
-        let center = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, zoom, panX, panY);
-        recalculateTile(center.q, center.r);
-    }
-
-    // ──── Curve Color Helpers ────
-    function hashString(s) {
-        let h = 0;
-        for (let i = 0; i < s.length; i++) {
-            h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-        }
-        return Math.abs(h);
-    }
-
-    function getCurveColorIndex(curveID) {
-        const c = curves.get(curveID);
-        if (!c) return -1;
-        return (typeof c.color === 'number') ? c.color : curveColors.indexOf(c.color);
-    }
-
-    function getAdjacentColors(edgeSet, excludeCurveID) {
-        const adjColors = new Set();
-        for (const id of edgeSet) {
-            const [q, r, e] = decodeEdgeID(id);
-            
-            const adjEdgesInTile = [(e + 1) % 6, (e + 5) % 6];
-            for (const ae of adjEdgesInTile) {
-                const adjID = edgeID(q, r, ae);
-                if (curveMap.has(adjID)) {
-                    const cid = curveMap.get(adjID);
-                    if (cid !== excludeCurveID) {
-                        const c = curves.get(cid);
-                        if (c) adjColors.add(c.color); 
-                    }
-                }
-            }
-            
-            const n = getNeighbor(q, r, e);
-            const adjEdgesInNeighbor = [(n.edge + 1) % 6, (n.edge + 5) % 6];
-            for (const ae of adjEdgesInNeighbor) {
-                const adjID = edgeID(n.q, n.r, ae);
-                if (curveMap.has(adjID)) {
-                    const cid = curveMap.get(adjID);
-                    if (cid !== excludeCurveID) {
-                        const c = curves.get(cid);
-                        if (c) adjColors.add(c.color);
-                    }
-                }
-            }
-        }
-        return adjColors;
-    }
-
-    function getBackgroundColorAt(x, y, coordScale = 1, offsetX = 0, offsetY = 0) {
-        if (gradientMarkersRGB.length === 0 && fadingMarkersRGB.length === 0) return null;
-        let totalWeight = 0, r = 0, g = 0, b = 0;
-        
-        for (let i = 0; i < gradientMarkersRGB.length; i++) {
-            const m = gradientMarkersRGB[i];
-            const mx = (m.x - offsetX) * coordScale;
-            const my = (m.y - offsetY) * coordScale;
-            const dx = x - mx;
-            const dy = y - my;
-            const distSq = dx * dx + dy * dy + 0.5;
-            const weight = (1 / (distSq * distSq)) * (m.weight || 0);
-            totalWeight += weight;
-            r += m.r * weight;
-            g += m.g * weight;
-            b += m.b * weight;
-        }
-        for (let i = 0; i < fadingMarkersRGB.length; i++) {
-            const m = fadingMarkersRGB[i];
-            const mx = (m.x - offsetX) * coordScale;
-            const my = (m.y - offsetY) * coordScale;
-            const dx = x - mx;
-            const dy = y - my;
-            const distSq = dx * dx + dy * dy + 0.5;
-            const weight = (1 / (distSq * distSq)) * (m.weight || 0);
-            totalWeight += weight;
-            r += m.r * weight;
-            g += m.g * weight;
-            b += m.b * weight;
-        }
-        
-        if (totalWeight === 0) return null;
-        return [r / totalWeight, g / totalWeight, b / totalWeight];
-    }
-
-    function pickColorForNewCurve(adjColors, avoidColor = -1, seed1 = 0, seed2 = 0, bgColor = null) {
-        if (curveColors.length === 1) return 0;
-        if (!adjColors) adjColors = new Set();
-        
-        const candidates = [];
-        for (let i = 0; i < curveColors.length; i++) {
-            if (!adjColors.has(i) && i !== avoidColor) candidates.push(i);
-        }
-        
-        let pool = candidates;
-        if (pool.length === 0) {
-            const fallback = [];
-            for (let i = 0; i < curveColors.length; i++) {
-                if (!adjColors.has(i)) fallback.push(i);
-            }
-            pool = fallback;
-        }
-        
-        if (pool.length === 0) {
-            return (avoidColor + 1) % curveColors.length;
-        }
-
-        if (bgColor && pool.length > 1) {
-            let bestContrast = 0;
-            const contrasts = new Array(pool.length);
-            
-            for (let i = 0; i < pool.length; i++) {
-                const cIdx = pool[i];
-                const curveRgb = hexToRgb(curveColors[cIdx]);
-                const contrast = colorDistance(curveRgb, bgColor);
-                contrasts[i] = contrast;
-                if (contrast > bestContrast) bestContrast = contrast;
-            }
-            
-            const threshold = bestContrast * 0.7;
-            const goodCandidates = [];
-            for (let i = 0; i < pool.length; i++) {
-                if (contrasts[i] >= threshold) goodCandidates.push(pool[i]);
-            }
-            
-            if (goodCandidates.length > 0) {
-                pool = goodCandidates;
-            }
-        }
-
-        let h = Math.imul(seed1 ^ (seed2 * 2654435761), 0x9E3779B1) >>> 0;
-        return pool[h % pool.length];
-    }
-
-    function splitCurve(curveID) {
-        let curve = curves.get(curveID);
-        if (!curve || curve.size <= 1) return;
-        let visited = new Set();
-        let components = [];
-        for (let id of curve.edges) {
-            if (visited.has(id)) continue;
-            let comp = [];
-            let q = [id];
-            visited.add(id);
-            while (q.length > 0) {
-                let curr = q.pop();
-                comp.push(curr);
-                let [q1, r1, e1] = decodeEdgeID(curr);
-                let n1 = getNeighbor(q1, r1, e1);
-                let k1 = (tileRot(q1, r1) / 60) % 6;
-                let pe1 = getOtherEdge(k1, e1, isTileAlter(q1, r1));
-                let pid1 = edgeID(q1, r1, pe1);
-                if (curve.edges.has(pid1) && !visited.has(pid1)) {
-                    visited.add(pid1);
-                    q.push(pid1);
-                }
-                let q2 = n1.q, r2 = n1.r, e2 = n1.edge;
-                let k2 = (tileRot(q2, r2) / 60) % 6;
-                let pe2 = getOtherEdge(k2, e2, isTileAlter(q2, r2));
-                let pid2 = edgeID(q2, r2, pe2);
-                if (curve.edges.has(pid2) && !visited.has(pid2)) {
-                    visited.add(pid2);
-                    q.push(pid2);
-                }
-            }
-            components.push(comp);
-        }
-        if (components.length > 1) {
-            components.sort((a, b) => b.length - a.length);
-            curve.edges = new Set(components[0]);
-            curve.size = curve.edges.size;
-            
-            for (let i = 1; i < components.length; i++) {
-                let newID = nextCurveID++;
-                let compSet = new Set(components[i]);
-                let adjColors = (curveColors.length <= 1) ? null : getAdjacentColors(compSet, curve.id);
-                
-                const [eq, er, ee] = decodeEdgeID(components[i][0]);
-                const p = hexToPix(eq, er, zoom, panX, panY);
-                const bgColor = getBackgroundColorAt(p.x, p.y);
-                
-                let newColor;
-                if (curveColors.length > 1) {
-                    // 1. Find candidates that aren't adjacent and aren't the original color
-                    let validCandidates = [];
-                    
-                    // Safely get original color index in case array size changed
-                    const origColorIdx = (typeof curve.color === 'number') ? (curve.color % curveColors.length) : 0;
-                    
-                    for (let i = 0; i < curveColors.length; i++) {
-                        if (!adjColors.has(i) && i !== origColorIdx) {
-                            validCandidates.push(i);
-                        }
-                    }
-                    // 2. Fallback if all colors are adjacent
-                    if (validCandidates.length === 0) {
-                        for (let i = 0; i < curveColors.length; i++) {
-                            if (!adjColors.has(i)) validCandidates.push(i);
-                        }
-                    }
-                    // 3. Ultimate fallback (guarantees a different color)
-                    newColor = (origColorIdx + 1) % curveColors.length;
-                    
-                    // 4. Pick the candidate with the maximum color distance from the original
-                    if (validCandidates.length > 0) {
-                        let maxDist = -1;
-                        const origRgb = hexToRgb(curveColors[origColorIdx]);
-                        for (const cIdx of validCandidates) {
-                            const cRgb = hexToRgb(curveColors[cIdx]);
-                            const dist = colorDistance(origRgb, cRgb);
-                            if (dist > maxDist) {
-                                maxDist = dist;
-                                newColor = cIdx;
-                            }
-                        }
-                    }
-                } else {
-                    newColor = 0;
-                }
-                
-                let newCurve = {
-                    id: newID, color: newColor, size: components[i].length, locked: false,
-                    edges: compSet
-                };
-                curves.set(newID, newCurve);
-                for (let id of newCurve.edges) curveMap.set(id, newID);
-            }
-        } else if (components.length === 1) {
-            // Edges are still connected; existing Set and size are already correct.
-            // No need to allocate a new Set.
-        } else {
-            curves.delete(curveID);
-        }
-    }
-
-    function updateLocalCurves(q, r) {
-        let affectedCurves = new Set();
-        let ids = [];
-        for (let i = 0; i < 6; i++) {
-            let id = edgeID(q, r, i);
-            ids.push(id);
-            if (curveMap.has(id)) affectedCurves.add(curveMap.get(id));
-        }
-        if (affectedCurves.size === 0) { recalculateTile(q, r); return; }
-        if (affectedCurves.size === 1) {
-            let cid = [...affectedCurves][0];
-            let allEdgesSame = true;
-            for (let i = 0; i < 6; i++) {
-                if (!curveMap.has(ids[i]) || curveMap.get(ids[i]) !== cid) { allEdgesSame = false; break; }
-            }
-            if (allEdgesSame) return;
-        }
-        
-        for (let i = 0; i < 6; i++) {
-            let id = ids[i];
-            if (curveMap.has(id)) {
-                let cid = curveMap.get(id);
-                let curve = curves.get(cid);
-                if (curve) {
-                    curve.edges.delete(id);
-                    curve.size = curve.edges.size;
-                }
-                curveMap.delete(id);
-            }
-        }
-        let validAffected = [];
-        for (let cid of affectedCurves) {
-            let curve = curves.get(cid);
-            if (curve) {
-                if (curve.size === 0) curves.delete(cid);
-                else validAffected.push(cid);
-            }
-        }
-        for (let cid of validAffected) splitCurve(cid);
-        let k = (tileRot(q, r) / 60) % 6;
-        let alter = isTileAlter(q, r);
-        let pairs = alter ? [
-            [(0 + k) % 6, (1 + k) % 6],
-            [(2 + k) % 6, (3 + k) % 6],
-            [(4 + k) % 6, (5 + k) % 6]
-        ] : [
-            [(2 + k) % 6, (3 + k) % 6],
-            [(4 + k) % 6, (0 + k) % 6],
-            [(1 + k) % 6, (5 + k) % 6]
-        ];
-        for (let pair of pairs) {
-            let e1 = pair[0],
-                e2 = pair[1];
-            let id1 = ids[e1],
-                id2 = ids[e2];
-            let n1 = getNeighbor(q, r, e1);
-            let k1 = (tileRot(n1.q, n1.r) / 60) % 6;
-            let n1_other = getOtherEdge(k1, n1.edge, isTileAlter(n1.q, n1.r));
-            let n1_other_id = edgeID(n1.q, n1.r, n1_other);
-            let c1 = curveMap.has(n1_other_id) ? curveMap.get(n1_other_id) : -1;
-            let n2 = getNeighbor(q, r, e2);
-            let k2 = (tileRot(n2.q, n2.r) / 60) % 6;
-            let n2_other = getOtherEdge(k2, n2.edge, isTileAlter(n2.q, n2.r));
-            let n2_other_id = edgeID(n2.q, n2.r, n2_other);
-            let c2 = curveMap.has(n2_other_id) ? curveMap.get(n2_other_id) : -1;
-            if (c1 !== -1 && c2 !== -1) {
-                if (c1 !== c2) {
-                    mergeCurves(c1, c2);
-                }
-                let targetCurveID = curveMap.get(n1_other_id);
-                curveMap.set(id1, targetCurveID);
-                curveMap.set(id2, targetCurveID);
-                curves.get(targetCurveID).edges.add(id1);
-                curves.get(targetCurveID).edges.add(id2);
-                curves.get(targetCurveID).size = curves.get(targetCurveID).edges.size;
-            } else if (c1 !== -1) {
-                curveMap.set(id1, c1);
-                curveMap.set(id2, c1);
-                curves.get(c1).edges.add(id1);
-                curves.get(c1).edges.add(id2);
-                curves.get(c1).size = curves.get(c1).edges.size;
-                queue.push({ q: n2.q, r: n2.r, e: n2.edge });
-            } else if (c2 !== -1) {
-                curveMap.set(id1, c2);
-                curveMap.set(id2, c2);
-                curves.get(c2).edges.add(id1);
-                curves.get(c2).edges.add(id2);
-                curves.get(c2).size = curves.get(c2).edges.size;
-                queue.push({ q: n1.q, r: n1.r, e: n1.edge });
-            } else {
-                let tempSet = new Set([id1, id2]);
-                let adjColors = (curveColors.length <= 1) ? null : getAdjacentColors(tempSet, -1);
-                
-                const p = hexToPix(q, r, zoom, panX, panY);
-                const bgColor = getBackgroundColorAt(p.x, p.y);
-                let color = pickColorForNewCurve(adjColors, -1, q, r * 6 + e1, bgColor);
-                
-                let curveID = nextCurveID++;
-                
-                curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
-                curveMap.set(id1, curveID);
-                curveMap.set(id2, curveID);
-                curves.get(curveID).edges.add(id1);
-                curves.get(curveID).edges.add(id2);
-                curves.get(curveID).size = 2;
-                queue.push({ q: n1.q, r: n1.r, e: n1.edge });
-                queue.push({ q: n2.q, r: n2.r, e: n2.edge });
-            }
-        }
-    }
-
-    function recalculateTile(q, r) {
-        let k = (tileRot(q, r) / 60) % 6;
-        let alter = isTileAlter(q, r);
-        let pairs = alter ? [
-            [(0 + k) % 6, (1 + k) % 6],
-            [(2 + k) % 6, (3 + k) % 6],
-            [(4 + k) % 6, (5 + k) % 6]
-        ] : [
-            [(2 + k) % 6, (3 + k) % 6],
-            [(4 + k) % 6, (0 + k) % 6],
-            [(1 + k) % 6, (5 + k) % 6]
-        ];
-        for (let pair of pairs) {
-            let e1 = pair[0],
-                e2 = pair[1];
-            let id1 = edgeID(q, r, e1);
-            let id2 = edgeID(q, r, e2);
-            let c1 = curveMap.has(id1) ? curveMap.get(id1) : -1;
-            let c2 = curveMap.has(id2) ? curveMap.get(id2) : -1;
-            if (c1 !== -1 && c2 !== -1) {
-                if (c1 !== c2) mergeCurves(c1, c2);
-            } else if (c1 !== -1) {
-                curveMap.set(id2, c1);
-                curves.get(c1).edges.add(id2);
-                curves.get(c1).size++;
-                let n = getNeighbor(q, r, e2);
-                queue.push({ q: n.q, r: n.r, e: n.edge });
-            } else if (c2 !== -1) {
-                curveMap.set(id1, c2);
-                curves.get(c2).edges.add(id1);
-                curves.get(c2).size++;
-                let n = getNeighbor(q, r, e1);
-                queue.push({ q: n.q, r: n.r, e: n.edge });
-            } else {
-                let curveID = nextCurveID++;
-                let tempSet = new Set([id1, id2]);
-                let adjColors = (curveColors.length <= 1) ? null : getAdjacentColors(tempSet, -1);
-                const p = hexToPix(q, r, zoom, panX, panY);
-                const bgColor = getBackgroundColorAt(p.x, p.y);
-                let color = pickColorForNewCurve(adjColors, -1, q, r * 6 + e1, bgColor);
-                
-                curves.set(curveID, { id: curveID, color: color, size: 0, locked: false, edges: new Set() });
-                curveMap.set(id1, curveID);
-                curves.get(curveID).edges.add(id1);
-                curves.get(curveID).size++;
-                let n1 = getNeighbor(q, r, e1);
-                queue.push({ q: n1.q, r: n1.r, e: n1.edge });
-                
-                curveMap.set(id2, curveID);
-                curves.get(curveID).edges.add(id2);
-                curves.get(curveID).size++;
-                let n2 = getNeighbor(q, r, e2);
-                queue.push({ q: n2.q, r: n2.r, e: n2.edge });
-            }
-        }
-    }
-
     function applyCurveStyle(q, r, e, sz, now) {
         ctx.setLineDash([]);
         const id = edgeID(q, r, e);
         
         let targetRgb = null;
         let targetCurveID = -1;
-        if (curveColors.length === 1) {
-            const c = curveColorsRGB[0];
+        if (state.curveColors.length === 1) {
+            const c = state.curveColorsRGB[0];
             if (c) {
                 targetRgb = { r: c.tr !== undefined ? c.tr : c.r, g: c.tg !== undefined ? c.tg : c.g, b: c.tb !== undefined ? c.tb : c.b };
             } else {
-                const rgb = hexToRgb(curveColors[0]);
+                const rgb = hexToRgb(state.curveColors[0]);
                 targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
             }
             targetCurveID = -2; 
-        } else if (curveMap.has(id)) {
-            targetCurveID = curveMap.get(id);
-            let curve = curves.get(targetCurveID);
+        } else if (state.curveMap.has(id)) {
+            targetCurveID = state.curveMap.get(id);
+            let curve = state.curves.get(targetCurveID);
             if (curve) {
                 let c = curve.color;
                 if (typeof c === 'number') {
-                    const cc = curveColorsRGB[c % curveColorsRGB.length];
+                    const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
                     targetRgb = { r: cc.tr !== undefined ? cc.tr : cc.r, g: cc.tg !== undefined ? cc.tg : cc.g, b: cc.tb !== undefined ? cc.tb : cc.b };
                 } else {
                     const rgb = hexToRgb(c); 
@@ -1320,7 +499,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         }
 
         if (targetRgb) {
-            let edgeData = edgeRgbMap.get(id);
+            let edgeData = state.edgeRgbMap.get(id);
             if (!edgeData) {
                 edgeData = { 
                     rgb: [targetRgb.r, targetRgb.g, targetRgb.b], 
@@ -1332,10 +511,10 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                     rippleActive: false,
                     colorStr: '' 
                 };
-                edgeRgbMap.set(id, edgeData);
+                state.edgeRgbMap.set(id, edgeData);
             }
             
-            if (isExporting) {
+            if (state.isExporting) {
                 edgeData.rgb[0] = targetRgb.r;
                 edgeData.rgb[1] = targetRgb.g;
                 edgeData.rgb[2] = targetRgb.b;
@@ -1343,7 +522,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 edgeData.rippleActive = false;
                 edgeData.colorStr = '';
             } else {
-                if (previousUnassignedEdges.has(id)) {
+                if (state.previousUnassignedEdges.has(id)) {
                     edgeData.alpha = 0;
                     edgeData.rippleActive = true;
                     edgeData.rippleTime = 0; 
@@ -1359,10 +538,10 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                                         Math.abs(targetRgb.g - edgeData.rgb[1]) > 3 || 
                                         Math.abs(targetRgb.b - edgeData.rgb[2]) > 5;
                     
-                    if (needsRipple && lastRipple.time > 0 && (now - lastRipple.time < 3000)) {
-                        edgeData.rippleTime = lastRipple.time;
-                        edgeData.rippleQ = lastRipple.q;
-                        edgeData.rippleR = lastRipple.r;
+                    if (needsRipple && state.lastRipple.time > 0 && (now - state.lastRipple.time < 3000)) {
+                        edgeData.rippleTime = state.lastRipple.time;
+                        edgeData.rippleQ = state.lastRipple.q;
+                        edgeData.rippleR = state.lastRipple.r;
                         edgeData.rippleActive = true;
                         edgeData.colorStr = '';
                     }
@@ -1375,7 +554,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                     const delay = dist * 35; 
                     if (now - edgeData.rippleTime < delay) {
                         canTransition = false;
-                        edgeColorAnimating = true; 
+                        state.edgeColorAnimating = true; 
                     }
                 }
                 
@@ -1393,7 +572,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                     edgeData.alpha = newAlpha;
                     
                     if (diff) {
-                        edgeColorAnimating = true;
+                        state.edgeColorAnimating = true;
                         edgeData.colorStr = ''; // Invalidate cache
                     } else {
                         edgeData.rippleActive = false;
@@ -1410,14 +589,14 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             }
             
             ctx.strokeStyle = edgeData.colorStr;
-            ctx.lineWidth = sz / 3 * curveLineWidth;
+            ctx.lineWidth = sz / 3 * state.curveLineWidth;
             return true;
         }
 
-        currentUnassignedEdges.add(id);
-        if (showUnrenderedDotted) {
+        state.currentUnassignedEdges.add(id);
+        if (state.showUnrenderedDotted) {
             ctx.strokeStyle = `rgba(110, 110, 144, 0.55)`;
-            ctx.lineWidth = Math.max(1, (sz / 10) * curveLineWidth);
+            ctx.lineWidth = Math.max(1, (sz / 10) * state.curveLineWidth);
             const dash = Math.max(2, sz / 8);
             ctx.setLineDash([dash, dash]);
             return true;
@@ -1525,20 +704,19 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         ctx.restore();
     }
 
-    let solvedCheckTimeout = null;
     function checkIfSolved() {
-        if (solvedCheckTimeout) return; 
+        if (state.solvedCheckTimeout) return; 
         
-        solvedCheckTimeout = setTimeout(() => {
-            solvedCheckTimeout = null;
+        state.solvedCheckTimeout = setTimeout(() => {
+            state.solvedCheckTimeout = null;
             performSolvedCheck();
         }, CONFIG.STATS_UPDATE_INTERVAL);
     }
     
     function performSolvedCheck() {
-        if (curveColors.length <= 1) return;
+        if (state.curveColors.length <= 1) return;
 
-        if (zoom <= CONFIG.ZOOM_FADE_MID) {
+        if (state.zoom <= CONFIG.ZOOM_FADE_MID) {
             window.dispatchEvent(new CustomEvent('hexCurveSolved', { detail: { solved: false } }));
             try { 
                 if (isEmbedMode) window.parent.postMessage({ type: 'HEX_CURVE_SOLVED', solved: false }, '*'); 
@@ -1549,7 +727,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         const isCollapsed = document.body.classList.contains('sidebar-collapsed');
         const effectiveW = (isCollapsed || isEmbedMode) ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
         const H = dom.cvs.height;
-        const hexes = visibleHexes(zoom, panX, panY, dom.cvs.width, H);
+        const hexes = visibleHexes(state.zoom, state.panX, state.panY, dom.cvs.width, H);
         if (hexes.length === 0) return;
         
         const visibleEdges = new Set();
@@ -1566,12 +744,12 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         let maxColorCount = 0;
 
         for (const id of visibleEdges) {
-            if (curveMap.has(id)) {
-                const curveID = curveMap.get(id);
-                const curve = curves.get(curveID);
+            if (state.curveMap.has(id)) {
+                const curveID = state.curveMap.get(id);
+                const curve = state.curves.get(curveID);
                 if (curve) {
                     let c = curve.color;
-                    if (typeof c === 'number') c = curveColors[c % curveColors.length];
+                    if (typeof c === 'number') c = state.curveColors[c % state.curveColors.length];
                     c = c.toLowerCase();
                     
                     totalColored++;
@@ -1613,20 +791,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     // ──── Main render loop ────
     let isRenderScheduled = false;
     let lastStatsUpdate = 0; 
-    let isGradientDirty = true; 
-    let starPanX5 = 0;
-    let starPanY5 = 0;
-    let starZoom5 = 1; 
-    let starPanX2 = 0;
-    let starPanY2 = 0;
-    let starZoom2 = 1; 
-    let starPanX3 = 0;
-    let starPanY3 = 0;
-    let starZoom3 = 1; 
-    let zoomOutStartTime = 0;
-    const visibleHexesArray = []; 
-    let currentUnassignedEdges = new Set();
-    let previousUnassignedEdges = new Set();
+
     function requestRender() {
         if (!isRenderScheduled) {
             isRenderScheduled = true;
@@ -1637,53 +802,52 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         }
     }
     
-    let exportFreezeTime = 0;
     function render() {
         const W = dom.cvs.width,
             H = dom.cvs.height;
         let now = Date.now();
         
-        if (isExporting) {
-            if (!exportFreezeTime) exportFreezeTime = now;
-            now = exportFreezeTime;
+        if (state.isExporting) {
+            if (!state.exportFreezeTime) state.exportFreezeTime = now;
+            now = state.exportFreezeTime;
         } else {
-            exportFreezeTime = 0;
+            state.exportFreezeTime = 0;
         }
 
-        const z = zoom,
-            px = panX,
-            py = panY;
-        const grid = showGrid,
-            img = texImg,
-            tf = texTf;
+        const z = state.zoom,
+            px = state.panX,
+            py = state.panY;
+        const grid = state.showGrid,
+            img = state.texImg,
+            tf = state.texTf;
         
-        // Use original editor zoom for visual fades in embed mode
+        // Use original editor state.zoom for visual fades in embed mode
         const visZoom = (isEmbedMode && embedData && embedData.origZoom) ? embedData.origZoom : z;
 
-        for (const [k, a] of animMap) {
-            if (now - a.start >= a.duration) animMap.delete(k);
+        for (const [k, a] of state.animMap) {
+            if (now - a.start >= a.duration) state.animMap.delete(k);
         }
 
         ctx.fillStyle = COLORS.bg;
         ctx.fillRect(0, 0, W, H);
         drawIDWGradient(W, H);
-        drawBackgroundStars(W, H, 1, starPanX5, starPanY5, starPanX2, starPanY2, starPanX3, starPanY3, now, visZoom, zoomOutStartTime);
+        drawBackgroundStars(W, H, 1, state.starPanX5, state.starPanY5, state.starPanX2, state.starPanY2, state.starPanX3, state.starPanY3, now, visZoom, state.zoomOutStartTime);
 
-        let keepRendering = (animMap.size > 0 || isDrag || isDragMarker);
-        if (showBgStars && visZoom <= CONFIG.ZOOM_FADE_MID) keepRendering = true;
+        let keepRendering = (state.animMap.size > 0 || state.isDrag || state.isDragMarker);
+        if (state.showBgStars && visZoom <= CONFIG.ZOOM_FADE_MID) keepRendering = true;
         
-        if (isExporting) keepRendering = false;
+        if (state.isExporting) keepRendering = false;
 
-        edgeColorAnimating = false;
+        state.edgeColorAnimating = false;
         let gradColorAnimating = false;
         let curveColorAnimating = false;
-        currentUnassignedEdges.clear();
+        state.currentUnassignedEdges.clear();
 
-        if (!isExporting) {
+        if (!state.isExporting) {
             // 1. Calculate target average color of ACTIVE markers
             let avgR = 0, avgG = 0, avgB = 0, avgW = 0;
-            for (let i = 0; i < gradientMarkersRGB.length; i++) {
-                const m = gradientMarkersRGB[i];
+            for (let i = 0; i < state.gradientMarkersRGB.length; i++) {
+                const m = state.gradientMarkersRGB[i];
                 const w = m.weight !== undefined ? m.weight : 1;
                 avgR += m.tr * w;
                 avgG += m.tg * w;
@@ -1691,17 +855,17 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 avgW += w;
             }
             if (avgW > 0) {
-                currentAvgR = avgR / avgW;
-                currentAvgG = avgG / avgW;
-                currentAvgB = avgB / avgW;
+                state.currentAvgR = avgR / avgW;
+                state.currentAvgG = avgG / avgW;
+                state.currentAvgB = avgB / avgW;
             } else {
-                currentAvgR = parseInt(COLORS.bg.slice(1, 3), 16);
-                currentAvgG = parseInt(COLORS.bg.slice(3, 5), 16);
-                currentAvgB = parseInt(COLORS.bg.slice(5, 7), 16);
+                state.currentAvgR = parseInt(COLORS.bg.slice(1, 3), 16);
+                state.currentAvgG = parseInt(COLORS.bg.slice(3, 5), 16);
+                state.currentAvgB = parseInt(COLORS.bg.slice(5, 7), 16);
             }
 
-            for (let i = 0; i < gradientMarkersRGB.length; i++) {
-                const m = gradientMarkersRGB[i];
+            for (let i = 0; i < state.gradientMarkersRGB.length; i++) {
+                const m = state.gradientMarkersRGB[i];
                 let diff = false;
                 
                 const nWeight = m.weight + (1 - m.weight) * 0.05;
@@ -1709,9 +873,9 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 m.weight = nWeight;
                 
                 // Calculate target color using IDW formula, then LERP towards it at 0.1
-                const targetR = currentAvgR + (m.tr - currentAvgR) * m.weight;
-                const targetG = currentAvgG + (m.tg - currentAvgG) * m.weight;
-                const targetB = currentAvgB + (m.tb - currentAvgB) * m.weight;
+                const targetR = state.currentAvgR + (m.tr - state.currentAvgR) * m.weight;
+                const targetG = state.currentAvgG + (m.tg - state.currentAvgG) * m.weight;
+                const targetB = state.currentAvgB + (m.tb - state.currentAvgB) * m.weight;
                 
                 const nr = m.r + (targetR - m.r) * 0.1;
                 const ng = m.g + (targetG - m.g) * 0.1;
@@ -1722,26 +886,26 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 
                 if (diff) {
                     gradColorAnimating = true;
-                    isGradientDirty = true;
+                    state.isGradientDirty = true;
                 }
             }
             
-            for (let i = fadingMarkersRGB.length - 1; i >= 0; i--) {
-                const m = fadingMarkersRGB[i];
+            for (let i = state.fadingMarkersRGB.length - 1; i >= 0; i--) {
+                const m = state.fadingMarkersRGB[i];
                 m.weight += (0 - m.weight) * 0.05; // Match fade-in speed!
                 
                 if (m.weight <= 0.00008) {
-                    fadingMarkersRGB.splice(i, 1);
+                    state.fadingMarkersRGB.splice(i, 1);
                     // Force one last update to clear it completely
                     gradColorAnimating = true;
-                    isGradientDirty = true;
+                    state.isGradientDirty = true;
                     continue;
                 }
                 
                 // Calculate target color using IDW formula, then LERP towards it at 0.1
-                const targetR = currentAvgR + (m.origR - currentAvgR) * m.weight;
-                const targetG = currentAvgG + (m.origG - currentAvgG) * m.weight;
-                const targetB = currentAvgB + (m.origB - currentAvgB) * m.weight;
+                const targetR = state.currentAvgR + (m.origR - state.currentAvgR) * m.weight;
+                const targetG = state.currentAvgG + (m.origG - state.currentAvgG) * m.weight;
+                const targetB = state.currentAvgB + (m.origB - state.currentAvgB) * m.weight;
                 
                 const nr = m.r + (targetR - m.r) * 0.1;
                 const ng = m.g + (targetG - m.g) * 0.1;
@@ -1751,35 +915,35 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 
                 // ALWAYS force rendering until it is completely gone
                 gradColorAnimating = true;
-                isGradientDirty = true;
+                state.isGradientDirty = true;
             }
         }
 
         // Flow physics: drift and turn
         let driftX = 0, driftY = 0;
-        if (flowEnabled && !isExporting) {
+        if (state.flowEnabled && !state.isExporting) {
             let speedMult = (visZoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
-            let isHovering = hoveredQ !== null && hoveredR !== null;
+            let isHovering = state.hoveredQ !== null && state.hoveredR !== null;
             
             // If hovering started during a long drift, interrupt it so the new angle picks quickly (within 2s)
-            if (isHovering && flowState === 'drift' && (flowStateEndTime - now) > 2000) {
-                flowStateEndTime = now + 2000;
+            if (isHovering && state.flowState === 'drift' && (state.flowStateEndTime - now) > 2000) {
+                state.flowStateEndTime = now + 2000;
             }
             
-            if (now > flowStateEndTime) {
-                if (flowState === 'drift') {
+            if (now > state.flowStateEndTime) {
+                if (state.flowState === 'drift') {
                     // Transition to turning
-                    flowState = 'turn';
+                    state.flowState = 'turn';
                     // 1s turn while hovering, normal 3s turn otherwise
-                    flowStateEndTime = now + (isHovering ? 1000 : CONFIG.FLOW_TURN_DURATION);
+                    state.flowStateEndTime = now + (isHovering ? 1000 : CONFIG.FLOW_TURN_DURATION);
                     
                     // Determine base angle: opposite of mouse vector if hovering, else current drift
-                    let baseAngle = driftAngle;
+                    let baseAngle = state.driftAngle;
                     if (isHovering) {
                         const cx = W / 2;
                         const cy = H / 2;
-                        const dx = mouseScreenX - cx;
-                        const dy = mouseScreenY - cy;
+                        const dx = state.mouseScreenX - cx;
+                        const dy = state.mouseScreenY - cy;
                         baseAngle = Math.atan2(dy, dx) + Math.PI; // Opposite of mouse vector
                     }
                     
@@ -1794,91 +958,91 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                             break;
                         }
                     }
-                    driftTargetAngle = baseAngle + turnAmount;
+                    state.driftTargetAngle = baseAngle + turnAmount;
                 } else {
                     // Transition back to drifting
-                    flowState = 'drift';
-                    driftAngle = driftTargetAngle; // Snap to target to prevent residual drift
+                    state.flowState = 'drift';
+                    state.driftAngle = state.driftTargetAngle; // Snap to target to prevent residual drift
                     // 5s drift while hovering, normal 10-20s drift otherwise
-                    flowStateEndTime = now + (isHovering ? 5000 : (CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE));
+                    state.flowStateEndTime = now + (isHovering ? 5000 : (CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE));
                     
                     // Set new base speed for this drift segment
-                    driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult;
+                    state.driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult;
                 }
             }
             
-            if (flowState === 'turn') {
+            if (state.flowState === 'turn') {
                 // Slow rotation of velocity vector
-                let angleDiff = driftTargetAngle - driftAngle;
+                let angleDiff = state.driftTargetAngle - state.driftAngle;
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                 while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                driftAngle += angleDiff * 0.03; 
+                state.driftAngle += angleDiff * 0.03; 
             }
             
             // Random fluctuations of absolute speed during drift
             let fluctuation = Math.sin(now / 800) * 0.2 + Math.sin(now / 350) * 0.1;
-            let currentTargetSpeed = driftTargetSpeed + (driftTargetSpeed * fluctuation);
-            driftSpeed += (currentTargetSpeed - driftSpeed) * 0.02;
+            let currentTargetSpeed = state.driftTargetSpeed + (state.driftTargetSpeed * fluctuation);
+            state.driftSpeed += (currentTargetSpeed - state.driftSpeed) * 0.02;
             
-            driftX = Math.cos(driftAngle) * driftSpeed;
-            driftY = Math.sin(driftAngle) * driftSpeed;
+            driftX = Math.cos(state.driftAngle) * state.driftSpeed;
+            driftY = Math.sin(state.driftAngle) * state.driftSpeed;
         }
 
         // Dampen residual velocity if the user holds the mouse/touch still before releasing
-        if ((isDrag || touchState.mode === 'pan' || touchState.mode === 'pan_wait') && Date.now() - lastPanMoveTime > 60) {
-            panVX *= 0.6;
-            panVY *= 0.6;
-            if (Math.abs(panVX) < 0.5) panVX = 0;
-            if (Math.abs(panVY) < 0.5) panVY = 0;
+        if ((state.isDrag || touchState.mode === 'pan' || touchState.mode === 'pan_wait') && Date.now() - state.lastPanMoveTime > 60) {
+            state.panVX *= 0.6;
+            state.panVY *= 0.6;
+            if (Math.abs(state.panVX) < 0.5) state.panVX = 0;
+            if (Math.abs(state.panVY) < 0.5) state.panVY = 0;
         }
 
         // Apply inertia ONLY in normal mode and when not dragging
-        if (!isEmbedMode && inertiaEnabled && !isDrag && !isExporting) {
-            panX += panVX;
-            panY += panVY;
-            starPanX5 += panVX * CONFIG.STAR_PARALLAX_LARGE; 
-            starPanY5 += panVY * CONFIG.STAR_PARALLAX_LARGE;
-            starPanX2 += panVX * CONFIG.STAR_PARALLAX_MED;
-            starPanY2 += panVY * CONFIG.STAR_PARALLAX_MED;
-            starPanX3 += panVX * CONFIG.STAR_PARALLAX_SMALL;
-            starPanY3 += panVY * CONFIG.STAR_PARALLAX_SMALL;
+        if (!isEmbedMode && state.inertiaEnabled && !state.isDrag && !state.isExporting) {
+            state.panX += state.panVX;
+            state.panY += state.panVY;
+            state.starPanX5 += state.panVX * CONFIG.STAR_PARALLAX_LARGE; 
+            state.starPanY5 += state.panVY * CONFIG.STAR_PARALLAX_LARGE;
+            state.starPanX2 += state.panVX * CONFIG.STAR_PARALLAX_MED;
+            state.starPanY2 += state.panVY * CONFIG.STAR_PARALLAX_MED;
+            state.starPanX3 += state.panVX * CONFIG.STAR_PARALLAX_SMALL;
+            state.starPanY3 += state.panVY * CONFIG.STAR_PARALLAX_SMALL;
             
             let damping = (visZoom < CONFIG.ZOOM_FADE_START_MULT) ? CONFIG.INERTIA_DAMPING_LOW : CONFIG.INERTIA_DAMPING_NORMAL;
-            panVX *= damping; 
-            panVY *= damping;
+            state.panVX *= damping; 
+            state.panVY *= damping;
             
-            if (Math.abs(panVX) < CONFIG.INERTIA_THRESHOLD) panVX = 0;
-            if (Math.abs(panVY) < CONFIG.INERTIA_THRESHOLD) panVY = 0;
-            if (panVX !== 0 || panVY !== 0) keepRendering = true;
+            if (Math.abs(state.panVX) < CONFIG.INERTIA_THRESHOLD) state.panVX = 0;
+            if (Math.abs(state.panVY) < CONFIG.INERTIA_THRESHOLD) state.panVY = 0;
+            if (state.panVX !== 0 || state.panVY !== 0) keepRendering = true;
         }
         
         // Apply flow drift in BOTH normal and embed modes (when enabled)
-        if (flowEnabled && (!isDrag || isEmbedMode) && !isExporting) {
-            panX += driftX;
-            panY += driftY;
-            starPanX5 += driftX * CONFIG.STAR_PARALLAX_LARGE; 
-            starPanY5 += driftY * CONFIG.STAR_PARALLAX_LARGE;
-            starPanX2 += driftX * CONFIG.STAR_PARALLAX_MED;
-            starPanY2 += driftY * CONFIG.STAR_PARALLAX_MED;
-            starPanX3 += driftX * CONFIG.STAR_PARALLAX_SMALL;
-            starPanY3 += driftY * CONFIG.STAR_PARALLAX_SMALL;
+        if (state.flowEnabled && (!state.isDrag || isEmbedMode) && !state.isExporting) {
+            state.panX += driftX;
+            state.panY += driftY;
+            state.starPanX5 += driftX * CONFIG.STAR_PARALLAX_LARGE; 
+            state.starPanY5 += driftY * CONFIG.STAR_PARALLAX_LARGE;
+            state.starPanX2 += driftX * CONFIG.STAR_PARALLAX_MED;
+            state.starPanY2 += driftY * CONFIG.STAR_PARALLAX_MED;
+            state.starPanX3 += driftX * CONFIG.STAR_PARALLAX_SMALL;
+            state.starPanY3 += driftY * CONFIG.STAR_PARALLAX_SMALL;
             keepRendering = true; 
         }
 
-        // Smooth zoom interpolation
-        if (!isExporting && Math.abs(targetZoom - zoom) > 0.0001) {
+        // Smooth state.zoom interpolation
+        if (!state.isExporting && Math.abs(state.targetZoom - state.zoom) > 0.0001) {
             let lerpFactor = 0.15; 
-            let step = (targetZoom - zoom) * lerpFactor;
-            if (Math.abs(step) < 0.0005) step = targetZoom - zoom; // Snap if very close
-            setZoom(zoom + step, zoomCx, zoomCy);
+            let step = (state.targetZoom - state.zoom) * lerpFactor;
+            if (Math.abs(step) < 0.0005) step = state.targetZoom - state.zoom; // Snap if very close
+            setZoom(state.zoom + step, state.zoomCx, state.zoomCy);
             keepRendering = true;
         }
 
-        // Track when user reaches exactly 20% zoom for blazing star delay
+        // Track when user reaches exactly 20% state.zoom for blazing star delay
         if (visZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) { 
-            if (zoomOutStartTime === 0) zoomOutStartTime = now;
+            if (state.zoomOutStartTime === 0) state.zoomOutStartTime = now;
         } else {
-            zoomOutStartTime = 0; 
+            state.zoomOutStartTime = 0; 
         }
 
         const sz = HEX_R * z;
@@ -1897,11 +1061,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             gridAlpha = curveAlpha;
         }
 
-        interactionFade += (targetInteractionFade - interactionFade) * 0.2;
-        if (Math.abs(targetInteractionFade - interactionFade) > 0.001) keepRendering = true;
+        state.interactionFade += (state.targetInteractionFade - state.interactionFade) * 0.2;
+        if (Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001) keepRendering = true;
 
-        curveAlpha *= interactionFade;
-        gridAlpha *= interactionFade;
+        curveAlpha *= state.interactionFade;
+        gridAlpha *= state.interactionFade;
 
         let hexes = [];
         if (img || curveAlpha > 0 || gridAlpha > 0) {
@@ -1914,11 +1078,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             });
         }
 
-        if (curveColors.length > 1 && curveAlpha > 0.01 && hexes.length > 0) {
+        if (state.curveColors.length > 1 && curveAlpha > 0.01 && hexes.length > 0) {
             let startTime = performance.now();
             let didWork = true;
             while (didWork && performance.now() - startTime < 16) {
-                if (queue.length > 0) {
+                if (state.queue.length > 0) {
                     processQueue();
                 } else if (findUncoloredTileInHexes(hexes)) {
                     processQueue();
@@ -1939,24 +1103,24 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             }
         } else if (curveAlpha > 0.01 || gridAlpha > 0.01) {
             if (curveAlpha < 0.99 || gridAlpha < 0.99) {
-                // Fading curves/grid: render to offscreen canvas to avoid per-tile alpha blending
-                if (curveCanvas.width !== W || curveCanvas.height !== H) {
-                    curveCanvas.width = W;
-                    curveCanvas.height = H;
+                // Fading state.curves/grid: render to offscreen canvas to avoid per-tile alpha blending
+                if (state.curveCanvas.width !== W || state.curveCanvas.height !== H) {
+                    state.curveCanvas.width = W;
+                    state.curveCanvas.height = H;
                 }
-                curveCtx.clearRect(0, 0, W, H);
+                state.curveCtx.clearRect(0, 0, W, H);
                 
                 const oldCtx = ctx;
-                ctx = curveCtx;
+                ctx = state.curveCtx;
                 
-                // 1. Draw curves only
+                // 1. Draw state.curves only
                 for (const h of hexes) {
                     const rot = displayRot(h.q, h.r, now);
                     drawTile(h.x, h.y, sz, rot, false, null, tf, h.q, h.r, now, 1.0, 0.0);
                 }
                 
-                // 2. Draw grid on top of curves as a single batched path
-                if (showGrid && gridAlpha > 0.01) {
+                // 2. Draw grid on top of state.curves as a single batched path
+                if (state.showGrid && gridAlpha > 0.01) {
                     traceHexPathBatch(ctx, hexes, sz);
                     ctx.strokeStyle = COLORS.gridLine;
                     ctx.lineWidth = 1;
@@ -1967,17 +1131,17 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 
                 ctx = oldCtx;
                 ctx.globalAlpha = Math.max(curveAlpha, gridAlpha);
-                ctx.drawImage(curveCanvas, 0, 0);
+                ctx.drawImage(state.curveCanvas, 0, 0);
                 ctx.globalAlpha = 1.0;
             } else {
                 // Fully opaque: draw directly (fastest path)
-                // 1. Draw curves only
+                // 1. Draw state.curves only
                 for (const h of hexes) {
                     const rot = displayRot(h.q, h.r, now);
                     drawTile(h.x, h.y, sz, rot, false, null, tf, h.q, h.r, now, 1.0, 0.0);
                 }
                 // 2. Draw grid on top
-                if (showGrid) {
+                if (state.showGrid) {
                     traceHexPathBatch(ctx, hexes, sz);
                     ctx.strokeStyle = COLORS.gridLine;
                     ctx.lineWidth = 1;
@@ -1986,36 +1150,36 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             }
         }
 
-        if (lod >= 1 && visZoom > CONFIG.ZOOM_FADE_MID + 0.001 && !isExporting) {
-            if (!isTouchDevice && hoveredQ !== null && hoveredR !== null) {
-                const p = hexToPix(hoveredQ, hoveredR, z, px, py);
+        if (lod >= 1 && visZoom > CONFIG.ZOOM_FADE_MID + 0.001 && !state.isExporting) {
+            if (!state.isTouchDevice && state.hoveredQ !== null && state.hoveredR !== null) {
+                const p = hexToPix(state.hoveredQ, state.hoveredR, z, px, py);
                 const targetHX = p.x;
                 const targetHY = p.y;
                 
-                if (visHoverX === null) {
-                    visHoverX = targetHX;
-                    visHoverY = targetHY;
+                if (state.visHoverX === null) {
+                    state.visHoverX = targetHX;
+                    state.visHoverY = targetHY;
                 } else {
-                    visHoverX += (targetHX - visHoverX) * CONFIG.HOVER_LERP; 
-                    visHoverY += (targetHY - visHoverY) * CONFIG.HOVER_LERP;
+                    state.visHoverX += (targetHX - state.visHoverX) * CONFIG.HOVER_LERP; 
+                    state.visHoverY += (targetHY - state.visHoverY) * CONFIG.HOVER_LERP;
                     
-                    if (Math.abs(targetHX - visHoverX) > 0.5 || Math.abs(targetHY - visHoverY) > 0.5) {
+                    if (Math.abs(targetHX - state.visHoverX) > 0.5 || Math.abs(targetHY - state.visHoverY) > 0.5) {
                         keepRendering = true;
                     } else {
-                        visHoverX = targetHX;
-                        visHoverY = targetHY;
+                        state.visHoverX = targetHX;
+                        state.visHoverY = targetHY;
                     }
                 }
-                drawHoverStroke(visHoverX, visHoverY, sz, grid);
+                drawHoverStroke(state.visHoverX, state.visHoverY, sz, grid);
             }
             
-            if (touchOutlines.length > 0) {
+            if (state.touchOutlines.length > 0) {
                 keepRendering = true; 
-                for (let i = touchOutlines.length - 1; i >= 0; i--) {
-                    const t = touchOutlines[i];
+                for (let i = state.touchOutlines.length - 1; i >= 0; i--) {
+                    const t = state.touchOutlines[i];
                     t.alpha -= CONFIG.TOUCH_OUTLINE_FADE; 
                     if (t.alpha <= 0) {
-                        touchOutlines.splice(i, 1);
+                        state.touchOutlines.splice(i, 1);
                         continue;
                     }
                     const p = hexToPix(t.q, t.r, z, px, py);
@@ -2036,9 +1200,9 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             }
         }
 
-        if (markersVisible) {
-            for (let i = 0; i < gradientMarkers.length; i++) {
-                const m = gradientMarkers[i];
+        if (state.markersVisible) {
+            for (let i = 0; i < state.gradientMarkers.length; i++) {
+                const m = state.gradientMarkers[i];
                 const outline = getContrastColor(m.color);
                 let scale = 1.0;
                 if (touchState.mode === 'marker_wait' && i === touchState.markerIdx && touchState.startTime) {
@@ -2052,7 +1216,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
         if (now - lastStatsUpdate > CONFIG.STATS_UPDATE_INTERVAL) {
             lastStatsUpdate = now;
-            if (visZoom <= CONFIG.ZOOM_FADE_MID || curveColors.length <= 1) {
+            if (visZoom <= CONFIG.ZOOM_FADE_MID || state.curveColors.length <= 1) {
                 dom.statCurvesWrap.style.display = 'none';
                 dom.statColorsWrap.style.display = 'none';
             } else {
@@ -2066,16 +1230,16 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                     if (h.x >= 0 && h.x <= effectiveW && h.y >= 0 && h.y <= H) {
                         for (let e = 0; e < 6; e++) {
                             const id = edgeID(h.q, h.r, e);
-                            if (curveMap.has(id)) visCurveIDs.add(curveMap.get(id));
+                            if (state.curveMap.has(id)) visCurveIDs.add(state.curveMap.get(id));
                         }
                     }
                 }
                 let visColors = new Set();
                 for (const cid of visCurveIDs) {
-                    const c = curves.get(cid);
+                    const c = state.curves.get(cid);
                     if (c) {
                         let col = c.color;
-                        if (typeof col === 'number') col = curveColors[col % curveColors.length];
+                        if (typeof col === 'number') col = state.curveColors[col % state.curveColors.length];
                         visColors.add(col.toLowerCase());
                     }
                 }
@@ -2084,7 +1248,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             }
             
             if (curveAlpha === 0) {
-                edgeRgbMap.clear();
+                state.edgeRgbMap.clear();
             } else {
                 const visibleEdgeIDs = new Set();
                 for (const h of hexes) {
@@ -2092,37 +1256,37 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                         visibleEdgeIDs.add(edgeID(h.q, h.r, e));
                     }
                 }
-                for (const id of edgeRgbMap.keys()) {
+                for (const id of state.edgeRgbMap.keys()) {
                     if (!visibleEdgeIDs.has(id)) {
-                        edgeRgbMap.delete(id);
+                        state.edgeRgbMap.delete(id);
                     }
                 }
             }
         }
 
-        if (keepRendering || edgeColorAnimating || gradColorAnimating || curveColorAnimating) {
+        if (keepRendering || state.edgeColorAnimating || gradColorAnimating || curveColorAnimating) {
             requestRender();
         }
         
-        const tempUnassigned = previousUnassignedEdges;
-        previousUnassignedEdges = currentUnassignedEdges;
-        currentUnassignedEdges = tempUnassigned;
+        const tempUnassigned = state.previousUnassignedEdges;
+        state.previousUnassignedEdges = state.currentUnassignedEdges;
+        state.currentUnassignedEdges = tempUnassigned;
     }
 
     // ──── Resize ────
     function resize() {
-        isGradientDirty = true;
+        state.isGradientDirty = true;
         
         if (isEmbedMode) {
             if (embedData) {
                 dom.cvs.width = embedData.w;
                 dom.cvs.height = embedData.h;
             }
-            if (!isInitialized) {
-                isInitialized = true;
-                if (gradientMarkers.length === 0) {
+            if (!state.isInitialized) {
+                state.isInitialized = true;
+                if (state.gradientMarkers.length === 0) {
                     const pos = getRandomMarkerPosition();
-                    gradientMarkers.push({ x: pos.x, y: pos.y, color: '#cccccc' });
+                    state.gradientMarkers.push({ x: pos.x, y: pos.y, color: '#cccccc' });
                     updateGradientMarkersCache();
                     renderGradientList();
                     renderCurveList();
@@ -2137,24 +1301,24 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         dom.cvs.width = w;
         dom.cvs.height = h;
 
-        if (!isInitialized) {
+        if (!state.isInitialized) {
             if (w > 0 && h > 0) {
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
                 const effectiveW = isCollapsed ? w : Math.max(0, w - CONFIG.SIDEBAR_WIDTH);
-                panX = effectiveW / 2;
-                panY = h / 2;
-                starPanX5 = panX;
-                starPanY5 = panY;
-                starZoom5 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
-                starZoom2 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_MED);
-                starPanX3 = panX;
-                starPanY3 = panY;
-                starZoom3 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_SMALL);
-                isInitialized = true;
+                state.panX = effectiveW / 2;
+                state.panY = h / 2;
+                state.starPanX5 = state.panX;
+                state.starPanY5 = state.panY;
+                state.starZoom5 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+                state.starZoom2 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_MED);
+                state.starPanX3 = state.panX;
+                state.starPanY3 = state.panY;
+                state.starZoom3 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_SMALL);
+                state.isInitialized = true;
 
-                if (gradientMarkers.length === 0) {
+                if (state.gradientMarkers.length === 0) {
                     const pos = getRandomMarkerPosition();
-                    gradientMarkers.push({
+                    state.gradientMarkers.push({
                         x: pos.x,
                         y: pos.y,
                         color: '#cccccc' 
@@ -2357,18 +1521,18 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     });
 
     function scheduleMagnetZoom() {
-        clearTimeout(magnetTimer);
-        magnetTimer = setTimeout(() => {
+        clearTimeout(state.magnetTimer);
+        state.magnetTimer = setTimeout(() => {
             // Postpone the magnet snap if the user is actively interacting
-            if (isDrag || touchState.mode === 'pinch') {
+            if (state.isDrag || touchState.mode === 'pinch') {
                 scheduleMagnetZoom(); 
                 return;
             }
-            if (targetZoom < 0.27 && targetZoom > CONFIG.MIN_ZOOM) {
-                if (targetZoom < 0.22) {
-                    targetZoom = 0.20; // Snap to 20%
+            if (state.targetZoom < 0.27 && state.targetZoom > CONFIG.MIN_ZOOM) {
+                if (state.targetZoom < 0.22) {
+                    state.targetZoom = 0.20; // Snap to 20%
                 } else {
-                    targetZoom = 0.25; // Snap to 25%
+                    state.targetZoom = 0.25; // Snap to 25%
                 }
                 requestRender();
             }
@@ -2376,39 +1540,39 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     }
 
     function setZoom(nz, cx, cy) {
-        const oz = zoom;
-        const oPanX = panX;
-        const oPanY = panY;
-        zoom = Math.max(MIN_Z, Math.min(MAX_Z, nz));
+        const oz = state.zoom;
+        const oPanX = state.panX;
+        const oPanY = state.panY;
+        state.zoom = Math.max(MIN_Z, Math.min(MAX_Z, nz));
         if (cx !== undefined) {
-            panX = cx - (cx - oPanX) * (zoom / oz);
-            panY = cy - (cy - oPanY) * (zoom / oz);
+            state.panX = cx - (cx - oPanX) * (state.zoom / oz);
+            state.panY = cy - (cy - oPanY) * (state.zoom / oz);
             
-            if (zoom !== oz) {
-                const odz5 = starZoom5;
-                const odz2 = starZoom2;
-                const odz3 = starZoom3;
+            if (state.zoom !== oz) {
+                const odz5 = state.starZoom5;
+                const odz2 = state.starZoom2;
+                const odz3 = state.starZoom3;
 
-                starZoom5 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
-                starZoom2 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_MED);
-                starZoom3 = Math.pow(zoom, CONFIG.STAR_ZOOM_EXP_SMALL);
+                state.starZoom5 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+                state.starZoom2 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_MED);
+                state.starZoom3 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_SMALL);
                 
-                starPanX5 = cx - (cx - starPanX5) * (starZoom5 / odz5);
-                starPanY5 = cy - (cy - starPanY5) * (starZoom5 / odz5);
-                starPanX2 = cx - (cx - starPanX2) * (starZoom2 / odz2);
-                starPanY2 = cy - (cy - starPanY2) * (starZoom2 / odz2);
-                starPanX3 = cx - (cx - starPanX3) * (starZoom3 / odz3);
-                starPanY3 = cy - (cy - starPanY3) * (starZoom3 / odz3);
+                state.starPanX5 = cx - (cx - state.starPanX5) * (state.starZoom5 / odz5);
+                state.starPanY5 = cy - (cy - state.starPanY5) * (state.starZoom5 / odz5);
+                state.starPanX2 = cx - (cx - state.starPanX2) * (state.starZoom2 / odz2);
+                state.starPanY2 = cy - (cy - state.starPanY2) * (state.starZoom2 / odz2);
+                state.starPanX3 = cx - (cx - state.starPanX3) * (state.starZoom3 / odz3);
+                state.starPanY3 = cy - (cy - state.starPanY3) * (state.starZoom3 / odz3);
             }
             
-            if (isDrag) {
-                const dx = mouseScreenX - dragSX;
-                const dy = mouseScreenY - dragSY;
-                dragPX = panX - dx;
-                dragPY = panY - dy;
+            if (state.isDrag) {
+                const dx = state.mouseScreenX - state.dragSX;
+                const dy = state.mouseScreenY - state.dragSY;
+                state.dragPX = state.panX - dx;
+                state.dragPY = state.panY - dy;
             }
         }
-        dom.zoomLabel.textContent = Math.round(zoom * 100) + '%';
+        dom.zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
     }
 
     // ──── Touch / Mobile Pinch Zoom & Pan ────
@@ -2426,11 +1590,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     };
 
     dom.cvs.addEventListener('touchstart', e => {
-        isTouchDevice = true;
-        hoveredQ = null;
-        hoveredR = null;
-        visHoverX = null;
-        visHoverY = null;
+        state.isTouchDevice = true;
+        state.hoveredQ = null;
+        state.hoveredR = null;
+        state.visHoverX = null;
+        state.visHoverY = null;
 
         // Auto-hide sidebar on canvas interaction
         if (!isEmbedMode && !sidebar.classList.contains('collapsed')) {
@@ -2444,10 +1608,10 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             const tx = e.touches[0].clientX - r.left;
             const ty = e.touches[0].clientY - r.top;
 
-            if (!isEmbedMode && markersVisible) {
+            if (!isEmbedMode && state.markersVisible) {
                 let clickedMarkerIdx = -1;
-                for (let i = 0; i < gradientMarkers.length; i++) {
-                    const m = gradientMarkers[i];
+                for (let i = 0; i < state.gradientMarkers.length; i++) {
+                    const m = state.gradientMarkers[i];
                     const dx = tx - m.x;
                     const dy = ty - m.y;
                     if (dx * dx + dy * dy < CONFIG.MARKER_HIT_RADIUS * CONFIG.MARKER_HIT_RADIUS) { 
@@ -2464,11 +1628,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                     touchState.timer = setTimeout(() => {
                         if (touchState.mode === 'marker_wait') {
                             touchState.mode = 'marker_drag';
-                            isDragMarker = true;
-                            draggedMarkerIndex = touchState.markerIdx;
-                            dragMarkerOffsetX = touchState.startX - gradientMarkers[touchState.markerIdx].x;
-                            dragMarkerOffsetY = touchState.startY - gradientMarkers[touchState.markerIdx].y;
-                            targetInteractionFade = 0.0; // Hide grid/curves ONLY when long-press completes
+                            state.isDragMarker = true;
+                            state.draggedMarkerIndex = touchState.markerIdx;
+                            state.dragMarkerOffsetX = touchState.startX - state.gradientMarkers[touchState.markerIdx].x;
+                            state.dragMarkerOffsetY = touchState.startY - state.gradientMarkers[touchState.markerIdx].y;
+                            state.targetInteractionFade = 0.0; // Hide grid/state.curves ONLY when long-press completes
                             if (navigator.vibrate) navigator.vibrate(CONFIG.HAPTIC_DUR); 
                             requestRender();
                         }
@@ -2482,25 +1646,25 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             touchState.mode = 'pan_wait';
             touchState.startX = tx;
             touchState.startY = ty;
-            touchState.startPanX = panX;
-            touchState.startPanY = panY;
+            touchState.startPanX = state.panX;
+            touchState.startPanY = state.panY;
             touchState.startTime = Date.now();
             
-            isDrag = false;
-            dragMoved = false;
-            dragSX = tx; dragSY = ty;
-            embedDragLastTile = null;
-            panVX = 0; panVY = 0;
+            state.isDrag = false;
+            state.dragMoved = false;
+            state.dragSX = tx; state.dragSY = ty;
+            state.embedDragLastTile = null;
+            state.panVX = 0; state.panVY = 0;
             
             touchState.timer = setTimeout(() => {
-                if (touchState.mode === 'pan_wait' && !dragMoved) {
+                if (touchState.mode === 'pan_wait' && !state.dragMoved) {
                     touchState.mode = 'draw';
-                    isDrag = false; 
+                    state.isDrag = false; 
                     if (navigator.vibrate) navigator.vibrate(CONFIG.HAPTIC_DUR);
-                    const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
+                    const h = pixToHex(touchState.startX, touchState.startY, state.zoom, state.panX, state.panY);
                     const hk = hexKey(h.q, h.r);
-                    if (hk !== embedDragLastTile) {
-                        embedDragLastTile = hk;
+                    if (hk !== state.embedDragLastTile) {
+                        state.embedDragLastTile = hk;
                         rotateTile(h.q, h.r);
                     }
                     requestRender();
@@ -2510,29 +1674,29 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             if (touchState.mode === 'marker_wait' || touchState.mode === 'pan_wait') {
                 clearTimeout(touchState.timer);
             }
-            targetInteractionFade = 1.0; // Restore grid/curves for pinch
+            state.targetInteractionFade = 1.0; // Restore grid/state.curves for pinch
             if (touchState.mode === 'marker_drag') {
-                isDragMarker = false;
-                draggedMarkerIndex = -1;
+                state.isDragMarker = false;
+                state.draggedMarkerIndex = -1;
             }
             touchState.mode = 'pinch';
-            isDrag = false; 
+            state.isDrag = false; 
             
-            panVX = 0; 
-            panVY = 0;
+            state.panVX = 0; 
+            state.panVY = 0;
             
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             touchState.startDist = Math.hypot(dx, dy);
-            touchState.startZoom = targetZoom;
+            touchState.startZoom = state.targetZoom;
             
             const r = dom.cvs.getBoundingClientRect();
             touchState.pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left;
             touchState.pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top;
             
-            zoomCx = touchState.pinchCenterX;
-            zoomCy = touchState.pinchCenterY;
-            zoomOutBlockedUntil = 0; 
+            state.zoomCx = touchState.pinchCenterX;
+            state.zoomCy = touchState.pinchCenterY;
+            state.zoomOutBlockedUntil = 0; 
         }
         e.preventDefault();
     }, { passive: false });
@@ -2544,13 +1708,13 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         if (touchState.mode === 'marker_drag' && e.touches.length === 1) {
             const tx = e.touches[0].clientX - r.left;
             const ty = e.touches[0].clientY - r.top;
-            gradientMarkers[draggedMarkerIndex].x = tx - dragMarkerOffsetX;
-            gradientMarkers[draggedMarkerIndex].y = ty - dragMarkerOffsetY;
-            if (gradientMarkersRGB[draggedMarkerIndex]) {
-                gradientMarkersRGB[draggedMarkerIndex].x = gradientMarkers[draggedMarkerIndex].x;
-                gradientMarkersRGB[draggedMarkerIndex].y = gradientMarkers[draggedMarkerIndex].y;
+            state.gradientMarkers[state.draggedMarkerIndex].x = tx - state.dragMarkerOffsetX;
+            state.gradientMarkers[state.draggedMarkerIndex].y = ty - state.dragMarkerOffsetY;
+            if (state.gradientMarkersRGB[state.draggedMarkerIndex]) {
+                state.gradientMarkersRGB[state.draggedMarkerIndex].x = state.gradientMarkers[state.draggedMarkerIndex].x;
+                state.gradientMarkersRGB[state.draggedMarkerIndex].y = state.gradientMarkers[state.draggedMarkerIndex].y;
             }
-            isGradientDirty = true;
+            state.isGradientDirty = true;
             requestRender();
             e.preventDefault();
             return;
@@ -2570,10 +1734,10 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         } else if (touchState.mode === 'draw' && e.touches.length === 1) {
             const tx = e.touches[0].clientX - r.left;
             const ty = e.touches[0].clientY - r.top;
-            const h = pixToHex(tx, ty, zoom, panX, panY);
+            const h = pixToHex(tx, ty, state.zoom, state.panX, state.panY);
             const hk = hexKey(h.q, h.r);
-            if (hk !== embedDragLastTile) {
-                embedDragLastTile = hk;
+            if (hk !== state.embedDragLastTile) {
+                state.embedDragLastTile = hk;
                 rotateTile(h.q, h.r);
             }
             requestRender();
@@ -2586,40 +1750,40 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             const dy = ty - touchState.startY;
             
             if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
-                if (!dragMoved) dragMoved = true;
+                if (!state.dragMoved) state.dragMoved = true;
             }
             
-            if (dragMoved && touchState.mode === 'pan_wait') {
+            if (state.dragMoved && touchState.mode === 'pan_wait') {
                 clearTimeout(touchState.timer);
                 touchState.mode = 'pan';
-                isDrag = true; 
+                state.isDrag = true; 
             }
             
             if (touchState.mode === 'pan') {
                 let targetPanX = touchState.startPanX + dx;
                 let targetPanY = touchState.startPanY + dy;
                 
-                const dPanX = targetPanX - panX;
-                const dPanY = targetPanY - panY;
+                const dPanX = targetPanX - state.panX;
+                const dPanY = targetPanY - state.panY;
                 
-                if (inertiaEnabled) {
-                    panVX = dPanX;
-                    panVY = dPanY;
-                    lastPanMoveTime = Date.now();
+                if (state.inertiaEnabled) {
+                    state.panVX = dPanX;
+                    state.panVY = dPanY;
+                    state.lastPanMoveTime = Date.now();
                 } else {
-                    panVX = 0;
-                    panVY = 0;
+                    state.panVX = 0;
+                    state.panVY = 0;
                 }
                 
-                panX = targetPanX;
-                panY = targetPanY;
+                state.panX = targetPanX;
+                state.panY = targetPanY;
                 
-                starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
-                starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
-                starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
-                starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
-                starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
-                starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
+                state.starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
+                state.starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
+                state.starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
+                state.starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
+                state.starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
+                state.starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
             }
             requestRender();
         } else if (touchState.mode === 'pinch' && e.touches.length === 2) {
@@ -2630,12 +1794,12 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             let scale = newDist / Math.max(1, touchState.startDist);
             let newTargetZoom = touchState.startZoom * scale;
             
-            if (targetZoom < CONFIG.ZOOM_FADE_HIGH && newTargetZoom < targetZoom) {
-                let delta = newTargetZoom - targetZoom;
-                newTargetZoom = targetZoom + delta * 0.25;
+            if (state.targetZoom < CONFIG.ZOOM_FADE_HIGH && newTargetZoom < state.targetZoom) {
+                let delta = newTargetZoom - state.targetZoom;
+                newTargetZoom = state.targetZoom + delta * 0.25;
             }
             
-            targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, newTargetZoom));
+            state.targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, newTargetZoom));
             checkIfSolved();
             scheduleMagnetZoom();
             requestRender();
@@ -2651,43 +1815,43 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         if (wasMode === 'marker_wait') {
             clearTimeout(touchState.timer);
             const now = Date.now();
-            if (now - lastTapTime < 300) {
+            if (now - state.lastTapTime < 300) {
                 removeMarkerAt(touchState.startX, touchState.startY);
-                lastTapTime = 0;
+                state.lastTapTime = 0;
             } else {
-                lastTapTime = now;
+                state.lastTapTime = now;
             }
         } else if (wasMode === 'marker_drag') {
-            isDragMarker = false;
-            draggedMarkerIndex = -1;
-            targetInteractionFade = 1.0; // Bring back grid/curves
+            state.isDragMarker = false;
+            state.draggedMarkerIndex = -1;
+            state.targetInteractionFade = 1.0; // Bring back grid/state.curves
         } else if (wasMode === 'pan_wait') {
             clearTimeout(touchState.timer);
             
             // Single tap on empty grid - Rotate tile!
-            const h = pixToHex(touchState.startX, touchState.startY, zoom, panX, panY);
+            const h = pixToHex(touchState.startX, touchState.startY, state.zoom, state.panX, state.panY);
             rotateTile(h.q, h.r);
-            touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); 
+            state.touchOutlines.push({ q: h.q, r: h.r, alpha: 1.0 }); 
         } else if (wasMode === 'pan') {
-            if (dragMoved) {
+            if (state.dragMoved) {
                 checkIfSolved();
             }
-            // Do NOT zero panVX/panVY here so inertia can continue!
+            // Do NOT zero state.panVX/state.panVY here so inertia can continue!
         } else if (wasMode === 'draw') {
-            panVX = 0; panVY = 0; // Draw mode shouldn't have inertia
+            state.panVX = 0; state.panVY = 0; // Draw mode shouldn't have inertia
         }
         
         if (e.touches.length === 0) {
             touchState.mode = 'none';
-            isDrag = false;
+            state.isDrag = false;
             // Only kill inertia if we weren't panning
             if (wasMode !== 'pan') {
-                panVX = 0; panVY = 0;
+                state.panVX = 0; state.panVY = 0;
             }
         } else if (wasMode === 'pinch' && e.touches.length === 1) {
             touchState.mode = 'none';
-            isDrag = false;
-            panVX = 0; panVY = 0; // Kill inertia when transitioning from pinch
+            state.isDrag = false;
+            state.panVX = 0; state.panVY = 0; // Kill inertia when transitioning from pinch
         }
         
         requestRender();
@@ -2698,41 +1862,41 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         if (isEmbedMode) return;
         e.preventDefault();
         const r = dom.cvs.getBoundingClientRect();
-        zoomCx = e.clientX - r.left;
-        zoomCy = e.clientY - r.top;
+        state.zoomCx = e.clientX - r.left;
+        state.zoomCy = e.clientY - r.top;
 
         const now = Date.now();
         let delta = e.deltaY > 0 ? CONFIG.WHEEL_DELTA_OUT : CONFIG.WHEEL_DELTA_IN;
 
         if (e.deltaY > 0) { 
-            if (targetZoom >= CONFIG.ZOOM_FADE_HIGH && targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
-                if (now < zoomOutBlockedUntil) return;
-                if (zoomOutBlockedUntil === 0) {
-                    zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_WHEEL;
+            if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH && state.targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
+                if (now < state.zoomOutBlockedUntil) return;
+                if (state.zoomOutBlockedUntil === 0) {
+                    state.zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_WHEEL;
                     return;
                 }
             }
-            if (targetZoom < CONFIG.ZOOM_FADE_HIGH) {
+            if (state.targetZoom < CONFIG.ZOOM_FADE_HIGH) {
                 delta = 1 + (delta - 1) * CONFIG.WHEEL_SLOW_MULT;
             }
         } else { 
-            if (targetZoom * delta >= CONFIG.ZOOM_FADE_HIGH) {
-                zoomOutBlockedUntil = 0;
+            if (state.targetZoom * delta >= CONFIG.ZOOM_FADE_HIGH) {
+                state.zoomOutBlockedUntil = 0;
             }
         }
 
-        targetZoom *= delta;
-        targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, targetZoom));
+        state.targetZoom *= delta;
+        state.targetZoom = Math.max(MIN_Z, Math.min(MAX_Z, state.targetZoom));
         checkIfSolved();
         scheduleMagnetZoom();
         requestRender();
     }, { passive: false });
 
     dom.cvs.addEventListener('mouseleave', () => {
-        hoveredQ = null;
-        hoveredR = null;
-        visHoverX = null;
-        visHoverY = null;
+        state.hoveredQ = null;
+        state.hoveredR = null;
+        state.visHoverX = null;
+        state.visHoverY = null;
     });
     
     dom.cvs.addEventListener('mousedown', e => {
@@ -2741,16 +1905,16 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         const my = e.clientY - r.top;
         
         if (isEmbedMode) {
-            isDrag = true; dragMoved = false;
-            dragSX = mx; dragSY = my;
-            embedDragLastTile = null;
+            state.isDrag = true; state.dragMoved = false;
+            state.dragSX = mx; state.dragSY = my;
+            state.embedDragLastTile = null;
             return;
         }
 
-        if (markersVisible) {
+        if (state.markersVisible) {
             let clickedMarkerIdx = -1;
-            for (let i = 0; i < gradientMarkers.length; i++) {
-                const m = gradientMarkers[i];
+            for (let i = 0; i < state.gradientMarkers.length; i++) {
+                const m = state.gradientMarkers[i];
                 const dx = mx - m.x;
                 const dy = my - m.y;
                 const hitR = CONFIG.MARKER_HIT_RADIUS;
@@ -2760,23 +1924,23 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 }
             }
             if (clickedMarkerIdx !== -1) {
-                isDragMarker = true;
-                draggedMarkerIndex = clickedMarkerIdx;
-                dragMarkerOffsetX = mx - gradientMarkers[clickedMarkerIdx].x;
-                dragMarkerOffsetY = my - gradientMarkers[clickedMarkerIdx].y;
+                state.isDragMarker = true;
+                state.draggedMarkerIndex = clickedMarkerIdx;
+                state.dragMarkerOffsetX = mx - state.gradientMarkers[clickedMarkerIdx].x;
+                state.dragMarkerOffsetY = my - state.gradientMarkers[clickedMarkerIdx].y;
                 requestRender();
                 return;
             }
         }
 
-        isDrag = true;
-        dragMoved = false;
-        dragSX = e.clientX;
-        dragSY = e.clientY;
-        dragPX = panX;
-        dragPY = panY;
-        panVX = 0;
-        panVY = 0;
+        state.isDrag = true;
+        state.dragMoved = false;
+        state.dragSX = e.clientX;
+        state.dragSY = e.clientY;
+        state.dragPX = state.panX;
+        state.dragPY = state.panY;
+        state.panVX = 0;
+        state.panVY = 0;
         requestRender();
     });
 
@@ -2785,105 +1949,105 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         const mx = e.clientX - r.left;
         const my = e.clientY - r.top;
 
-        if (isDragMarker && draggedMarkerIndex !== -1) {
-            gradientMarkers[draggedMarkerIndex].x = mx - dragMarkerOffsetX;
-            gradientMarkers[draggedMarkerIndex].y = my - dragMarkerOffsetY;
-            if (gradientMarkersRGB[draggedMarkerIndex]) {
-                gradientMarkersRGB[draggedMarkerIndex].x = gradientMarkers[draggedMarkerIndex].x;
-                gradientMarkersRGB[draggedMarkerIndex].y = gradientMarkers[draggedMarkerIndex].y;
+        if (state.isDragMarker && state.draggedMarkerIndex !== -1) {
+            state.gradientMarkers[state.draggedMarkerIndex].x = mx - state.dragMarkerOffsetX;
+            state.gradientMarkers[state.draggedMarkerIndex].y = my - state.dragMarkerOffsetY;
+            if (state.gradientMarkersRGB[state.draggedMarkerIndex]) {
+                state.gradientMarkersRGB[state.draggedMarkerIndex].x = state.gradientMarkers[state.draggedMarkerIndex].x;
+                state.gradientMarkersRGB[state.draggedMarkerIndex].y = state.gradientMarkers[state.draggedMarkerIndex].y;
             }
-            isGradientDirty = true;
-            targetInteractionFade = 0.0; // Hide grid/curves as soon as mouse drag starts
+            state.isGradientDirty = true;
+            state.targetInteractionFade = 0.0; // Hide grid/state.curves as soon as mouse drag starts
             requestRender();
             return;
         }
 
-        mouseScreenX = mx;
-        mouseScreenY = my;
+        state.mouseScreenX = mx;
+        state.mouseScreenY = my;
 
         const isCollapsed = document.body.classList.contains('sidebar-collapsed');
         const sidebarHidden = isCollapsed || isEmbedMode;
         const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
 
-        const h = pixToHex(mouseScreenX, mouseScreenY, zoom, panX, panY);
+        const h = pixToHex(state.mouseScreenX, state.mouseScreenY, state.zoom, state.panX, state.panY);
 
-        if (isTouchDevice) {
-            hoveredQ = null;
-            hoveredR = null;
+        if (state.isTouchDevice) {
+            state.hoveredQ = null;
+            state.hoveredR = null;
         } else {
             if (!sidebarHidden && mx > effectiveW) {
-                hoveredQ = null;
-                hoveredR = null;
+                state.hoveredQ = null;
+                state.hoveredR = null;
             } else {
-                hoveredQ = h.q;
-                hoveredR = h.r;
+                state.hoveredQ = h.q;
+                state.hoveredR = h.r;
             }
         }
-        if (isDrag) {
-            const dx = mx - dragSX, dy = my - dragSY;
-            if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!dragMoved) dragMoved = true; }
+        if (state.isDrag) {
+            const dx = mx - state.dragSX, dy = my - state.dragSY;
+            if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) { if (!state.dragMoved) state.dragMoved = true; }
 
             if (isEmbedMode) {
-                if (dragMoved) {
+                if (state.dragMoved) {
                     const hk = hexKey(h.q, h.r);
-                    if (hk !== embedDragLastTile) {
-                        embedDragLastTile = hk;
+                    if (hk !== state.embedDragLastTile) {
+                        state.embedDragLastTile = hk;
                         rotateTile(h.q, h.r);
                     }
                 }
             } else {
-                let targetPanX = dragPX + dx;
-                let targetPanY = dragPY + dy;
+                let targetPanX = state.dragPX + dx;
+                let targetPanY = state.dragPY + dy;
 
-                const dPanX = targetPanX - panX;
-                const dPanY = targetPanY - panY;
+                const dPanX = targetPanX - state.panX;
+                const dPanY = targetPanY - state.panY;
 
-                if (inertiaEnabled) {
-                    panVX = dPanX;
-                    panVY = dPanY;
-                    lastPanMoveTime = Date.now();
+                if (state.inertiaEnabled) {
+                    state.panVX = dPanX;
+                    state.panVY = dPanY;
+                    state.lastPanMoveTime = Date.now();
                 } else {
-                    panVX = 0;
-                    panVY = 0;
+                    state.panVX = 0;
+                    state.panVY = 0;
                 }
 
-                panX = targetPanX;
-                panY = targetPanY;
+                state.panX = targetPanX;
+                state.panY = targetPanY;
                 
-                starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
-                starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
-                starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
-                starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
-                starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
-                starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
+                state.starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
+                state.starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
+                state.starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
+                state.starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
+                state.starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
+                state.starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
             }
         }
         requestRender();
     });
     window.addEventListener('mouseup', e => {
-        if (isDragMarker) {
-            isDragMarker = false;
-            draggedMarkerIndex = -1;
-            targetInteractionFade = 1.0; // Bring back grid/curves
+        if (state.isDragMarker) {
+            state.isDragMarker = false;
+            state.draggedMarkerIndex = -1;
+            state.targetInteractionFade = 1.0; // Bring back grid/state.curves
             requestRender();
             return;
         }
-        if (isDrag) {
-            if (!dragMoved) {
+        if (state.isDrag) {
+            if (!state.dragMoved) {
                 handleClick(e);
             } else {
                 checkIfSolved();
             }
-            isDrag = false;
-            targetInteractionFade = 1.0; // Bring back grid/curves
+            state.isDrag = false;
+            state.targetInteractionFade = 1.0; // Bring back grid/state.curves
         }
         requestRender();
     });
 
     function removeMarkerAt(mx, my) {
         let clickedMarkerIdx = -1;
-        for (let i = 0; i < gradientMarkers.length; i++) {
-            const m = gradientMarkers[i];
+        for (let i = 0; i < state.gradientMarkers.length; i++) {
+            const m = state.gradientMarkers[i];
             const dx = mx - m.x;
             const dy = my - m.y;
             const hitR = CONFIG.MARKER_HIT_RADIUS;
@@ -2894,10 +2058,10 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         }
 
         if (clickedMarkerIdx !== -1) {
-            if (gradientMarkers.length > 1) {
-                const removedMarker = gradientMarkers[clickedMarkerIdx];
-                const cached = gradientMarkersRGB[clickedMarkerIdx];
-                fadingMarkersRGB.push({
+            if (state.gradientMarkers.length > 1) {
+                const removedMarker = state.gradientMarkers[clickedMarkerIdx];
+                const cached = state.gradientMarkersRGB[clickedMarkerIdx];
+                state.fadingMarkersRGB.push({
                     x: removedMarker.x,
                     y: removedMarker.y,
                     r: cached.r, g: cached.g, b: cached.b,
@@ -2905,11 +2069,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                     weight: cached.weight || 1
                 });
                 
-                gradientMarkers.splice(clickedMarkerIdx, 1);
-                gradientMarkersRGB.splice(clickedMarkerIdx, 1); 
+                state.gradientMarkers.splice(clickedMarkerIdx, 1);
+                state.gradientMarkersRGB.splice(clickedMarkerIdx, 1); 
                 
-                isDragMarker = false;
-                draggedMarkerIndex = -1;
+                state.isDragMarker = false;
+                state.draggedMarkerIndex = -1;
                 
                 renderGradientList();
                 updateGradientMarkersCache();
@@ -2928,8 +2092,8 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         const my = e.clientY - r.top;
 
         let clickedMarkerIdx = -1;
-        for (let i = 0; i < gradientMarkers.length; i++) {
-            const m = gradientMarkers[i];
+        for (let i = 0; i < state.gradientMarkers.length; i++) {
+            const m = state.gradientMarkers[i];
             const dx = mx - m.x;
             const dy = my - m.y;
             const hitR = CONFIG.MARKER_HIT_RADIUS;
@@ -2948,30 +2112,30 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         const k = hexKey(q, r);
         const now = Date.now();
         
-        lastRipple = { q, r, time: now };
+        state.lastRipple = { q, r, time: now };
 
         const curDisplay = displayRot(q, r, now);
         const curLogical = tileRot(q, r);
         const nextLogical = (curLogical + ROT_STEP) % 360;
-        rotOverrides.set(k, nextLogical);
+        state.rotOverrides.set(k, nextLogical);
 
         const target = nearestTarget(curDisplay, nextLogical);
-        animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
+        state.animMap.set(k, { start: now, from: curDisplay, to: target, duration: CLICK_DUR });
         
-        // Only calculate curves if they are actually visible to prevent memory leaks
-        const visZoom = (isEmbedMode && embedData && embedData.origZoom) ? embedData.origZoom : zoom;
+        // Only calculate state.curves if they are actually visible to prevent memory leaks
+        const visZoom = (isEmbedMode && embedData && embedData.origZoom) ? embedData.origZoom : state.zoom;
         const visSz = HEX_R * visZoom;
         const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
         
         if (visSz > fadeEndSz) {
-            if (curveColors.length > 1) {
+            if (state.curveColors.length > 1) {
                 updateLocalCurves(q, r);
             }
         } else {
-            queue.length = 0;
-            curveMap.clear();
-            curves.clear();
-            edgeRgbMap.clear();
+            state.queue.length = 0;
+            state.curveMap.clear();
+            state.curves.clear();
+            state.edgeRgbMap.clear();
         }
 
         checkIfSolved();
@@ -2980,37 +2144,37 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     function handleClick(e) {
         const r = dom.cvs.getBoundingClientRect();
-        const h = pixToHex(e.clientX - r.left, e.clientY - r.top, zoom, panX, panY);
+        const h = pixToHex(e.clientX - r.left, e.clientY - r.top, state.zoom, state.panX, state.panY);
         rotateTile(h.q, h.r);
     }
 
     dom.zoomIn.onclick = () => {
-        zoomCx = dom.cvs.width / 2; 
-        zoomCy = dom.cvs.height / 2;
-        targetZoom = Math.min(MAX_Z, targetZoom * CONFIG.BTN_DELTA_IN);
-        if (targetZoom >= CONFIG.ZOOM_FADE_HIGH) zoomOutBlockedUntil = 0;
+        state.zoomCx = dom.cvs.width / 2; 
+        state.zoomCy = dom.cvs.height / 2;
+        state.targetZoom = Math.min(MAX_Z, state.targetZoom * CONFIG.BTN_DELTA_IN);
+        if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH) state.zoomOutBlockedUntil = 0;
         checkIfSolved();
         scheduleMagnetZoom();
         requestRender();
     };
     
     dom.zoomOut.onclick = () => {
-        zoomCx = dom.cvs.width / 2; 
-        zoomCy = dom.cvs.height / 2;
+        state.zoomCx = dom.cvs.width / 2; 
+        state.zoomCy = dom.cvs.height / 2;
         const now = Date.now();
         let delta = CONFIG.BTN_DELTA_OUT;
         
-        if (targetZoom >= CONFIG.ZOOM_FADE_HIGH && targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
-            if (now < zoomOutBlockedUntil) return;
-            if (zoomOutBlockedUntil === 0) {
-                zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
+        if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH && state.targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
+            if (now < state.zoomOutBlockedUntil) return;
+            if (state.zoomOutBlockedUntil === 0) {
+                state.zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
                 return;
             }
         }
-        if (targetZoom < CONFIG.ZOOM_FADE_HIGH) {
+        if (state.targetZoom < CONFIG.ZOOM_FADE_HIGH) {
             delta = 1 + (delta - 1) * CONFIG.BTN_SLOW_MULT;
         }
-        targetZoom = Math.max(MIN_Z, targetZoom * delta);
+        state.targetZoom = Math.max(MIN_Z, state.targetZoom * delta);
         checkIfSolved();
         scheduleMagnetZoom();
         requestRender();
@@ -3018,67 +2182,67 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     window.addEventListener('keydown', e => {
         if (isEmbedMode) return;
-        zoomCx = dom.cvs.width / 2; 
-        zoomCy = dom.cvs.height / 2;
+        state.zoomCx = dom.cvs.width / 2; 
+        state.zoomCy = dom.cvs.height / 2;
         const now = Date.now();
         
         if (e.key === '=' || e.key === '+') {
-            targetZoom = Math.min(MAX_Z, targetZoom * CONFIG.KEY_DELTA_IN);
-            if (targetZoom >= CONFIG.ZOOM_FADE_HIGH) zoomOutBlockedUntil = 0;
+            state.targetZoom = Math.min(MAX_Z, state.targetZoom * CONFIG.KEY_DELTA_IN);
+            if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH) state.zoomOutBlockedUntil = 0;
             checkIfSolved();
             scheduleMagnetZoom();
         }
         if (e.key === '-') {
             let delta = CONFIG.KEY_DELTA_OUT;
-            if (targetZoom >= CONFIG.ZOOM_FADE_HIGH && targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
-                if (now < zoomOutBlockedUntil) return;
-                if (zoomOutBlockedUntil === 0) {
-                    zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
+            if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH && state.targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
+                if (now < state.zoomOutBlockedUntil) return;
+                if (state.zoomOutBlockedUntil === 0) {
+                    state.zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
                     return;
                 }
             }
-            if (targetZoom < CONFIG.ZOOM_FADE_HIGH) {
+            if (state.targetZoom < CONFIG.ZOOM_FADE_HIGH) {
                 delta = 1 + (delta - 1) * CONFIG.BTN_SLOW_MULT;
             }
-            targetZoom = Math.max(MIN_Z, targetZoom * delta);
+            state.targetZoom = Math.max(MIN_Z, state.targetZoom * delta);
             checkIfSolved();
             scheduleMagnetZoom(); 
         }
         requestRender();
     });
 
-    dom.gridToggle.addEventListener('change', function() { showGrid = this.checked; requestRender();});
-    dom.unrenderedToggle.addEventListener('change', function() { showUnrenderedDotted = this.checked; requestRender();});
-    dom.bgStarsToggle.addEventListener('change', function() { showBgStars = this.checked; requestRender();});
-    dom.markersToggle.addEventListener('change', function() { markersVisible = this.checked; requestRender();});
+    dom.gridToggle.addEventListener('change', function() { state.showGrid = this.checked; requestRender();});
+    dom.unrenderedToggle.addEventListener('change', function() { state.showUnrenderedDotted = this.checked; requestRender();});
+    dom.bgStarsToggle.addEventListener('change', function() { state.showBgStars = this.checked; requestRender();});
+    dom.markersToggle.addEventListener('change', function() { state.markersVisible = this.checked; requestRender();});
     dom.flowToggle.addEventListener('change', function() { 
-        flowEnabled = this.checked; 
+        state.flowEnabled = this.checked; 
         requestRender(); 
     });
     dom.inertiaToggle.addEventListener('change', function() { 
-        inertiaEnabled = this.checked; 
-        if (!inertiaEnabled) {
-            panVX = 0; 
-            panVY = 0;
+        state.inertiaEnabled = this.checked; 
+        if (!state.inertiaEnabled) {
+            state.panVX = 0; 
+            state.panVY = 0;
         }
         requestRender(); 
     });
     dom.sCurveW.addEventListener('input', function() {
-        curveLineWidth = +dom.sCurveW.value;
-        dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
+        state.curveLineWidth = +dom.sCurveW.value;
+        dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
         requestRender();
     });
 
     let lastAlterRatio = 0;
     dom.sAlterTiles.addEventListener('input', function() {
-        alterTilesRatio = +dom.sAlterTiles.value;
-        dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
-        if (Math.abs(alterTilesRatio - lastAlterRatio) > 0.001) {
-            lastAlterRatio = alterTilesRatio;
-            curveMap.clear();
-            edgeRgbMap.clear();
-            curves.clear();
-            queue.length = 0;
+        state.alterTilesRatio = +dom.sAlterTiles.value;
+        dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
+        if (Math.abs(state.alterTilesRatio - lastAlterRatio) > 0.001) {
+            lastAlterRatio = state.alterTilesRatio;
+            state.curveMap.clear();
+            state.edgeRgbMap.clear();
+            state.curves.clear();
+            state.queue.length = 0;
             initializeCentralTile();
         }
         requestRender();
@@ -3087,58 +2251,58 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     function bulkAnimate(newMode, newSeed) {
         const now = Date.now();
-        const hexes = visibleHexes(zoom, panX, panY, dom.cvs.width, dom.cvs.height);
+        const hexes = visibleHexes(state.zoom, state.panX, state.panY, dom.cvs.width, dom.cvs.height);
         const snapshots = new Map();
         for (const h of hexes) snapshots.set(hexKey(h.q, h.r), displayRot(h.q, h.r, now));
-        rotOverrides.clear();
-        rotMode = newMode;
-        rotSeed = newSeed; 
+        state.rotOverrides.clear();
+        state.rotMode = newMode;
+        state.rotSeed = newSeed; 
         for (const h of hexes) {
             const k = hexKey(h.q, h.r);
             const curDisplay = snapshots.get(k);
             const newBase = baseRot(h.q, h.r);
             const target = nearestTarget(curDisplay, newBase);
             if (Math.abs(target - curDisplay) > 0.5) {
-                animMap.set(k, { start: now, from: curDisplay, to: target, duration: BULK_DUR });
+                state.animMap.set(k, { start: now, from: curDisplay, to: target, duration: BULK_DUR });
             } else {
-                animMap.delete(k);
+                state.animMap.delete(k);
             }
         }
-        curveMap.clear();
-        edgeRgbMap.clear();
-        curves.clear();
-        queue.length = 0;
+        state.curveMap.clear();
+        state.edgeRgbMap.clear();
+        state.curves.clear();
+        state.queue.length = 0;
         initializeCentralTile();
         checkIfSolved();
     }
 
     dom.randAnglesBtn.onclick = () => {
-        bulkAnimate('hash', (rotSeed + 1) & 0x7FFFFFFF);
+        bulkAnimate('hash', (state.rotSeed + 1) & 0x7FFFFFFF);
         toast('Angles randomized');
     };
 
     dom.randLineColorsBtn.onclick = () => {
-        if (curveColors.length === 0) return;
-        curveColorPool = generateDistinctThemePool();
-        for (let i = 0; i < curveColors.length; i++) {
-            curveColors[i] = curveColorPool.pool[i] || curveColors[i];
+        if (state.curveColors.length === 0) return;
+        state.curveColorPool = generateDistinctThemePool();
+        for (let i = 0; i < state.curveColors.length; i++) {
+            state.curveColors[i] = state.curveColorPool.pool[i] || state.curveColors[i];
         }
         updateCurveColorsCache();
         renderCurveList();
-        toast(`Theme "${curveColorPool.name}" applied to curves`);
+        toast(`Theme "${state.curveColorPool.name}" applied to state.curves`);
         checkIfSolved();
         requestRender();
     };
 
     dom.randGradColorsBtn.onclick = () => {
-        if (gradientMarkers.length === 0) return;
-        gradientColorPool = generateDistinctThemePool();
-        for (let i = 0; i < gradientMarkers.length; i++) {
-            gradientMarkers[i].color = gradientColorPool.pool[i] || gradientMarkers[i].color;
+        if (state.gradientMarkers.length === 0) return;
+        state.gradientColorPool = generateDistinctThemePool();
+        for (let i = 0; i < state.gradientMarkers.length; i++) {
+            state.gradientMarkers[i].color = state.gradientColorPool.pool[i] || state.gradientMarkers[i].color;
             updateGradientMarkersCache();
         }
         renderGradientList();
-        toast(`Theme "${gradientColorPool.name}" applied to gradient`);
+        toast(`Theme "${state.gradientColorPool.name}" applied to gradient`);
         requestRender();
     };
 
@@ -3166,7 +2330,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         reader.onload = ev => {
             const img = new Image();
             img.onload = () => {
-                pendImg = img;
+                state.pendImg = img;
                 openEditor();
             };
             img.src = ev.target.result;
@@ -3197,31 +2361,31 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     function openEditor() {
         dom.editorPanel.classList.add('open');
-        writeSliders(texTf);
+        writeSliders(state.texTf);
         drawPreview();
     }
 
     function closeEditor() {
         dom.editorPanel.classList.remove('open');
-        pendImg = null;
+        state.pendImg = null;
     }
 
     function applyTexture() {
-        if (pendImg) texImg = pendImg;
-        texTf = readSliders();
+        if (state.pendImg) state.texImg = state.pendImg;
+        state.texTf = readSliders();
         toast('Texture applied — keep adjusting or close the editor');
     }
 
     dom.cancelEd.onclick = closeEditor;
     dom.applyEd.onclick = applyTexture;
     dom.resetTexBtn.onclick = () => {
-        texImg = null;
-        texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+        state.texImg = null;
+        state.texTf = { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
         if (dom.editorPanel.classList.contains('open')) {
-            writeSliders(texTf);
+            writeSliders(state.texTf);
             drawPreview();
         }
-        pendImg = null;
+        state.pendImg = null;
         closeEditor();
         dom.fileName.textContent = '';
         toast('Texture reset to default');
@@ -3256,7 +2420,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         traceHexPath(pctx, cX, cY, rSz);
         pctx.clip();
         pctx.translate(cX, cY);
-        const img = pendImg || texImg;
+        const img = state.pendImg || state.texImg;
         if (img) {
             const tf = readSliders();
             pctx.rotate(tf.rot * DEG2RAD);
@@ -3353,14 +2517,12 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         return url; 
     }
 
-    let lastTapTime = 0;
-
     function pickNewMarkerColor() {
-        const existing = new Set(gradientMarkers.map(m => m.color.toLowerCase()));
+        const existing = new Set(state.gradientMarkers.map(m => m.color.toLowerCase()));
         
-        for (let i = 0; i < gradientColorPool.pool.length; i++) {
-            if (!existing.has(gradientColorPool.pool[i].toLowerCase())) {
-                return gradientColorPool.pool[i];
+        for (let i = 0; i < state.gradientColorPool.pool.length; i++) {
+            if (!existing.has(state.gradientColorPool.pool[i].toLowerCase())) {
+                return state.gradientColorPool.pool[i];
             }
         }
         
@@ -3372,11 +2534,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     }
 
     function pickNewCurveColor() {
-        const existing = new Set(curveColors.map(c => c.toLowerCase()));
+        const existing = new Set(state.curveColors.map(c => c.toLowerCase()));
         
-        for (let i = 0; i < curveColorPool.pool.length; i++) {
-            if (!existing.has(curveColorPool.pool[i].toLowerCase())) {
-                return curveColorPool.pool[i];
+        for (let i = 0; i < state.curveColorPool.pool.length; i++) {
+            if (!existing.has(state.curveColorPool.pool[i].toLowerCase())) {
+                return state.curveColorPool.pool[i];
             }
         }
         
@@ -3400,14 +2562,14 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         let bestX = minX + Math.random() * (maxX - minX);
         let bestY = minY + Math.random() * (maxY - minY);
 
-        if (gradientMarkers.length > 0) {
+        if (state.gradientMarkers.length > 0) {
             let maxMinDist = -1;
             const candidates = 100;
             for (let i = 0; i < candidates; i++) {
                 const cx = minX + Math.random() * (maxX - minX);
                 const cy = minY + Math.random() * (maxY - minY);
                 let minDist = Infinity;
-                for (const m of gradientMarkers) {
+                for (const m of state.gradientMarkers) {
                     const dx = cx - m.x;
                     const dy = cy - m.y;
                     const dist = dx * dx + dy * dy;
@@ -3424,7 +2586,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     }
 
     dom.addMarkerBtn.onclick = () => {
-        if (gradientMarkers.length >= CONFIG.MAX_MARKERS) {
+        if (state.gradientMarkers.length >= CONFIG.MAX_MARKERS) {
             toast('Maximum of ' + CONFIG.MAX_MARKERS + ' gradient markers reached');
             return;
         }
@@ -3434,15 +2596,15 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             return;
         }
         const pos = getRandomMarkerPosition();
-        gradientMarkers.push({ x: pos.x, y: pos.y, color: color });
+        state.gradientMarkers.push({ x: pos.x, y: pos.y, color: color });
         updateGradientMarkersCache();
-        markersVisible = true;
+        state.markersVisible = true;
         dom.markersToggle.checked = true;
         renderGradientList();
     };
 
     dom.addCurveBtn.onclick = () => {
-        if (curveColors.length >= CONFIG.MAX_CURVE_COLORS) {
+        if (state.curveColors.length >= CONFIG.MAX_CURVE_COLORS) {
             toast('Maximum of ' + CONFIG.MAX_CURVE_COLORS + ' curve colors reached');
             return;
         }
@@ -3451,13 +2613,13 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             toast('All colors are already in use');
             return;
         }
-        curveColors.push(color);
+        state.curveColors.push(color);
         updateCurveColorsCache();
-        activeCurveIndex = curveColors.length - 1;
+        state.activeCurveIndex = state.curveColors.length - 1;
         renderCurveList();
-        curveMap.clear();
-        curves.clear();
-        queue.length = 0;
+        state.curveMap.clear();
+        state.curves.clear();
+        state.queue.length = 0;
         initializeCentralTile();
         checkIfSolved();
     };
@@ -3476,7 +2638,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     function serializeRotOverrides() {
         const out = [];
-        for (const [k, rot] of rotOverrides.entries()) {
+        for (const [k, rot] of state.rotOverrides.entries()) {
             const { q, r } = decodeHexKey(k);
             out.push([q, r, rot]);
         }
@@ -3484,46 +2646,41 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     }
 
     function getTextureDataUrl() {
-        if (!texImg) return null;
+        if (!state.texImg) return null;
         try {
             const c = document.createElement('canvas');
-            c.width = texImg.naturalWidth || texImg.width;
-            c.height = texImg.naturalHeight || texImg.height;
-            c.getContext('2d').drawImage(texImg, 0, 0);
+            c.width = state.texImg.naturalWidth || state.texImg.width;
+            c.height = state.texImg.naturalHeight || state.texImg.height;
+            c.getContext('2d').drawImage(state.texImg, 0, 0);
             return c.toDataURL('image/png');
         } catch (e) { return null; }
     }
 
     // ── Frame state ──
-    let efRect = { x: 0, y: 0, w: 0, h: 0 };
-    let efDrag = null;
-    let aspectLocked = false;
-    let targetRatio = 1;
-    let sidebarWasCollapsed = false;
 
     function openExportOverlay() {
-        // 1. Finish processing the queue instantly so all curves are generated
+        // 1. Finish processing the state.queue instantly so all state.curves are generated
         let safety = 10000;
-        while (safety-- > 0 && queue.length > 0) {
+        while (safety-- > 0 && state.queue.length > 0) {
             processQueue();
         }
         
         // 2. Force all edges to their final target colors instantly (no ripples)
-        for (const [id, edgeData] of edgeRgbMap.entries()) {
+        for (const [id, edgeData] of state.edgeRgbMap.entries()) {
             let targetCurveID = -1;
             let targetRgb = null;
             
-            if (curveColors.length === 1) {
-                const c = curveColorsRGB[0];
+            if (state.curveColors.length === 1) {
+                const c = state.curveColorsRGB[0];
                 if (c) targetRgb = { r: c.tr !== undefined ? c.tr : c.r, g: c.tg !== undefined ? c.tg : c.g, b: c.tb !== undefined ? c.tb : c.b };
                 targetCurveID = -2;
-            } else if (curveMap.has(id)) {
-                targetCurveID = curveMap.get(id);
-                const curve = curves.get(targetCurveID);
+            } else if (state.curveMap.has(id)) {
+                targetCurveID = state.curveMap.get(id);
+                const curve = state.curves.get(targetCurveID);
                 if (curve) {
                     let c = curve.color;
                     if (typeof c === 'number') {
-                        const cc = curveColorsRGB[c % curveColorsRGB.length];
+                        const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
                         targetRgb = { r: cc.tr !== undefined ? cc.tr : cc.r, g: cc.tg !== undefined ? cc.tg : cc.g, b: cc.tb !== undefined ? cc.tb : cc.b };
                     } else {
                         const rgb = hexToRgb(c); 
@@ -3534,7 +2691,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             
             if (targetRgb) {
                 if (!edgeData) {
-                    edgeRgbMap.set(id, { 
+                    state.edgeRgbMap.set(id, { 
                         rgb: [targetRgb.r, targetRgb.g, targetRgb.b], 
                         alpha: 1, 
                         targetCurveID: targetCurveID, 
@@ -3554,33 +2711,33 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                     edgeData.colorStr = '';
                 }
             } else {
-                edgeRgbMap.delete(id);
+                state.edgeRgbMap.delete(id);
             }
         }
 
         const cr = dom.cvs.getBoundingClientRect();
         const fw = cr.width / 2, fh = cr.height / 2;
-        targetRatio = fw / fh;
-        efRect = { x: cr.left + (cr.width - fw) / 2, y: cr.top + (cr.height - fh) / 2, w: fw, h: fh };
+        state.targetRatio = fw / fh;
+        state.efRect = { x: cr.left + (cr.width - fw) / 2, y: cr.top + (cr.height - fh) / 2, w: fw, h: fh };
         dom.exportOverlay.classList.add('active');
         
-        sidebarWasCollapsed = document.body.classList.contains('sidebar-collapsed');
-        if (!sidebarWasCollapsed) {
+        state.sidebarWasCollapsed = document.body.classList.contains('sidebar-collapsed');
+        if (!state.sidebarWasCollapsed) {
             document.body.classList.add('sidebar-collapsed');
             document.querySelector('.sidebar').classList.add('collapsed');
             document.getElementById('sidebarToggle').classList.add('collapsed');
         }
         document.body.classList.add('exporting');
-        isExporting = true;
+        state.isExporting = true;
         
         // Kill any ongoing inertia immediately
-        panVX = 0; 
-        panVY = 0;
+        state.panVX = 0; 
+        state.panVY = 0;
 
         dom.exportW.value = Math.round(fw);
         dom.exportH.value = Math.round(fh);
         
-        aspectLocked = false;
+        state.aspectLocked = false;
         dom.aspectLockBtn.classList.remove('active');
         dom.exportFrame.classList.remove('locked-aspect');
         
@@ -3596,25 +2753,25 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     function closeExportOverlay() {
         dom.exportOverlay.classList.remove('active');
         document.body.classList.remove('exporting');
-        if (!sidebarWasCollapsed) {
+        if (!state.sidebarWasCollapsed) {
             document.body.classList.remove('sidebar-collapsed');
             document.querySelector('.sidebar').classList.remove('collapsed');
             document.getElementById('sidebarToggle').classList.remove('collapsed');
         }
-        isExporting = false;
+        state.isExporting = false;
         dom.embedCodeWrap.classList.remove('visible');
         dom.imageExportWrap.classList.remove('visible');
     }
     
     function updateExportFrameDOM() {
         const f = dom.exportFrame;
-        f.style.left = efRect.x + 'px';
-        f.style.top = efRect.y + 'px';
-        f.style.width = efRect.w + 'px';
-        f.style.height = efRect.h + 'px';
+        f.style.left = state.efRect.x + 'px';
+        f.style.top = state.efRect.y + 'px';
+        f.style.width = state.efRect.w + 'px';
+        f.style.height = state.efRect.h + 'px';
         
         // Hide export menu if the drawn frame is smaller than 50x50
-        if (efRect.w < 50 || efRect.h < 50) {
+        if (state.efRect.w < 50 || state.efRect.h < 50) {
             dom.exportMenu.style.display = 'none';
             return;
         }
@@ -3626,45 +2783,45 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         let placed = false;
 
         // 1. Try Right side
-        if (efRect.x + efRect.w + 16 + menuW <= window.innerWidth - 16) {
-            mx = efRect.x + efRect.w + 16;
-            my = efRect.y;
+        if (state.efRect.x + state.efRect.w + 16 + menuW <= window.innerWidth - 16) {
+            mx = state.efRect.x + state.efRect.w + 16;
+            my = state.efRect.y;
             // Clamp vertically to screen bounds
             my = Math.max(16, Math.min(my, window.innerHeight - menuH - 16));
             placed = true;
         }
 
         // 2. Try Left side
-        if (!placed && efRect.x - menuW - 16 >= 16) {
-            mx = efRect.x - menuW - 16;
-            my = efRect.y;
+        if (!placed && state.efRect.x - menuW - 16 >= 16) {
+            mx = state.efRect.x - menuW - 16;
+            my = state.efRect.y;
             // Clamp vertically to screen bounds
             my = Math.max(16, Math.min(my, window.innerHeight - menuH - 16));
             placed = true;
         }
 
         // 3. Try Top
-        if (!placed && efRect.y - menuH - 16 >= 16) {
-            my = efRect.y - menuH - 16;
+        if (!placed && state.efRect.y - menuH - 16 >= 16) {
+            my = state.efRect.y - menuH - 16;
             // Center horizontally over the frame
-            mx = efRect.x + (efRect.w / 2) - (menuW / 2);
+            mx = state.efRect.x + (state.efRect.w / 2) - (menuW / 2);
             mx = Math.max(16, Math.min(mx, window.innerWidth - menuW - 16));
             placed = true;
         }
 
         // 4. Try Bottom
-        if (!placed && efRect.y + efRect.h + 16 + menuH <= window.innerHeight - 16) {
-            my = efRect.y + efRect.h + 16;
+        if (!placed && state.efRect.y + state.efRect.h + 16 + menuH <= window.innerHeight - 16) {
+            my = state.efRect.y + state.efRect.h + 16;
             // Center horizontally over the frame
-            mx = efRect.x + (efRect.w / 2) - (menuW / 2);
+            mx = state.efRect.x + (state.efRect.w / 2) - (menuW / 2);
             mx = Math.max(16, Math.min(mx, window.innerWidth - menuW - 16));
             placed = true;
         }
 
         // 5. Absolute Last Resort: Inside the frame (top-left corner)
         if (!placed) {
-            mx = efRect.x + 16;
-            my = efRect.y + 16;
+            mx = state.efRect.x + 16;
+            my = state.efRect.y + 16;
             // Just in case the frame itself is smaller than the menu, clamp to screen
             mx = Math.max(16, Math.min(mx, window.innerWidth - menuW - 16));
             my = Math.max(16, Math.min(my, window.innerHeight - menuH - 16));
@@ -3675,16 +2832,16 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         
         const sideLabel = document.getElementById('exportSideLabel');
         if (sideLabel) {
-            sideLabel.textContent = efRect.w >= efRect.h ? 'Exported width (px)' : 'Exported height (px)';
+            sideLabel.textContent = state.efRect.w >= state.efRect.h ? 'Exported width (px)' : 'Exported height (px)';
         }
     }
 
     function clampFrameToCanvas() {
         const cr = dom.cvs.getBoundingClientRect();
-        efRect.x = Math.max(cr.left, Math.min(efRect.x, cr.left + cr.width - 80));
-        efRect.y = Math.max(cr.top, Math.min(efRect.y, cr.top + cr.height - 80));
-        efRect.w = Math.max(50, Math.min(efRect.w, cr.left + cr.width - efRect.x));
-        efRect.h = Math.max(50, Math.min(efRect.h, cr.top + cr.height - efRect.y));
+        state.efRect.x = Math.max(cr.left, Math.min(state.efRect.x, cr.left + cr.width - 80));
+        state.efRect.y = Math.max(cr.top, Math.min(state.efRect.y, cr.top + cr.height - 80));
+        state.efRect.w = Math.max(50, Math.min(state.efRect.w, cr.left + cr.width - state.efRect.x));
+        state.efRect.h = Math.max(50, Math.min(state.efRect.h, cr.top + cr.height - state.efRect.y));
     }
 
     dom.exportBtn.onclick = openExportOverlay;
@@ -3692,32 +2849,32 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     // ── Aspect Ratio Lock ──
     dom.aspectLockBtn.addEventListener('click', () => {
-        aspectLocked = !aspectLocked;
-        dom.aspectLockBtn.classList.toggle('active', aspectLocked);
-        dom.exportFrame.classList.toggle('locked-aspect', aspectLocked);
+        state.aspectLocked = !state.aspectLocked;
+        dom.aspectLockBtn.classList.toggle('active', state.aspectLocked);
+        dom.exportFrame.classList.toggle('locked-aspect', state.aspectLocked);
         
-        if (aspectLocked) {
+        if (state.aspectLocked) {
             let valW = parseInt(dom.exportW.value) || 50;
             let valH = parseInt(dom.exportH.value) || 50;
-            targetRatio = valW / valH;
+            state.targetRatio = valW / valH;
             
-            let newW = efRect.w;
-            let newH = newW / targetRatio;
-            if (newH > efRect.h) { 
-                newH = efRect.h; 
-                newW = newH * targetRatio; 
+            let newW = state.efRect.w;
+            let newH = newW / state.targetRatio;
+            if (newH > state.efRect.h) { 
+                newH = state.efRect.h; 
+                newW = newH * state.targetRatio; 
             }
             
-            efRect.x += (efRect.w - newW) / 2;
-            efRect.y += (efRect.h - newH) / 2;
-            efRect.w = newW;
-            efRect.h = newH;
+            state.efRect.x += (state.efRect.w - newW) / 2;
+            state.efRect.y += (state.efRect.h - newH) / 2;
+            state.efRect.w = newW;
+            state.efRect.h = newH;
             
             clampFrameToCanvas();
             updateExportFrameDOM();
             
-            dom.exportW.value = Math.round(efRect.w);
-            dom.exportH.value = Math.round(efRect.h);
+            dom.exportW.value = Math.round(state.efRect.w);
+            dom.exportH.value = Math.round(state.efRect.h);
         }
     });
 
@@ -3725,18 +2882,18 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     dom.exportW.addEventListener('change', () => {
         const cr = dom.cvs.getBoundingClientRect();
         let valW = parseInt(dom.exportW.value) || 50;
-        if (aspectLocked) {
-            let valH = valW / targetRatio;
-            if (valH > cr.height) { valH = cr.height; valW = valH * targetRatio; }
-            if (valW > cr.width) { valW = cr.width; valH = valW / targetRatio; }
+        if (state.aspectLocked) {
+            let valH = valW / state.targetRatio;
+            if (valH > cr.height) { valH = cr.height; valW = valH * state.targetRatio; }
+            if (valW > cr.width) { valW = cr.width; valH = valW / state.targetRatio; }
             dom.exportH.value = Math.round(valH);
             dom.exportW.value = Math.round(valW);
-            efRect.w = valW;
-            efRect.h = valH;
+            state.efRect.w = valW;
+            state.efRect.h = valH;
         } else {
             valW = Math.min(valW, cr.width);
             dom.exportW.value = valW;
-            efRect.w = valW;
+            state.efRect.w = valW;
         }
         clampFrameToCanvas();
         updateExportFrameDOM();
@@ -3745,18 +2902,18 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     dom.exportH.addEventListener('change', () => {
         const cr = dom.cvs.getBoundingClientRect();
         let valH = parseInt(dom.exportH.value) || 50;
-        if (aspectLocked) {
-            let valW = valH * targetRatio;
-            if (valW > cr.width) { valW = cr.width; valH = valW / targetRatio; }
-            if (valH > cr.height) { valH = cr.height; valW = valH * targetRatio; }
+        if (state.aspectLocked) {
+            let valW = valH * state.targetRatio;
+            if (valW > cr.width) { valW = cr.width; valH = valW / state.targetRatio; }
+            if (valH > cr.height) { valH = cr.height; valW = valH * state.targetRatio; }
             dom.exportW.value = Math.round(valW);
             dom.exportH.value = Math.round(valH);
-            efRect.w = valW;
-            efRect.h = valH;
+            state.efRect.w = valW;
+            state.efRect.h = valH;
         } else {
             valH = Math.min(valH, cr.height);
             dom.exportH.value = valH;
-            efRect.h = valH;
+            state.efRect.h = valH;
         }
         clampFrameToCanvas();
         updateExportFrameDOM();
@@ -3772,16 +2929,16 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     dom.fmtPdfBtn.onclick = async () => {
         const cr = dom.cvs.getBoundingClientRect();
-        const fx = efRect.x - cr.left;
-        const fy = efRect.y - cr.top;
+        const fx = state.efRect.x - cr.left;
+        const fy = state.efRect.y - cr.top;
         const targetLong = parseInt(dom.exportSide.value) || 1920;
-        const currentLong = Math.max(efRect.w, efRect.h);
+        const currentLong = Math.max(state.efRect.w, state.efRect.h);
         const scale = targetLong / currentLong;
-        const eW = Math.round(efRect.w * scale);
-        const eH = Math.round(efRect.h * scale);
-        const eZoom = zoom * scale;
-        const ePanX = (panX - fx) * scale;
-        const ePanY = (panY - fy) * scale;
+        const eW = Math.round(state.efRect.w * scale);
+        const eH = Math.round(state.efRect.h * scale);
+        const eZoom = state.zoom * scale;
+        const ePanX = (state.panX - fx) * scale;
+        const ePanY = (state.panY - fy) * scale;
 
         const svgString = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
 
@@ -3806,7 +2963,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     // ── Shared SVG generation function ──
     function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
-        const now = exportFreezeTime || Date.now();
+        const now = state.exportFreezeTime || Date.now();
         const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
 
         let exportBounds = { minQ: Infinity, maxQ: -Infinity, minR: Infinity, maxR: -Infinity };
@@ -3817,7 +2974,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
         }
 
-        const origSz = HEX_R * zoom;
+        const origSz = HEX_R * state.zoom;
         let eCurveAlpha = 1.0, eGridAlpha = 1.0;
         const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
         const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
@@ -3829,11 +2986,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         }
 
         // SKIP PROCESS QUEUE IF CURVES ARE INVISIBLE!
-        if (curveColors.length >= 1 && eCurveAlpha > 0) {
+        if (state.curveColors.length >= 1 && eCurveAlpha > 0) {
             let safety = 2000;
             while (safety-- > 0) {
                 processQueue(exportBounds, false);
-                if (queue.length === 0) {
+                if (state.queue.length === 0) {
                     if (!findUncoloredTileInHexes(exportHexes)) break;
                 }
             }
@@ -3843,23 +3000,23 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         svg += `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${eW}" height="${eH}" viewBox="0 0 ${eW} ${eH}">`;
         svg += `<rect width="${eW}" height="${eH}" fill="${COLORS.bg}"/>`;
 
-        if (gradientMarkersRGB.length > 0) {
+        if (state.gradientMarkersRGB.length > 0) {
             updateIDWGradientCanvas(eW, eH, scale, fx, fy, 0.5);
-            const gradUrl = gradientCanvas.toDataURL('image/png');
+            const gradUrl = state.gradientCanvas.toDataURL('image/png');
             svg += `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
         }
 
-        if (showBgStars) {
-            const expStarPanX5 = (starPanX5 - fx) * scale;
-            const expStarPanY5 = (starPanY5 - fy) * scale;
-            const expStarPanX2 = (starPanX2 - fx) * scale;
-            const expStarPanY2 = (starPanY2 - fy) * scale;
-            const expStarPanX3 = (starPanX3 - fx) * scale;
-            const expStarPanY3 = (starPanY3 - fy) * scale;
+        if (state.showBgStars) {
+            const expStarPanX5 = (state.starPanX5 - fx) * scale;
+            const expStarPanY5 = (state.starPanY5 - fy) * scale;
+            const expStarPanX2 = (state.starPanX2 - fx) * scale;
+            const expStarPanY2 = (state.starPanY2 - fy) * scale;
+            const expStarPanX3 = (state.starPanX3 - fx) * scale;
+            const expStarPanY3 = (state.starPanY3 - fy) * scale;
             
-            const spacing5 = CONFIG.STAR_SPACING_LARGE * starZoom5 * scale;
-            const spacing2 = CONFIG.STAR_SPACING_MED * starZoom2 * scale;
-            const spacing3 = CONFIG.STAR_SPACING_SMALL * starZoom3 * scale;
+            const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * scale;
+            const spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * scale;
+            const spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * scale;
 
             function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime, offsetX, offsetY, blazeFade = 1.0) {
                 if (spacing < CONFIG.STAR_MIN_SPACING) return;
@@ -3966,8 +3123,8 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             
             let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
             if (l3Alpha > 0) {
-                let canBlaze = zoomOutStartTime > 0 && (now - zoomOutStartTime) > CONFIG.STAR_BLAZE_DELAY;
-                addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, canBlaze, l3Alpha, zoomOutStartTime, fx, fy, 1.0);
+                let canBlaze = state.zoomOutStartTime > 0 && (now - state.zoomOutStartTime) > CONFIG.STAR_BLAZE_DELAY;
+                addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, canBlaze, l3Alpha, state.zoomOutStartTime, fx, fy, 1.0);
             }
         }
 
@@ -3979,17 +3136,17 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : (eSz > CONFIG.LOD_MED_SZ ? CONFIG.LOD_EXT_MED : CONFIG.LOD_EXT_LOW);
 
         function getSvgEdgeColor(q, r, e) {
-            if (curveColors.length === 1) {
-                const cc = curveColorsRGB[0];
+            if (state.curveColors.length === 1) {
+                const cc = state.curveColorsRGB[0];
                 return `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
             }
             const id = edgeID(q, r, e);
-            if (!curveMap.has(id)) return null;
-            const curve = curves.get(curveMap.get(id));
+            if (!state.curveMap.has(id)) return null;
+            const curve = state.curves.get(state.curveMap.get(id));
             if (!curve) return null;
             const c = curve.color;
             if (typeof c === 'number') {
-                const cc = curveColorsRGB[c % curveColorsRGB.length];
+                const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
                 return `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
             }
             return c;
@@ -4024,7 +3181,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                 const cos = Math.cos(rad);
                 const sin = Math.sin(rad);
 
-                if (texImg) {
+                if (state.texImg) {
                     // Skip vector logic for texture tiles
                 } else {
                     const a = eSz * SQRT3 / 2;
@@ -4038,7 +3195,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
                         c = getSvgEdgeColor(h.q, h.r, (1 + k) % 6); if (c) { pathsByColor[c] = pathsByColor[c] || []; pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, a, 1.5 * eSz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false)); }
                     }
 
-                    if (showGrid) {
+                    if (state.showGrid) {
                         let hexPath = "M ";
                         for (let i = 0; i < 6; i++) {
                             const ang = PI_DIV_3 * i;
@@ -4056,12 +3213,12 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
             }
         }
 
-        const lw = (eSz / 3 * curveLineWidth).toFixed(2);
+        const lw = (eSz / 3 * state.curveLineWidth).toFixed(2);
         for (const color in pathsByColor) {
             svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"/>`;
         }
 
-        if (showGrid && eGridAlpha > 0 && gridPaths.length > 0) {
+        if (state.showGrid && eGridAlpha > 0 && gridPaths.length > 0) {
             svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-opacity="${eGridAlpha.toFixed(3)}"/>`;
         }
 
@@ -4071,17 +3228,17 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     dom.fmtSvgBtn.onclick = () => {
         const cr = dom.cvs.getBoundingClientRect();
-        const fx = efRect.x - cr.left;
-        const fy = efRect.y - cr.top;
+        const fx = state.efRect.x - cr.left;
+        const fy = state.efRect.y - cr.top;
         const targetLong = parseInt(dom.exportSide.value) || 1920;
-        const currentLong = Math.max(efRect.w, efRect.h);
+        const currentLong = Math.max(state.efRect.w, state.efRect.h);
         const scale = targetLong / currentLong;
         
-        const eW = Math.round(efRect.w * scale);
-        const eH = Math.round(efRect.h * scale);
-        const eZoom = zoom * scale;
-        const ePanX = (panX - fx) * scale;
-        const ePanY = (panY - fy) * scale;
+        const eW = Math.round(state.efRect.w * scale);
+        const eH = Math.round(state.efRect.h * scale);
+        const eZoom = state.zoom * scale;
+        const ePanX = (state.panX - fx) * scale;
+        const ePanY = (state.panY - fy) * scale;
 
         const svg = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
 
@@ -4122,89 +3279,89 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     dom.exportFrame.addEventListener('mousedown', e => {
         const h = e.target.dataset.h;
         if (h) {
-            efDrag = { mode: h, mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y, w: efRect.w, h: efRect.h, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
+            state.efDrag = { mode: h, mx: e.clientX, my: e.clientY, x: state.efRect.x, y: state.efRect.y, w: state.efRect.w, h: state.efRect.h, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
         } else {
-            efDrag = { mode: 'move', mx: e.clientX, my: e.clientY, x: efRect.x, y: efRect.y, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
+            state.efDrag = { mode: 'move', mx: e.clientX, my: e.clientY, x: state.efRect.x, y: state.efRect.y, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
         }
         e.preventDefault();
         e.stopPropagation();
     });
 
     dom.exportBackdrop.addEventListener('mousedown', e => {
-        efDrag = { mode: 'draw', mx: e.clientX, my: e.clientY, startX: e.clientX, startY: e.clientY, prevRect: {...efRect}, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
-        efRect.x = e.clientX;
-        efRect.y = e.clientY;
-        efRect.w = 0;
-        efRect.h = 0;
+        state.efDrag = { mode: 'draw', mx: e.clientX, my: e.clientY, startX: e.clientX, startY: e.clientY, prevRect: {...state.efRect}, exportW: parseInt(dom.exportW.value), exportH: parseInt(dom.exportH.value) };
+        state.efRect.x = e.clientX;
+        state.efRect.y = e.clientY;
+        state.efRect.w = 0;
+        state.efRect.h = 0;
         updateExportFrameDOM();
         e.preventDefault();
         e.stopPropagation();
     });
 
     window.addEventListener('mousemove', e => {
-        if (!efDrag) return;
-        const dx = e.clientX - efDrag.mx, dy = e.clientY - efDrag.my;
+        if (!state.efDrag) return;
+        const dx = e.clientX - state.efDrag.mx, dy = e.clientY - state.efDrag.my;
         const cr = dom.cvs.getBoundingClientRect();
         
-        if (efDrag.mode === 'move') {
-            efRect.x = efDrag.x + dx;
-            efRect.y = efDrag.y + dy;
+        if (state.efDrag.mode === 'move') {
+            state.efRect.x = state.efDrag.x + dx;
+            state.efRect.y = state.efDrag.y + dy;
             // Resist in all 4 directions (clamp position without shrinking) and slip grab point
-            if (efRect.w <= cr.width) {
-                const maxX = cr.left + cr.width - efRect.w;
-                if (efRect.x < cr.left) { efDrag.x = cr.left - dx; efRect.x = cr.left; }
-                else if (efRect.x > maxX) { efDrag.x = maxX - dx; efRect.x = maxX; }
-            } else { efDrag.x = cr.left - dx; efRect.x = cr.left; }
-            if (efRect.h <= cr.height) {
-                const maxY = cr.top + cr.height - efRect.h;
-                if (efRect.y < cr.top) { efDrag.y = cr.top - dy; efRect.y = cr.top; }
-                else if (efRect.y > maxY) { efDrag.y = maxY - dy; efRect.y = maxY; }
-            } else { efDrag.y = cr.top - dy; efRect.y = cr.top; }
-        } else if (efDrag.mode === 'draw') {
-            let rawW = Math.abs(e.clientX - efDrag.startX);
-            let rawH = Math.abs(e.clientY - efDrag.startY);
-            let startX = Math.min(efDrag.startX, e.clientX);
-            let startY = Math.min(efDrag.startY, e.clientY);
+            if (state.efRect.w <= cr.width) {
+                const maxX = cr.left + cr.width - state.efRect.w;
+                if (state.efRect.x < cr.left) { state.efDrag.x = cr.left - dx; state.efRect.x = cr.left; }
+                else if (state.efRect.x > maxX) { state.efDrag.x = maxX - dx; state.efRect.x = maxX; }
+            } else { state.efDrag.x = cr.left - dx; state.efRect.x = cr.left; }
+            if (state.efRect.h <= cr.height) {
+                const maxY = cr.top + cr.height - state.efRect.h;
+                if (state.efRect.y < cr.top) { state.efDrag.y = cr.top - dy; state.efRect.y = cr.top; }
+                else if (state.efRect.y > maxY) { state.efDrag.y = maxY - dy; state.efRect.y = maxY; }
+            } else { state.efDrag.y = cr.top - dy; state.efRect.y = cr.top; }
+        } else if (state.efDrag.mode === 'draw') {
+            let rawW = Math.abs(e.clientX - state.efDrag.startX);
+            let rawH = Math.abs(e.clientY - state.efDrag.startY);
+            let startX = Math.min(state.efDrag.startX, e.clientX);
+            let startY = Math.min(state.efDrag.startY, e.clientY);
             
-            if (aspectLocked) {
-                if (rawW / rawH > targetRatio) { rawW = rawH * targetRatio; } 
-                else { rawH = rawW / targetRatio; }
+            if (state.aspectLocked) {
+                if (rawW / rawH > state.targetRatio) { rawW = rawH * state.targetRatio; } 
+                else { rawH = rawW / state.targetRatio; }
             }
             
-            efRect.x = (e.clientX < efDrag.startX) ? efDrag.startX - rawW : startX;
-            efRect.y = (e.clientY < efDrag.startY) ? efDrag.startY - rawH : startY;
-            efRect.w = rawW;
-            efRect.h = rawH;
+            state.efRect.x = (e.clientX < state.efDrag.startX) ? state.efDrag.startX - rawW : startX;
+            state.efRect.y = (e.clientY < state.efDrag.startY) ? state.efDrag.startY - rawH : startY;
+            state.efRect.w = rawW;
+            state.efRect.h = rawH;
             
-            dom.exportW.value = Math.round(efRect.w);
-            dom.exportH.value = Math.round(efRect.h);
+            dom.exportW.value = Math.round(state.efRect.w);
+            dom.exportH.value = Math.round(state.efRect.h);
             
             updateExportFrameDOM();
             return;
         } else {
-            let { x, y, w, h } = efDrag;
+            let { x, y, w, h } = state.efDrag;
             let newW = w, newH = h;
             
-            if (efDrag.mode.includes('r')) newW = efDrag.w + dx;
-            if (efDrag.mode.includes('l')) { newW = efDrag.w - dx; x = efDrag.x + dx; }
-            if (efDrag.mode.includes('b')) newH = efDrag.h + dy;
-            if (efDrag.mode.includes('t')) { newH = efDrag.h - dy; y = efDrag.y + dy; }
+            if (state.efDrag.mode.includes('r')) newW = state.efDrag.w + dx;
+            if (state.efDrag.mode.includes('l')) { newW = state.efDrag.w - dx; x = state.efDrag.x + dx; }
+            if (state.efDrag.mode.includes('b')) newH = state.efDrag.h + dy;
+            if (state.efDrag.mode.includes('t')) { newH = state.efDrag.h - dy; y = state.efDrag.y + dy; }
             
-            if (aspectLocked) {
-                let scale = Math.max(newW / efDrag.w, newH / efDrag.h);
+            if (state.aspectLocked) {
+                let scale = Math.max(newW / state.efDrag.w, newH / state.efDrag.h);
                 scale = Math.max(0.1, scale);
-                newW = efDrag.w * scale;
-                newH = efDrag.h * scale;
-                if (efDrag.mode.includes('l')) x = efDrag.x + (efDrag.w - newW);
-                if (efDrag.mode.includes('t')) y = efDrag.y + (efDrag.h - newH);
+                newW = state.efDrag.w * scale;
+                newH = state.efDrag.h * scale;
+                if (state.efDrag.mode.includes('l')) x = state.efDrag.x + (state.efDrag.w - newW);
+                if (state.efDrag.mode.includes('t')) y = state.efDrag.y + (state.efDrag.h - newH);
             }
-            if (newW < 50) { newW = 50; if (efDrag.mode.includes('l')) x = efDrag.x + efDrag.w - 50; if (aspectLocked) newH = newW / targetRatio; }
-            if (newH < 50) { newH = 50; if (efDrag.mode.includes('t')) y = efDrag.y + efDrag.h - 50; if (aspectLocked) newW = newH * targetRatio; }
+            if (newW < 50) { newW = 50; if (state.efDrag.mode.includes('l')) x = state.efDrag.x + state.efDrag.w - 50; if (state.aspectLocked) newH = newW / state.targetRatio; }
+            if (newH < 50) { newH = 50; if (state.efDrag.mode.includes('t')) y = state.efDrag.y + state.efDrag.h - 50; if (state.aspectLocked) newW = newH * state.targetRatio; }
             
-            efRect.x = x; efRect.y = y; efRect.w = newW; efRect.h = newH;
+            state.efRect.x = x; state.efRect.y = y; state.efRect.w = newW; state.efRect.h = newH;
             
-            dom.exportW.value = Math.round(efRect.w);
-            dom.exportH.value = Math.round(efRect.h);
+            dom.exportW.value = Math.round(state.efRect.w);
+            dom.exportH.value = Math.round(state.efRect.h);
             clampFrameToCanvas();
         }
         updateExportFrameDOM();
@@ -4212,35 +3369,35 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     window.addEventListener('mouseup', () => { 
         // Exit export mode if the drawn frame is released under 50x50
-        if (efDrag && efDrag.mode === 'draw' && (efRect.w < 50 || efRect.h < 50)) {
+        if (state.efDrag && state.efDrag.mode === 'draw' && (state.efRect.w < 50 || state.efRect.h < 50)) {
             closeExportOverlay();
         }
-        efDrag = null; 
+        state.efDrag = null; 
         requestRender(); 
     });
 
     // ── Output Size Inputs ──
     dom.exportW.addEventListener('input', () => {
         let val = parseInt(dom.exportW.value) || 50;
-        if (aspectLocked) {
-            dom.exportH.value = Math.round(val / targetRatio);
+        if (state.aspectLocked) {
+            dom.exportH.value = Math.round(val / state.targetRatio);
         }
     });
     
     dom.exportH.addEventListener('input', () => {
         let val = parseInt(dom.exportH.value) || 50;
-        if (aspectLocked) {
-            dom.exportW.value = Math.round(val * targetRatio);
+        if (state.aspectLocked) {
+            dom.exportW.value = Math.round(val * state.targetRatio);
         }
     });
 
     dom.exportW.addEventListener('change', () => {
-        if (!aspectLocked) {
+        if (!state.aspectLocked) {
             const val = parseInt(dom.exportW.value) || 50;
             const prev = parseFloat(dom.exportW.dataset.prev || val);
             if (prev > 0) {
                 const ratio = val / prev;
-                efRect.w *= ratio;
+                state.efRect.w *= ratio;
                 clampFrameToCanvas();
                 updateExportFrameDOM();
             }
@@ -4249,12 +3406,12 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     });
 
     dom.exportH.addEventListener('change', () => {
-        if (!aspectLocked) {
+        if (!state.aspectLocked) {
             const val = parseInt(dom.exportH.value) || 50;
             const prev = parseFloat(dom.exportH.dataset.prev || val);
             if (prev > 0) {
                 const ratio = val / prev;
-                efRect.h *= ratio;
+                state.efRect.h *= ratio;
                 clampFrameToCanvas();
                 updateExportFrameDOM();
             }
@@ -4268,11 +3425,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         offCanvas.height = eH;
         const offCtx = offCanvas.getContext('2d');
         const scale = eW / fw;
-        const eZoom = zoom * scale;
-        const ePanX = (panX - fx) * scale;
-        const ePanY = (panY - fy) * (eH / fh);
+        const eZoom = state.zoom * scale;
+        const ePanX = (state.panX - fx) * scale;
+        const ePanY = (state.panY - fy) * (eH / fh);
 
-        const origSz = HEX_R * zoom;
+        const origSz = HEX_R * state.zoom;
         let eCurveAlpha = 1.0, eGridAlpha = 1.0;
         const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
         const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
@@ -4300,11 +3457,11 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         }
 
         // SKIP PROCESS QUEUE IF CURVES ARE INVISIBLE!
-        if (curveColors.length >= 1 && eCurveAlpha > 0) {
+        if (state.curveColors.length >= 1 && eCurveAlpha > 0) {
             let safety = 2000;
             while (safety-- > 0) {
                 processQueue(exportBounds, false); 
-                if (queue.length === 0) {
+                if (state.queue.length === 0) {
                     if (!findUncoloredTileInHexes(hexes)) break;
                 }
             }
@@ -4312,31 +3469,31 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
         const oldCtx = ctx;
         ctx = offCtx;
-        const now = exportFreezeTime || Date.now();
+        const now = state.exportFreezeTime || Date.now();
 
         offCtx.fillStyle = COLORS.bg;
         offCtx.fillRect(0, 0, eW, eH);
 
         drawIDWGradient(eW, eH, scale, fx, fy);
 
-        const expStarPanX5 = (starPanX5 - fx) * scale;
-        const expStarPanY5 = (starPanY5 - fy) * scale;
-        const expStarPanX2 = (starPanX2 - fx) * scale;
-        const expStarPanY2 = (starPanY2 - fy) * scale;
-        const expStarPanX3 = (starPanX3 - fx) * scale;
-        const expStarPanY3 = (starPanY3 - fy) * scale;
+        const expStarPanX5 = (state.starPanX5 - fx) * scale;
+        const expStarPanY5 = (state.starPanY5 - fy) * scale;
+        const expStarPanX2 = (state.starPanX2 - fx) * scale;
+        const expStarPanY2 = (state.starPanY2 - fy) * scale;
+        const expStarPanX3 = (state.starPanX3 - fx) * scale;
+        const expStarPanY3 = (state.starPanY3 - fy) * scale;
         
-        drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, zoomOutStartTime, fx, fy);
+        drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, state.zoomOutStartTime, fx, fy);
 
         const eSz = HEX_R * eZoom;
-        // 1. Draw curves only
+        // 1. Draw state.curves only
         for (const h of hexes) {
             const rot = tileRot(h.q, h.r);
-            drawTile(h.x, h.y, eSz, rot, false, texImg, texTf, h.q, h.r, now, eCurveAlpha, 0.0);
+            drawTile(h.x, h.y, eSz, rot, false, state.texImg, state.texTf, h.q, h.r, now, eCurveAlpha, 0.0);
         }
         
         // 2. Draw grid on top
-        if (showGrid && eGridAlpha > 0.01) {
+        if (state.showGrid && eGridAlpha > 0.01) {
             traceHexPathBatch(ctx, hexes, eSz);
             ctx.globalAlpha = eGridAlpha;
             ctx.strokeStyle = COLORS.gridLine;
@@ -4356,17 +3513,17 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
     dom.fmtPngBtn.onclick = async () => {
         const cr = dom.cvs.getBoundingClientRect();
-        const fx = efRect.x - cr.left;
-        const fy = efRect.y - cr.top;
+        const fx = state.efRect.x - cr.left;
+        const fy = state.efRect.y - cr.top;
         const targetLong = parseInt(dom.exportSide.value) || 1920;
-        const currentLong = Math.max(efRect.w, efRect.h);
+        const currentLong = Math.max(state.efRect.w, state.efRect.h);
         const scale = targetLong / currentLong;
         
-        const eW = Math.round(efRect.w * scale);
-        const eH = Math.round(efRect.h * scale);
+        const eW = Math.round(state.efRect.w * scale);
+        const eH = Math.round(state.efRect.h * scale);
 
         const off = document.createElement('canvas');
-        renderToOffscreen(off, eW, eH, fx, fy, efRect.w, efRect.h);
+        renderToOffscreen(off, eW, eH, fx, fy, state.efRect.w, state.efRect.h);
 
         const blob = await canvasToBlob(off, 'image/png');
         
@@ -4387,20 +3544,20 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         dom.embedCodeWrap.classList.add('visible');
         
         const cr = dom.cvs.getBoundingClientRect();
-        const fx = efRect.x - cr.left;
-        const fy = efRect.y - cr.top;
+        const fx = state.efRect.x - cr.left;
+        const fy = state.efRect.y - cr.top;
         
         const targetLong = parseInt(dom.exportSide.value) || 1920;
-        const currentLong = Math.max(efRect.w, efRect.h);
+        const currentLong = Math.max(state.efRect.w, state.efRect.h);
         const scale = targetLong / currentLong;
         
-        const eW = Math.round(efRect.w * scale);
-        const eH = Math.round(efRect.h * scale);
-        const eZoom = zoom * scale;
-        const ePanX = (panX - fx) * scale;
-        const ePanY = (panY - fy) * scale;
+        const eW = Math.round(state.efRect.w * scale);
+        const eH = Math.round(state.efRect.h * scale);
+        const eZoom = state.zoom * scale;
+        const ePanX = (state.panX - fx) * scale;
+        const ePanY = (state.panY - fy) * scale;
 
-        const eMarkers = gradientMarkers.map(m => ({
+        const eMarkers = state.gradientMarkers.map(m => ({
             x: (m.x - fx) * scale,
             y: (m.y - fy) * scale,
             color: m.color
@@ -4408,11 +3565,20 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
         const data = {
             w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
-            origZoom: zoom,
-            showGrid, showUnrenderedDotted, markersVisible: false, showBgStars, flowEnabled, inertiaEnabled,
-            rotMode, randomSeed, rotSeed, curveLineWidth, alterTilesRatio,
-            texTf: { ...texTf },
-            curveColors: [...curveColors],
+            origZoom: state.zoom,
+            showGrid: state.showGrid, 
+            showUnrenderedDotted: state.showUnrenderedDotted, 
+            markersVisible: false, 
+            showBgStars: state.showBgStars, 
+            flowEnabled: state.flowEnabled, 
+            inertiaEnabled: state.inertiaEnabled,
+            rotMode: state.rotMode, 
+            randomSeed: state.randomSeed, 
+            rotSeed: state.rotSeed, 
+            curveLineWidth: state.curveLineWidth, 
+            alterTilesRatio: state.alterTilesRatio,
+            texTf: { ...state.texTf },
+            curveColors: [...state.curveColors],
             markers: eMarkers, 
             rotOverrides: serializeRotOverrides(),
             texture: getTextureDataUrl()
@@ -4503,65 +3669,65 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
     })();
 
     // Initialize theme pools on startup
-    curveColorPool = generateDistinctThemePool();
-    gradientColorPool = generateDistinctThemePool();
+    state.curveColorPool = generateDistinctThemePool();
+    state.gradientColorPool = generateDistinctThemePool();
     
     if (isEmbedMode && embedData) {
         // ── Embed mode: load state from data ──
-        zoom = embedData.zoom;
-        targetZoom = zoom;
-        panX = embedData.panX;
-        panY = embedData.panY;
-        showGrid = embedData.showGrid;
-        showUnrenderedDotted = embedData.showUnrenderedDotted;
-        markersVisible = embedData.markersVisible;
-        showBgStars = embedData.showBgStars !== undefined ? embedData.showBgStars : true;
-        rotMode = embedData.rotMode || 'hash';
-        randomSeed = embedData.randomSeed || 0;
-        rotSeed = embedData.rotSeed || 0;
-        curveLineWidth = embedData.curveLineWidth || 1;
-        alterTilesRatio = embedData.alterTilesRatio || 0;
-        flowEnabled = embedData.flowEnabled || false;
-        inertiaEnabled = embedData.inertiaEnabled !== undefined ? embedData.inertiaEnabled : true;
-        dom.inertiaToggle.checked = inertiaEnabled;
-        texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
-        curveColors.length = 0;
-        curveColors.push(...(embedData.curveColors && embedData.curveColors.length > 0
+        state.zoom = embedData.zoom;
+        state.targetZoom = state.zoom;
+        state.panX = embedData.panX;
+        state.panY = embedData.panY;
+        state.showGrid = embedData.showGrid;
+        state.showUnrenderedDotted = embedData.showUnrenderedDotted;
+        state.markersVisible = embedData.markersVisible;
+        state.showBgStars = embedData.showBgStars !== undefined ? embedData.showBgStars : true;
+        state.rotMode = embedData.rotMode || 'hash';
+        state.randomSeed = embedData.randomSeed || 0;
+        state.rotSeed = embedData.rotSeed || 0;
+        state.curveLineWidth = embedData.curveLineWidth || 1;
+        state.alterTilesRatio = embedData.alterTilesRatio || 0;
+        state.flowEnabled = embedData.flowEnabled || false;
+        state.inertiaEnabled = embedData.inertiaEnabled !== undefined ? embedData.inertiaEnabled : true;
+        dom.inertiaToggle.checked = state.inertiaEnabled;
+        state.texTf = embedData.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+        state.curveColors.length = 0;
+        state.curveColors.push(...(embedData.curveColors && embedData.curveColors.length > 0
             ? [...embedData.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']));
-        gradientMarkers.length = 0;
-        gradientMarkers.push(...(embedData.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({ ...m })));
-        markersVisible = false; 
+        state.gradientMarkers.length = 0;
+        state.gradientMarkers.push(...(embedData.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({ ...m })));
+        state.markersVisible = false; 
 
         updateCurveColorsCache();
         updateGradientMarkersCache();
 
-        dom.gridToggle.checked = showGrid;
-        dom.unrenderedToggle.checked = showUnrenderedDotted;
-        dom.bgStarsToggle.checked = showBgStars;
-        dom.markersToggle.checked = markersVisible;
-        dom.flowToggle.checked = flowEnabled;
-        dom.sCurveW.value = curveLineWidth;
-        dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
-        dom.sAlterTiles.value = alterTilesRatio;
-        dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
+        dom.gridToggle.checked = state.showGrid;
+        dom.unrenderedToggle.checked = state.showUnrenderedDotted;
+        dom.bgStarsToggle.checked = state.showBgStars;
+        dom.markersToggle.checked = state.markersVisible;
+        dom.flowToggle.checked = state.flowEnabled;
+        dom.sCurveW.value = state.curveLineWidth;
+        dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
+        dom.sAlterTiles.value = state.alterTilesRatio;
+        dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
 
         if (embedData.rotOverrides) {
             for (const [q, r, rot] of embedData.rotOverrides) {
-                rotOverrides.set(hexKey(q, r), rot);
+                state.rotOverrides.set(hexKey(q, r), rot);
             }
         }
 
         function startEmbedRender() {
             dom.cvs.width = embedData.w;
             dom.cvs.height = embedData.h;
-            isInitialized = true;
-            curveMap.clear(); edgeRgbMap.clear();
-            curves.clear(); queue.length = 0;
+            state.isInitialized = true;
+            state.curveMap.clear(); state.edgeRgbMap.clear();
+            state.curves.clear(); state.queue.length = 0;
             initializeCentralTile();
             
-            // Kickstart blazing stars if the embed is at 20% zoom
+            // Kickstart blazing stars if the embed is at 20% state.zoom
             if (embedData.origZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
-                zoomOutStartTime = Date.now() - CONFIG.STAR_BLAZE_DELAY - 1000;
+                state.zoomOutStartTime = Date.now() - CONFIG.STAR_BLAZE_DELAY - 1000;
             }
             
             render();
@@ -4569,7 +3735,7 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
 
         if (embedData.texture) {
             const img = new Image();
-            img.onload = () => { texImg = img; startEmbedRender(); };
+            img.onload = () => { state.texImg = img; startEmbedRender(); };
             img.onerror = () => { startEmbedRender(); };
             img.src = embedData.texture;
         } else {
@@ -4577,19 +3743,19 @@ import { toast, renderGradientList, renderCurveList } from './ui.js';
         }
     } else {
         // ── Normal mode ──
-        showGrid = dom.gridToggle.checked;
-        showUnrenderedDotted = dom.unrenderedToggle.checked;
-        showBgStars = dom.bgStarsToggle.checked;
-        markersVisible = dom.markersToggle.checked;
-        flowEnabled = dom.flowToggle.checked;
-        inertiaEnabled = dom.inertiaToggle.checked;
-        curveLineWidth = +dom.sCurveW.value || 1;
-        dom.vCurveW.textContent = curveLineWidth.toFixed(2) + 'x';
-        alterTilesRatio = +dom.sAlterTiles.value || 0;
-        dom.vAlterTiles.textContent = alterTilesRatio.toFixed(2);
+        state.showGrid = dom.gridToggle.checked;
+        state.showUnrenderedDotted = dom.unrenderedToggle.checked;
+        state.showBgStars = dom.bgStarsToggle.checked;
+        state.markersVisible = dom.markersToggle.checked;
+        state.flowEnabled = dom.flowToggle.checked;
+        state.inertiaEnabled = dom.inertiaToggle.checked;
+        state.curveLineWidth = +dom.sCurveW.value || 1;
+        dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
+        state.alterTilesRatio = +dom.sAlterTiles.value || 0;
+        dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
 
-        curveColors.length = 0; 
-        curveColors.push('#444444');
+        state.curveColors.length = 0; 
+        state.curveColors.push('#444444');
         updateCurveColorsCache();
         updateGradientMarkersCache(); 
 
