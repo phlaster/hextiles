@@ -19,25 +19,36 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare Deploy Info
+        run: |
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}/commit/$SHORT_SHA"
+          echo "VITE_DEPLOY_INFO=<div style='text-align: center;'>Deployed: ${DEPLOY_DATE}</div><div style='text-align: left;'>Commit: <a href='${REPO_URL}' target='_blank'>${SHORT_SHA}</a></div>" >> $GITHUB_ENV
+          
+      - name: Build
+        env:
+          VITE_DEPLOY_INFO: ${{ env.VITE_DEPLOY_INFO }}
+        run: npm run build
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Inject Deploy Info
-        run: |
-          COMMIT_HASH=$(git rev-parse HEAD)
-          DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          REPLACE_STR="Deployed: ${DEPLOY_DATE}\n${COMMIT_HASH}"
-          echo "Replacing placeholder with: $REPLACE_STR"
-          sed -i "s|__DEPLOY_INFO__|$REPLACE_STR|g" index.html
-          echo "Verification:"
-          grep "Deployed:" index.html || echo "Warning: Placeholder not found!"
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
-          path: '.'
+          path: './dist'
 
   deploy:
     environment:
@@ -48,4 +59,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -3668,6 +3668,12 @@ import { processQueue, findUncoloredTileInHexes, findNextUncoloredTile, getVisib
         } catch (e) { console.warn('Could not auto-detect GitHub repo URL'); }
     })();
 
+    // ── Inject Deploy Info ──
+    const deployInfoEl = document.getElementById('deployInfo');
+    if (deployInfoEl) {
+        deployInfoEl.innerHTML = import.meta.env.VITE_DEPLOY_INFO || 'LOCAL DEVELOPMENT';
+    }
+
     // Initialize theme pools on startup
     state.curveColorPool = generateDistinctThemePool();
     state.gradientColorPool = generateDistinctThemePool();
