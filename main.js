@@ -55,50 +55,46 @@ import {
 //  APPLICATION
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 (() => {
-    // ──── LOD Tuner (Local Dev Only) ────
-    const metaEnv = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : null;
-    const isLocalDev = (metaEnv && metaEnv.DEV !== undefined) ? metaEnv.DEV : (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '');
-    
+    const isLocalDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '';
+
     if (isLocalDev) {
-    const lodTuner = {
-        HighSz: document.getElementById('lodHighSz'),
-        MedHighSz: document.getElementById('lodMedHighSz'),
-        MedLowSz: document.getElementById('lodMedLowSz'),
-        ExtHigh: document.getElementById('lodExtHigh'),
-        ExtMedHigh: document.getElementById('lodExtMedHigh'),
-        ExtMedLow: document.getElementById('lodExtMedLow'),
-        ExtLow: document.getElementById('lodExtLow')
-    };
-    const lodLabels = {
-        HighSz: document.getElementById('vLodHighSz'),
-        MedHighSz: document.getElementById('vLodMedHighSz'),
-        MedLowSz: document.getElementById('vLodMedLowSz'),
-        ExtHigh: document.getElementById('vLodExtHigh'),
-        ExtMedHigh: document.getElementById('vLodExtMedHigh'),
-        ExtMedLow: document.getElementById('vLodExtMedLow'),
-        ExtLow: document.getElementById('vLodExtLow')
-    };
+        const lodTuner = {
+            HighSz: document.getElementById('lodHighSz'),
+            MedHighSz: document.getElementById('lodMedHighSz'),
+            MedLowSz: document.getElementById('lodMedLowSz'),
+            ExtHigh: document.getElementById('lodExtHigh'),
+            ExtMedHigh: document.getElementById('lodExtMedHigh'),
+            ExtMedLow: document.getElementById('lodExtMedLow'),
+            ExtLow: document.getElementById('lodExtLow')
+        };
 
-    // Live label updates
-    Object.keys(lodTuner).forEach(key => {
-        lodTuner[key].addEventListener('input', () => {
-            lodLabels[key].textContent = lodTuner[key].value;
+        const lodLabels = {
+            HighSz: document.getElementById('vLodHighSz'),
+            MedHighSz: document.getElementById('vLodMedHighSz'),
+            MedLowSz: document.getElementById('vLodMedLowSz'),
+            ExtHigh: document.getElementById('vLodExtHigh'),
+            ExtMedHigh: document.getElementById('vLodExtMedHigh'),
+            ExtMedLow: document.getElementById('vLodExtMedLow'),
+            ExtLow: document.getElementById('vLodExtLow')
+        };
+
+        Object.keys(lodTuner).forEach(key => {
+            lodTuner[key].addEventListener('input', () => {
+                lodLabels[key].textContent = lodTuner[key].value;
+            });
         });
-    });
 
-    // Apply button logic
-    document.getElementById('lodApplyBtn').addEventListener('click', () => {
-        CONFIG.LOD_HIGH_SZ = +lodTuner.HighSz.value;
-        CONFIG.LOD_MED_HIGH_SZ = +lodTuner.MedHighSz.value;
-        CONFIG.LOD_MED_LOW_SZ = +lodTuner.MedLowSz.value;
-        CONFIG.LOD_EXT_HIGH = +lodTuner.ExtHigh.value;
-        CONFIG.LOD_EXT_MED_HIGH = +lodTuner.ExtMedHigh.value;
-        CONFIG.LOD_EXT_MED_LOW = +lodTuner.ExtMedLow.value;
-        CONFIG.LOD_EXT_LOW = +lodTuner.ExtLow.value;
-        requestRender(); // Force visual update
-    });
+        document.getElementById('lodApplyBtn').addEventListener('click', () => {
+            CONFIG.LOD_HIGH_SZ = +lodTuner.HighSz.value;
+            CONFIG.LOD_MED_HIGH_SZ = +lodTuner.MedHighSz.value;
+            CONFIG.LOD_MED_LOW_SZ = +lodTuner.MedLowSz.value;
+            CONFIG.LOD_EXT_HIGH = +lodTuner.ExtHigh.value;
+            CONFIG.LOD_EXT_MED_HIGH = +lodTuner.ExtMedHigh.value;
+            CONFIG.LOD_EXT_MED_LOW = +lodTuner.ExtMedLow.value;
+            CONFIG.LOD_EXT_LOW = +lodTuner.ExtLow.value;
+            requestRender();
+        });
     } else {
-        // Remove the tuner entirely in production
         document.getElementById('lod-tuner')?.remove();
     }
 
@@ -256,7 +252,9 @@ import {
     })();
 
     const deployInfoEl = document.getElementById('deployInfo');
-    if (deployInfoEl) deployInfoEl.innerHTML = (metaEnv && metaEnv.VITE_DEPLOY_INFO) || 'LOCAL DEVELOPMENT';
+    if (deployInfoEl) {
+        deployInfoEl.innerHTML = import.meta.env.VITE_DEPLOY_INFO || 'LOCAL DEVELOPMENT';
+    }
 
     state.curveColorPool = generateDistinctThemePool();
     state.gradientColorPool = generateDistinctThemePool();
