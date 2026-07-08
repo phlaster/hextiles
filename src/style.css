@@ -267,6 +267,18 @@ body.exporting .zoom-bar { opacity: 0; pointer-events: none; }
     border-top: 1px solid var(--col-border);
 }
 
+.deploy-link,
+.deploy-link:visited {
+    color: var(--col-fg);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.deploy-link:hover {
+    color: var(--col-accent);
+    text-decoration: underline;
+}
+
 .section-header {
     display: flex;
     align-items: center;

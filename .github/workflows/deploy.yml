@@ -35,7 +35,7 @@ jobs:
           SHORT_SHA=${GITHUB_SHA:0:7}
           DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           REPO_URL="https://github.com/${GITHUB_REPOSITORY}/commit/$SHORT_SHA"
-          echo "VITE_DEPLOY_INFO=<div style='text-align: center;'>Deployed: ${DEPLOY_DATE}</div><div style='text-align: left;'>Commit: <a href='${REPO_URL}' target='_blank'>${SHORT_SHA}</a></div>" >> $GITHUB_ENV
+          echo "VITE_DEPLOY_INFO=<div style='text-align: left;'>Deployed: ${DEPLOY_DATE}</div><div style='text-align: left;'>Commit: <a class='deploy-link' href='${REPO_URL}' target='_blank'>${SHORT_SHA}</a></div>" >> $GITHUB_ENV
           
       - name: Build
         env:
