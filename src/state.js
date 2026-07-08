@@ -61,7 +61,6 @@ export const state = {
 
     // Render flags
     showGrid: true,
-    showUnrenderedDotted: true,
     showBgStars: true,
     markersVisible: true,
     flowEnabled: false,

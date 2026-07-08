@@ -1065,14 +1065,11 @@ function applyCurveStyle(q, r, e, sz, now) {
         return true;
     }
     state.currentUnassignedEdges.add(id);
-    if (state.showUnrenderedDotted) {
-        state.ctx.strokeStyle = `rgba(110, 110, 144, 0.55)`;
-        state.ctx.lineWidth = Math.max(1, (sz / 10) * state.curveLineWidth);
-        const dash = Math.max(2, sz / 8);
-        state.ctx.setLineDash([dash, dash]);
-        return true;
-    }
-    return false;
+    state.ctx.strokeStyle = `rgba(110, 110, 144, 0.55)`;
+    state.ctx.lineWidth = Math.max(1, (sz / 10) * state.curveLineWidth);
+    const dash = Math.max(2, sz / 8);
+    state.ctx.setLineDash([dash, dash]);
+    return true;
 }
 
 function drawHoverStroke(cx, cy, sz, grid) {

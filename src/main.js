@@ -271,7 +271,6 @@ import {
         state.panX = state.embedData.panX;
         state.panY = state.embedData.panY;
         state.showGrid = state.embedData.showGrid;
-        state.showUnrenderedDotted = state.embedData.showUnrenderedDotted;
         state.markersVisible = state.embedData.markersVisible;
         state.showBgStars = state.embedData.showBgStars !== undefined ? state.embedData.showBgStars : true;
         state.rotMode = state.embedData.rotMode || 'hash';
@@ -302,7 +301,6 @@ import {
         updateGradientMarkersCache();
 
         dom.gridToggle.checked = state.showGrid;
-        dom.unrenderedToggle.checked = state.showUnrenderedDotted;
         dom.bgStarsToggle.checked = state.showBgStars;
         dom.markersToggle.checked = state.markersVisible;
         dom.flowToggle.checked = state.flowEnabled;
@@ -341,7 +339,6 @@ import {
         } else startEmbedRender();
     } else {
         state.showGrid = dom.gridToggle.checked;
-        state.showUnrenderedDotted = dom.unrenderedToggle.checked;
         state.showBgStars = dom.bgStarsToggle.checked;
         state.markersVisible = dom.markersToggle.checked;
         state.flowEnabled = dom.flowToggle.checked;

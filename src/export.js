@@ -239,7 +239,6 @@ export function setupExport() {
             panY: ePanY,
             origZoom: state.zoom,
             showGrid: state.showGrid,
-            showUnrenderedDotted: state.showUnrenderedDotted,
             markersVisible: false,
             showBgStars: state.showBgStars,
             flowEnabled: state.flowEnabled,

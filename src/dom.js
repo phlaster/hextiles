@@ -16,7 +16,6 @@ export const dom = {
     randAnglesBtn: document.getElementById('randAnglesBtn'),
     randLineColorsBtn: document.getElementById('randLineColorsBtn'),
     randGradColorsBtn: document.getElementById('randGradColorsBtn'),
-    unrenderedToggle: document.getElementById('unrenderedToggle'),
     markersToggle: document.getElementById('markersToggle'),
     cancelEd: document.getElementById('cancelEd'),
     applyEd: document.getElementById('applyEd'),
@@ -74,7 +73,6 @@ export const dom = {
     sAlterTiles: document.getElementById('sAlterTiles'),
     vAlterTiles: document.getElementById('vAlterTiles'),
 
-    unrenderedToggle: document.getElementById('unrenderedToggle'),
     bgStarsToggle: document.getElementById('bgStarsToggle'),
     markersToggle: document.getElementById('markersToggle'),
     flowToggle: document.getElementById('flowToggle'),

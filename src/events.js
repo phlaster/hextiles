@@ -855,10 +855,6 @@ export function setupEvents() {
         state.showGrid = this.checked;
         requestRender();
     });
-    dom.unrenderedToggle.addEventListener('change', function() {
-        state.showUnrenderedDotted = this.checked;
-        requestRender();
-    });
     dom.bgStarsToggle.addEventListener('change', function() {
         state.showBgStars = this.checked;
         requestRender();
