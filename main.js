@@ -56,7 +56,8 @@ import {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 (() => {
     // ──── LOD Tuner (Local Dev Only) ────
-    const isLocalDev = import.meta.env.DEV || (document.getElementById('deployInfo')?.textContent === 'LOCAL DEVELOPMENT');
+    const metaEnv = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : null;
+    const isLocalDev = (metaEnv && metaEnv.DEV !== undefined) ? metaEnv.DEV : (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '');
     
     if (isLocalDev) {
     const lodTuner = {
@@ -255,7 +256,7 @@ import {
     })();
 
     const deployInfoEl = document.getElementById('deployInfo');
-    if (deployInfoEl) deployInfoEl.innerHTML = import.meta.env.VITE_DEPLOY_INFO || 'LOCAL DEVELOPMENT';
+    if (deployInfoEl) deployInfoEl.innerHTML = (metaEnv && metaEnv.VITE_DEPLOY_INFO) || 'LOCAL DEVELOPMENT';
 
     state.curveColorPool = generateDistinctThemePool();
     state.gradientColorPool = generateDistinctThemePool();
