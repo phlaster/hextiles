@@ -222,7 +222,7 @@ export function getBackgroundColorAt(x, y, coordScale = 1, offsetX = 0, offsetY 
         const my = (m.y - offsetY) * coordScale;
         const dx = x - mx;
         const dy = y - my;
-        const distSq = dx * dx + dy * dy + 0.5;
+        const distSq = dx * dx + dy * dy + 0.5 * coordScale * coordScale;
         const weight = (1 / (distSq * distSq)) * (m.weight || 0);
         totalWeight += weight;
         r += m.r * weight;
@@ -235,7 +235,7 @@ export function getBackgroundColorAt(x, y, coordScale = 1, offsetX = 0, offsetY 
         const my = (m.y - offsetY) * coordScale;
         const dx = x - mx;
         const dy = y - my;
-        const distSq = dx * dx + dy * dy + 0.5;
+        const distSq = dx * dx + dy * dy + 0.5 * coordScale * coordScale;
         const weight = (1 / (distSq * distSq)) * (m.weight || 0);
         totalWeight += weight;
         r += m.r * weight;

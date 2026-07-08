@@ -781,7 +781,7 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
                     t = t * t * (3 - 2 * t);
                     let sR = Math.round(255 * (1 - t)),
                         sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult,
-                        r = Math.max(1.5, (size * coordScale) / 2);
+                        r = Math.max(0.1, (size * coordScale) / 2);
                     if (allowBlazing && zoomOutTime > 0) {
                         const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
                         const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration,
@@ -959,7 +959,7 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
     const scale = eW / fw,
         eZoom = state.zoom * scale,
         ePanX = (state.panX - fx) * scale,
-        ePanY = (state.panY - fy) * (eH / fh);
+        ePanY = (state.panY - fy) * scale;
     const origSz = HEX_R * state.zoom;
     let eCurveAlpha = 1.0,
         eGridAlpha = 1.0;

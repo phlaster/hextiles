@@ -96,13 +96,15 @@ export function resize() {
             const effectiveW = isCollapsed ? w : Math.max(0, w - CONFIG.SIDEBAR_WIDTH);
             state.panX = effectiveW / 2;
             state.panY = h / 2;
-            state.starPanX5 = state.panX;
-            state.starPanY5 = state.panY;
-            state.starZoom5 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+            
+            state.starPanX2 = state.panX; state.starPanY2 = state.panY;
+            state.starPanX3 = state.panX; state.starPanY3 = state.panY;
+            state.starPanX5 = state.panX; state.starPanY5 = state.panY;
+            
             state.starZoom2 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_MED);
-            state.starPanX3 = state.panX;
-            state.starPanY3 = state.panY;
             state.starZoom3 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_SMALL);
+            state.starZoom5 = Math.pow(state.zoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+            
             state.isInitialized = true;
 
             if (state.gradientMarkers.length === 0) {
@@ -238,7 +240,7 @@ export function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offse
                 const m = allMarkers[i];
                 const dx = px - (m.x * qualityScale);
                 const dy = py - (m.y * qualityScale);
-                const distSq = dx * dx + dy * dy + 0.5;
+                const distSq = dx * dx + dy * dy + 0.5 * coordScale * coordScale;
                 const weight = (1 / (distSq * distSq)) * m.weight;
                 totalWeight += weight;
                 r += m.r * weight;
