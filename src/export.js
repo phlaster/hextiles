@@ -254,7 +254,9 @@ export function setupExport() {
             curveColors: [...state.curveColors],
             markers: eMarkers,
             rotOverrides: serializeRotOverrides(),
-            texture: getTextureDataUrl()
+            texture: getTextureDataUrl(),
+            flowEnabled: state.flowEnabled,
+            liveTwistsEnabled: state.liveTwistsEnabled,
         };
         let encoded;
         try {

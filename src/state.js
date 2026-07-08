@@ -64,6 +64,8 @@ export const state = {
     showBgStars: true,
     markersVisible: true,
     flowEnabled: false,
+    liveTwistsEnabled: false,
+    liveTwistsTimer: null,
     inertiaEnabled: true,
     interactionFade: 1.0,
     targetInteractionFade: 1.0,

@@ -23,7 +23,8 @@ import {
     initializeCentralTile
 } from './curves.js';
 import {
-    setupEvents
+    setupEvents,
+    scheduleLiveTwist
 } from './events.js';
 import {
     requestRender,
@@ -279,6 +280,8 @@ import {
         state.curveLineWidth = state.embedData.curveLineWidth || 1;
         state.alterTilesRatio = state.embedData.alterTilesRatio || 0;
         state.flowEnabled = state.embedData.flowEnabled || false;
+        state.flowEnabled = state.embedData.flowEnabled || false;
+        state.liveTwistsEnabled = state.embedData.liveTwistsEnabled || false;
         state.inertiaEnabled = state.embedData.inertiaEnabled !== undefined ? state.embedData.inertiaEnabled : true;
         dom.inertiaToggle.checked = state.inertiaEnabled;
         state.texTf = state.embedData.texTf || {
@@ -308,6 +311,9 @@ import {
         dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
         dom.sAlterTiles.value = state.alterTilesRatio;
         dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
+        dom.flowToggle.checked = state.flowEnabled;
+        dom.liveTwistsToggle.checked = state.liveTwistsEnabled;
+        if (state.liveTwistsEnabled) scheduleLiveTwist();
 
         if (state.embedData.rotOverrides) {
             for (const [q, r, rot] of state.embedData.rotOverrides) state.rotOverrides.set(hexKey(q, r), rot);
@@ -347,7 +353,9 @@ import {
         dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
         state.alterTilesRatio = +dom.sAlterTiles.value || 0;
         dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
-
+        state.flowEnabled = dom.flowToggle.checked;
+        state.liveTwistsEnabled = dom.liveTwistsToggle.checked;
+        if (state.liveTwistsEnabled) scheduleLiveTwist();
         state.curveColors.length = 0;
         state.curveColors.push('#444444');
         updateCurveColorsCache();

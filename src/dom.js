@@ -76,6 +76,7 @@ export const dom = {
     bgStarsToggle: document.getElementById('bgStarsToggle'),
     markersToggle: document.getElementById('markersToggle'),
     flowToggle: document.getElementById('flowToggle'),
+    liveTwistsToggle: document.getElementById('liveTwistsToggle'),
     inertiaToggle: document.getElementById('inertiaToggle'),
 
     sidebar: document.querySelector('.sidebar'),

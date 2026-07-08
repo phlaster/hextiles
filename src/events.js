@@ -172,7 +172,6 @@ export function rotateTile(q, r) {
 }
 
 export function setupEvents() {
-    // Fullscreen
     dom.fullscreenBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen mode not allowed'));
         else if (document.exitFullscreen) document.exitFullscreen();
@@ -203,7 +202,6 @@ export function setupEvents() {
         requestRender();
     });
 
-    // Sidebar Toggle
     dom.sidebarToggle.addEventListener('click', () => {
         dom.sidebar.classList.toggle('collapsed');
         dom.sidebarToggle.classList.toggle('collapsed');
@@ -218,7 +216,6 @@ export function setupEvents() {
         ro.observe(dom.wrap);
     } else if (!state.isEmbedMode) window.addEventListener('resize', resize);
 
-    // Sidebar Swipe
     let sbTouchStartX = null,
         sbTouchStartY = null,
         sbDragging = false;
@@ -271,7 +268,6 @@ export function setupEvents() {
         sbDragging = false;
     });
 
-    // Chevron Button Drag
     let sbToggleDragging = false,
         sbToggleStartX = 0,
         sbToggleCurrentX = 0;
@@ -361,7 +357,6 @@ export function setupEvents() {
         e.preventDefault();
     });
 
-    // Canvas Touch
     dom.cvs.addEventListener('touchstart', e => {
         state.isTouchDevice = true;
         state.hoveredQ = null;
@@ -867,6 +862,11 @@ export function setupEvents() {
         state.flowEnabled = this.checked;
         requestRender();
     });
+    dom.liveTwistsToggle.addEventListener('change', function() {
+        state.liveTwistsEnabled = this.checked;
+        if (state.liveTwistsEnabled) scheduleLiveTwist();
+        else clearTimeout(state.liveTwistsTimer);
+    });
     dom.inertiaToggle.addEventListener('change', function() {
         state.inertiaEnabled = this.checked;
         if (!state.inertiaEnabled) {
@@ -1023,6 +1023,95 @@ export function setupEvents() {
             }
         }
     });
+}
+
+export function scheduleLiveTwist() {
+    clearTimeout(state.liveTwistsTimer);
+    if (!state.liveTwistsEnabled) return;
+    const delay = 5000 + Math.random() * 5000; // 5-10 seconds
+    state.liveTwistsTimer = setTimeout(() => {
+        if (state.liveTwistsEnabled) {
+            performLiveTwist();
+            scheduleLiveTwist();
+        }
+    }, delay);
+}
+
+function performLiveTwist() {
+    // Don't interrupt user interaction or exports
+    if (state.isDrag || state.touchState.mode !== 'none' || state.isExporting) return;
+    
+    const W = dom.cvs.width, H = dom.cvs.height;
+    const visZoom = (state.isEmbedMode && state.embedData && state.embedData.origZoom) ? state.embedData.origZoom : state.zoom;
+    const visSz = HEX_R * visZoom;
+    
+    // Only twist if curves are visible enough
+    if (visSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) return;
+    
+    const hexes = visibleHexes(state.zoom, state.panX, state.panY, W, H);
+    const candidates = [];
+    
+    // Filter to central 80% area
+    for (const h of hexes) {
+        if (h.x > W * 0.1 && h.x < W * 0.9 && h.y > H * 0.1 && h.y < H * 0.9) {
+            candidates.push(h);
+        }
+    }
+    
+    if (candidates.length === 0) return;
+    
+    let bestImpact = -1;
+    let bestHexes = [];
+    
+    // Evaluate impact for each candidate
+    for (const h of candidates) {
+        const impact = predictTwistImpact(h.q, h.r);
+        if (impact > bestImpact) {
+            bestImpact = impact;
+            bestHexes = [h];
+        } else if (impact === bestImpact) {
+            bestHexes.push(h);
+        }
+    }
+    
+    if (bestHexes.length > 0 && bestImpact > 0) {
+        const chosen = bestHexes[Math.floor(Math.random() * bestHexes.length)];
+        rotateTile(chosen.q, chosen.r);
+    }
+}
+
+function predictTwistImpact(q, r) {
+    const k = (tileRot(q, r) / 60) % 6;
+    const alter = isTileAlter(q, r);
+    const newK = (k + 1) % 6;
+    
+    // Determine the new pairs if rotated by 60 degrees
+    const newPairs = alter ? [
+        [(0 + newK) % 6, (1 + newK) % 6],
+        [(2 + newK) % 6, (3 + newK) % 6],
+        [(4 + newK) % 6, (5 + newK) % 6]
+    ] : [
+        [(2 + newK) % 6, (3 + newK) % 6],
+        [(4 + newK) % 6, (0 + newK) % 6],
+        [(1 + newK) % 6, (5 + newK) % 6]
+    ];
+    
+    let impact = 0;
+    
+    // Check how many edges will change color due to new pairings
+    for (const pair of newPairs) {
+        const e1 = pair[0], e2 = pair[1];
+        const id1 = edgeID(q, r, e1);
+        const id2 = edgeID(q, r, e2);
+        const c1 = state.curveMap.has(id1) ? state.curveMap.get(id1) : -1;
+        const c2 = state.curveMap.has(id2) ? state.curveMap.get(id2) : -1;
+        
+        if (c1 !== c2) {
+            if (c1 !== -1 && c2 !== -1) impact += 2; // Two colors merging
+            else if (c1 !== -1 || c2 !== -1) impact += 1; // One color expanding into blank
+        }
+    }
+    return impact;
 }
 
 function pickNewMarkerColor() {
