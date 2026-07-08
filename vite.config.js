@@ -36,8 +36,6 @@ export default defineConfig({
     port: 5173
   },
   define: {
-    // If VITE_DEPLOY_INFO is passed by the environment (GitHub Actions), use it.
-    // Otherwise, calculate it locally.
     'import.meta.env.VITE_DEPLOY_INFO': JSON.stringify(process.env.VITE_DEPLOY_INFO || getLocalDeployInfo())
   }
 });

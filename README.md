@@ -1,6 +1,6 @@
 # [hextiles](https://phlaster.github.io/hextiles/)
 
-![Horizontal Ornament](assets/tiles.png)
+![Horizontal Ornament](public/assets/tiles.png)
 
 An infinite, interactive hexagonal tile canvas for exploring peculiar pattens emerging from simple rule.
 
