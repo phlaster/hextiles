@@ -46,12 +46,12 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: rgba(19, 19, 42, 0.5);
     border: 1px solid var(--col-border);
     border-radius: 14px;
     padding: 6px 14px;
-    backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    background-color: rgba(19, 19, 42, 0.69);
     z-index: 10;
     transition: opacity .3s cubic-bezier(.4,0,.2,1);
 }
@@ -162,9 +162,9 @@ body.exporting .zoom-bar { opacity: 0; pointer-events: none; }
     z-index: 20;
     margin-left: auto;
     width: 310px;
-    background: rgba(19, 19, 42, 0.69);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    background-color: rgba(19, 19, 42, 0.69);
     border-left: 1px solid var(--col-border);
     display: flex;
     flex-direction: column;
@@ -573,9 +573,9 @@ input[type=range]::-moz-range-thumb {
 
 .export-menu {
     position: absolute;
-    background: rgba(19, 19, 42, 0.75);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    background-color: rgba(19, 19, 42, 0.69);
     border: 1px solid var(--col-border);
     border-radius: 12px;
     padding: 16px;
