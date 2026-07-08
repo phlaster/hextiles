@@ -26,13 +26,13 @@ import {
     setupEvents
 } from './events.js';
 import {
-    setupExport
-} from './export.js';
-import {
     requestRender,
     resize,
     render
 } from './render.js';
+import {
+    setupExport,
+} from './export.js';
 
 // ─── inject CSS custom properties from COLORS ───
 (function injectColors() {

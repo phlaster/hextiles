@@ -626,7 +626,7 @@ function openExportOverlay() {
     updateExportFrameDOM();
 }
 
-function closeExportOverlay() {
+export function closeExportOverlay() {
     dom.exportOverlay.classList.remove('active');
     document.body.classList.remove('exporting');
     if (!state.sidebarWasCollapsed) {
@@ -715,16 +715,16 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
         if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
     }
 
-    const origSz = HEX_R * state.zoom;
+    const eSz = HEX_R * eZoom;
     let eCurveAlpha = 1.0,
         eGridAlpha = 1.0;
     const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT,
         fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-    if (origSz <= fadeEndSz + 0.5) {
+    if (eSz <= fadeEndSz + 0.5) {
         eCurveAlpha = 0;
         eGridAlpha = 0;
-    } else if (origSz < fadeStartSz) {
-        let t = (origSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+    } else if (eSz < fadeStartSz) {
+        let t = (eSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
         eCurveAlpha = t * t * (3 - 2 * t);
         eGridAlpha = eCurveAlpha;
     }
@@ -848,7 +848,6 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
         }
     }
 
-    const eSz = HEX_R * eZoom;
     const pathsByColor = {};
     const gridPaths = [];
     const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : (eSz > CONFIG.LOD_MED_SZ ? CONFIG.LOD_EXT_MED : CONFIG.LOD_EXT_LOW);
@@ -960,16 +959,16 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
         eZoom = state.zoom * scale,
         ePanX = (state.panX - fx) * scale,
         ePanY = (state.panY - fy) * scale;
-    const origSz = HEX_R * state.zoom;
+    const eSz = HEX_R * eZoom;
     let eCurveAlpha = 1.0,
         eGridAlpha = 1.0;
     const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT,
         fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-    if (origSz <= fadeEndSz + 0.5) {
+    if (eSz <= fadeEndSz + 0.5) {
         eCurveAlpha = 0;
         eGridAlpha = 0;
-    } else if (origSz < fadeStartSz) {
-        let t = (origSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+    } else if (eSz < fadeStartSz) {
+        let t = (eSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
         eCurveAlpha = t * t * (3 - 2 * t);
         eGridAlpha = eCurveAlpha;
     }
@@ -1014,7 +1013,6 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
         expStarPanY3 = (state.starPanY3 - fy) * scale;
     drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, state.zoomOutStartTime, fx, fy); // Need to import
 
-    const eSz = HEX_R * eZoom;
     for (const h of hexes) {
         const rot = tileRot(h.q, h.r);
         drawTile(h.x, h.y, eSz, rot, false, state.texImg, state.texTf, h.q, h.r, now, eCurveAlpha, 0.0);

@@ -40,6 +40,9 @@ import {
     checkIfSolved,
     resize
 } from './render.js';
+import {
+    closeExportOverlay
+} from './export.js';
 
 const HEX_R = CONFIG.HEX_R;
 const MIN_Z = CONFIG.MIN_ZOOM;
@@ -1015,8 +1018,9 @@ export function setupEvents() {
 
     window.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
-            if (dom.exportOverlay.classList.contains('active')) dom.exportOverlay.classList.remove('active'); // export.js handles closing logic
-            else if (document.body.classList.contains('sidebar-collapsed')) {
+            if (dom.exportOverlay.classList.contains('active')) {
+                closeExportOverlay();
+            } else if (document.body.classList.contains('sidebar-collapsed')) {
                 document.body.classList.remove('sidebar-collapsed');
                 dom.sidebar.classList.remove('collapsed');
                 dom.sidebarToggle.classList.remove('collapsed');
