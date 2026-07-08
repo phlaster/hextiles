@@ -548,7 +548,8 @@ export function render() {
         gridAlpha = curveAlpha;
     }
 
-    state.interactionFade += (state.targetInteractionFade - state.interactionFade) * 0.2;
+    const fadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.4;
+    state.interactionFade += (state.targetInteractionFade - state.interactionFade) * fadeSpeed;
     if (Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001) keepRendering = true;
     curveAlpha *= state.interactionFade;
     gridAlpha *= state.interactionFade;
@@ -1077,8 +1078,13 @@ function applyCurveStyle(q, r, e, sz, now) {
 }
 
 function drawHoverStroke(cx, cy, sz, grid) {
+    if (state.interactionFade < 0.01) return;
+    
     const rSz = grid ? sz * 0.95 : sz;
     state.ctx.save();
+    
+    state.ctx.globalAlpha = state.interactionFade;
+    
     traceHexPath(state.ctx, cx, cy, rSz);
     state.ctx.lineWidth = 3;
     state.ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
