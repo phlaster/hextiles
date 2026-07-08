@@ -295,7 +295,9 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
         state.ctx.rotate(rot * CONFIG.DEG2RAD);
         const a = sz * SQRT3 / 2;
         state.ctx.lineCap = 'butt';
-        const ext = sz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : (sz > CONFIG.LOD_MED_SZ ? CONFIG.LOD_EXT_MED : CONFIG.LOD_EXT_LOW);
+        const ext = sz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : 
+            (sz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH : 
+            (sz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
         const logicalRot = tileRot(hq, hr);
         const k = (logicalRot / 60) % 6;
         if (curveAlpha > 0.01) {
@@ -569,7 +571,6 @@ export function render() {
         if (didWork) keepRendering = true;
     }
 
-    const lod = visSz > CONFIG.LOD_HIGH_SZ ? 2 : (visSz > CONFIG.LOD_MED_SZ ? 1 : 0);
     if (img) {
         for (const h of hexes) {
             const rot = displayRot(h.q, h.r, now);
@@ -619,6 +620,23 @@ export function render() {
                 state.ctx.lineWidth = 1;
                 state.ctx.stroke();
             }
+        }
+    }
+
+    const lod = visSz > CONFIG.LOD_HIGH_SZ ? 3 : 
+                (visSz > CONFIG.LOD_MED_HIGH_SZ ? 2 : 
+                (visSz > CONFIG.LOD_MED_LOW_SZ ? 1 : 0));
+
+    // ──── Debug LOD Indicator ────
+    const _lodEl = document.getElementById('lodCurrentStatus');
+    if (_lodEl) {
+        const _txt = `LOD: ${lod} | visSz: ${visSz.toFixed(1)}`;
+        if (_lodEl.textContent !== _txt) {
+            _lodEl.textContent = _txt;
+            _lodEl.style.color = lod === 3 ? 'var(--col-accent)' :
+                (lod === 2 ? 'var(--col-fg)' :
+                (lod === 1 ? 'var(--col-muted)' :
+                'rgba(150,150,150,0.5)'));
         }
     }
 

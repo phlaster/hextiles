@@ -99,12 +99,16 @@ export const CONFIG = {
     MAX_CURVE_COLORS: 10,
     STATS_UPDATE_INTERVAL: 500,
 
-    // Level of Detail (LOD) Thresholds
-    LOD_HIGH_SZ: 60, // Tile size (sz) above this is considered "close-up"
-    LOD_MED_SZ: 16, // Tile size above this is considered "medium"
-    LOD_EXT_HIGH: 0.004, // Arc extension at high LOD (prevents gaps when zoomed in)
-    LOD_EXT_MED: 0.035, // Arc extension at medium LOD
-    LOD_EXT_LOW: 0.02, // Arc extension at low LOD (prevents overlap seams when fading)
+    // Size Thresholds (visSz boundaries)
+    LOD_HIGH_SZ: 120,       // Threshold between LOD 3 and LOD 2
+    LOD_MED_HIGH_SZ: 60,   // Threshold between LOD 2 and LOD 1
+    LOD_MED_LOW_SZ: 30,    // Threshold between LOD 1 and LOD 0
+
+    // Curve Extensions (Overlap values per LOD)
+    LOD_EXT_HIGH: 0.007,    // Used for LOD 3
+    LOD_EXT_MED_HIGH: 0.014, // Used for LOD 2
+    LOD_EXT_MED_LOW: 0.028,   // Used for LOD 1
+    LOD_EXT_LOW: 0.050,      // Used for LOD 0
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

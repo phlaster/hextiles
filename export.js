@@ -850,7 +850,9 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
 
     const pathsByColor = {};
     const gridPaths = [];
-    const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : (eSz > CONFIG.LOD_MED_SZ ? CONFIG.LOD_EXT_MED : CONFIG.LOD_EXT_LOW);
+    const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : 
+                (eSz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH : 
+                (eSz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
 
     function getSvgEdgeColor(q, r, e) {
         if (state.curveColors.length === 1) {

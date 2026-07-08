@@ -32,6 +32,92 @@
             <span id="statColorsWrap" style="display:none">Colors: <strong id="statColors">0</strong></span>
         </div>
 
+        <div id="lod-tuner">
+            <h3>LOD Tuner</h3>
+            <div id="lodCurrentStatus" style="font-size: 11px; color: var(--col-fg); text-align: center; margin-bottom: 6px; padding: 5px; background: rgba(0,0,0,0.3); border-radius: 4px; font-weight: 600; letter-spacing: 0.5px; transition: color 0.2s;">
+                LOD: - | visSz: -
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>High SZ (3→2)</span><span class="s-val" id="vLodHighSz">50</span></div>
+                <input type="range" id="lodHighSz" min="10" max="200" step="1" value="50" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Med-High SZ (2→1)</span><span class="s-val" id="vLodMedHighSz">30</span></div>
+                <input type="range" id="lodMedHighSz" min="10" max="150" step="1" value="30" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Med-Low SZ (1→0)</span><span class="s-val" id="vLodMedLowSz">15</span></div>
+                <input type="range" id="lodMedLowSz" min="1" max="100" step="1" value="15" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Ext High (LOD 3)</span><span class="s-val" id="vLodExtHigh">0.02</span></div>
+                <input type="range" id="lodExtHigh" min="0" max="0.2" step="0.001" value="0.02" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Ext Med-High (LOD 2)</span><span class="s-val" id="vLodExtMedHigh">0.025</span></div>
+                <input type="range" id="lodExtMedHigh" min="0" max="0.2" step="0.001" value="0.025" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Ext Med-Low (LOD 1)</span><span class="s-val" id="vLodExtMedLow">0.03</span></div>
+                <input type="range" id="lodExtMedLow" min="0" max="0.2" step="0.001" value="0.03" />
+            </div>
+            <div class="lod-row">
+                <div class="lod-top"><span>Ext Low (LOD 0)</span><span class="s-val" id="vLodExtLow">0.001</span></div>
+                <input type="range" id="lodExtLow" min="0" max="0.05" step="0.0001" value="0.001" />
+            </div>
+            <button class="btn btn-accent" id="lodApplyBtn" style="margin-top: 5px;">Apply LOD</button>
+        </div>
+        <style>
+            #lod-tuner {
+                position: absolute;
+                top: 50px;
+                left: 10px;
+                background: rgba(19, 19, 42, 0.85);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                border: 1px solid var(--col-border);
+                border-radius: 10px;
+                padding: 12px;
+                z-index: 100;
+                color: var(--col-fg);
+                font-family: 'Space Grotesk', sans-serif;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 180px;
+            }
+            #lod-tuner h3 {
+                margin: 0 0 5px 0;
+                font-size: 12px;
+                color: var(--col-accent);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                text-align: center;
+            }
+            #lod-tuner .lod-row { display: flex; flex-direction: column; gap: 3px; }
+            #lod-tuner .lod-top { display: flex; justify-content: space-between; align-items: center; }
+            #lod-tuner .lod-top span { font-size: 11px; color: var(--col-muted); }
+            #lod-tuner .lod-top .s-val { font-size: 11px; color: var(--col-accent); font-weight: 600; }
+            #lod-tuner input[type=range] {
+                -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+                background: var(--col-border); border-radius: 2px; outline: none;
+            }
+            #lod-tuner input[type=range]::-webkit-slider-thumb {
+                -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+                background: var(--col-accent); cursor: pointer;
+            }
+
+            #lod-tuner {
+                transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
+            }
+            body.sidebar-collapsed #lod-tuner,
+            body.embed-mode #lod-tuner {
+                transform: translateX(calc(-100vw - 20px));
+                opacity: 0;
+                pointer-events: none;
+            }
+        </style>
+
     </div>
 
     <aside class="sidebar">
