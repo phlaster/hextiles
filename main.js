@@ -253,7 +253,10 @@ import {
 
     const deployInfoEl = document.getElementById('deployInfo');
     if (deployInfoEl) {
-        deployInfoEl.innerHTML = import.meta.env.VITE_DEPLOY_INFO || 'LOCAL DEVELOPMENT';
+        const currentText = deployInfoEl.innerHTML;
+        if (!currentText || currentText.includes('VITE_DEPLOY_INFO')) {
+            deployInfoEl.innerHTML = 'LOCAL DEVELOPMENT';
+        }
     }
 
     state.curveColorPool = generateDistinctThemePool();
