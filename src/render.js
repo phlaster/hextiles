@@ -49,6 +49,16 @@ const PI_DIV_3 = CONFIG.PI_DIV_3;
 const TWO_PI_DIV_3 = CONFIG.TWO_PI_DIV_3;
 const FOUR_PI_DIV_3 = CONFIG.FOUR_PI_DIV_3;
 
+export function computeFadeAlpha(zoom) {
+    const visSz = HEX_R * zoom;
+    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
+    const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
+    if (visSz <= fadeEndSz + 0.5) return 0;
+    if (visSz >= fadeStartSz) return 1;
+    const t = (visSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
+    return t * t * (3 - 2 * t);
+}
+
 export function requestRender() {
     if (!state.isRenderScheduled) {
         state.isRenderScheduled = true;
@@ -533,20 +543,9 @@ export function render() {
         state.zoomOutStartTime = 0;
     }
 
-    const sz = HEX_R * z,
-        visSz = HEX_R * visZoom;
-    let curveAlpha = 1.0,
-        gridAlpha = 1.0;
-    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT,
-        fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-    if (visSz <= fadeEndSz + 0.5) {
-        curveAlpha = 0.0;
-        gridAlpha = 0.0;
-    } else if (visSz < fadeStartSz) {
-        let t = (visSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-        curveAlpha = t * t * (3 - 2 * t);
-        gridAlpha = curveAlpha;
-    }
+    const sz = HEX_R * z, visSz = HEX_R * visZoom;
+    let curveAlpha = computeFadeAlpha(visZoom);
+    let gridAlpha = curveAlpha;
 
     const fadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.4;
     state.interactionFade += (state.targetInteractionFade - state.interactionFade) * fadeSpeed;
@@ -1011,7 +1010,7 @@ function applyCurveStyle(q, r, e, sz, now) {
             edgeData.colorStr = '';
         } else {
             if (state.previousUnassignedEdges.has(id)) {
-                edgeData.alpha = 0;
+                edgeData.alpha = 0; // Reset width multiplier
                 edgeData.rippleActive = true;
                 edgeData.rippleTime = 0;
                 edgeData.rippleQ = 0;
@@ -1059,11 +1058,10 @@ function applyCurveStyle(q, r, e, sz, now) {
             }
         }
         if (!edgeData.colorStr) {
-            if (edgeData.alpha > 0.99) edgeData.colorStr = `rgb(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])})`;
-            else edgeData.colorStr = `rgba(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])},${edgeData.alpha.toFixed(3)})`;
+            edgeData.colorStr = `rgb(${Math.round(edgeData.rgb[0])},${Math.round(edgeData.rgb[1])},${Math.round(edgeData.rgb[2])})`;
         }
         state.ctx.strokeStyle = edgeData.colorStr;
-        state.ctx.lineWidth = sz / 3 * state.curveLineWidth;
+        state.ctx.lineWidth = Math.max(0.1, (sz / 3) * state.curveLineWidth * edgeData.alpha);
         return true;
     }
     state.currentUnassignedEdges.add(id);

@@ -33,7 +33,8 @@ import {
     drawTile,
     drawBackgroundStars,
     drawIDWGradient,
-    updateIDWGradientCanvas
+    updateIDWGradientCanvas,
+    computeFadeAlpha
 } from './render.js';
 import {
     toast
@@ -716,18 +717,8 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
     }
 
     const eSz = HEX_R * eZoom;
-    let eCurveAlpha = 1.0,
-        eGridAlpha = 1.0;
-    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT,
-        fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-    if (eSz <= fadeEndSz + 0.5) {
-        eCurveAlpha = 0;
-        eGridAlpha = 0;
-    } else if (eSz < fadeStartSz) {
-        let t = (eSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-        eCurveAlpha = t * t * (3 - 2 * t);
-        eGridAlpha = eCurveAlpha;
-    }
+    const eCurveAlpha = computeFadeAlpha(state.zoom);
+    const eGridAlpha = eCurveAlpha;
 
     if (state.curveColors.length >= 1 && eCurveAlpha > 0) {
         let safety = 2000;
@@ -854,6 +845,29 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
                 (eSz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH : 
                 (eSz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
 
+
+    const curveColorCache = new Map();
+
+    function getCachedCurveColorStr(curveID) {
+        let cached = curveColorCache.get(curveID);
+        if (cached !== undefined) return cached;
+        const curve = state.curves.get(curveID);
+        if (!curve) {
+            curveColorCache.set(curveID, null);
+            return null;
+        }
+        const c = curve.color;
+        let colorStr;
+        if (typeof c === 'number') {
+            const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
+            colorStr = `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
+        } else {
+            colorStr = c;
+        }
+        curveColorCache.set(curveID, colorStr);
+        return colorStr;
+    }
+
     function getSvgEdgeColor(q, r, e) {
         if (state.curveColors.length === 1) {
             const cc = state.curveColorsRGB[0];
@@ -861,14 +875,7 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
         }
         const id = edgeID(q, r, e);
         if (!state.curveMap.has(id)) return null;
-        const curve = state.curves.get(state.curveMap.get(id));
-        if (!curve) return null;
-        const c = curve.color;
-        if (typeof c === 'number') {
-            const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
-            return `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
-        }
-        return c;
+        return getCachedCurveColorStr(state.curveMap.get(id));
     }
 
     function arcToPath(tx, ty, rot, cx, cy, r, startAngle, endAngle, anticlockwise) {
@@ -947,8 +954,11 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
         }
     }
     const lw = (eSz / 3 * state.curveLineWidth).toFixed(2);
-    for (const color in pathsByColor) svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"/>`;
-    if (state.showGrid && eGridAlpha > 0 && gridPaths.length > 0) svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-opacity="${eGridAlpha.toFixed(3)}"/>`;
+    const curveOpacityAttr = eCurveAlpha < 0.999 ? ` stroke-opacity="${eCurveAlpha.toFixed(3)}"` : '';
+    for (const color in pathsByColor) svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"${curveOpacityAttr}/>`;
+    
+    const gridOpacityAttr = eGridAlpha < 0.999 ? ` stroke-opacity="${eGridAlpha.toFixed(3)}"` : '';
+    if (state.showGrid && eGridAlpha > 0 && gridPaths.length > 0) svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-linecap="butt"${gridOpacityAttr}/>`;
     svg += `</svg>`;
     return svg;
 }
@@ -962,18 +972,8 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
         ePanX = (state.panX - fx) * scale,
         ePanY = (state.panY - fy) * scale;
     const eSz = HEX_R * eZoom;
-    let eCurveAlpha = 1.0,
-        eGridAlpha = 1.0;
-    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT,
-        fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-    if (eSz <= fadeEndSz + 0.5) {
-        eCurveAlpha = 0;
-        eGridAlpha = 0;
-    } else if (eSz < fadeStartSz) {
-        let t = (eSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-        eCurveAlpha = t * t * (3 - 2 * t);
-        eGridAlpha = eCurveAlpha;
-    }
+    const eCurveAlpha = computeFadeAlpha(state.zoom);
+    const eGridAlpha = eCurveAlpha;
 
     const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const centerHex = pixToHex(eW / 2, eH / 2, eZoom, ePanX, ePanY);
