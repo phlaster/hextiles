@@ -95,16 +95,19 @@ export function traceHexPath(c, cx, cy, sz) {
     c.closePath();
 }
 
-export function traceHexPathBatch(c, hexes, sz) {
+export function traceHexGridBatch(c, hexes, sz) {
     c.beginPath();
     for (const h of hexes) {
-        for (let i = 0; i < 6; i++) {
-            const a = CONFIG.PI_DIV_3 * i;
-            const vx = h.x + sz * Math.cos(a);
-            const vy = h.y + sz * Math.sin(a);
-            i === 0 ? c.moveTo(vx, vy) : c.lineTo(vx, vy);
+        for (let i = 0; i < 3; i++) {
+            const a1 = CONFIG.PI_DIV_3 * i;
+            const a2 = CONFIG.PI_DIV_3 * (i + 1);
+            const x1 = h.x + sz * Math.cos(a1);
+            const y1 = h.y + sz * Math.sin(a1);
+            const x2 = h.x + sz * Math.cos(a2);
+            const y2 = h.y + sz * Math.sin(a2);
+            if (i === 0) c.moveTo(x1, y1);
+            c.lineTo(x2, y2);
         }
-        c.closePath();
     }
 }
 

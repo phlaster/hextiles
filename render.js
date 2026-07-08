@@ -19,8 +19,8 @@ import {
     tileRot,
     displayRot,
     traceHexPath,
-    traceHexPathBatch,
     traceHexGrid,
+    traceHexGridBatch,
     visibleHexes,
     hash2D,
     isTileAlter
@@ -339,14 +339,6 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
         }
     }
     state.ctx.restore();
-    if (grid && gridAlpha > 0.01) {
-        traceHexGrid(state.ctx, cx, cy, sz);
-        state.ctx.globalAlpha = gridAlpha;
-        state.ctx.strokeStyle = COLORS.gridLine;
-        state.ctx.lineWidth = 1;
-        state.ctx.stroke();
-        state.ctx.globalAlpha = 1.0;
-    }
 }
 
 export function render() {
@@ -583,6 +575,14 @@ export function render() {
             const rot = displayRot(h.q, h.r, now);
             drawTile(h.x, h.y, sz, rot, grid, img, tf, h.q, h.r, now, curveAlpha, gridAlpha);
         }
+        if (state.showGrid && gridAlpha > 0.01) {
+            state.ctx.globalAlpha = gridAlpha;
+            traceHexGridBatch(state.ctx, hexes, sz);
+            state.ctx.strokeStyle = COLORS.gridLine;
+            state.ctx.lineWidth = 1;
+            state.ctx.stroke();
+            state.ctx.globalAlpha = 1.0;
+        }
     } else if (curveAlpha > 0.01 || gridAlpha > 0.01) {
         if (curveAlpha < 0.99 || gridAlpha < 0.99) {
             if (state.curveCanvas.width !== W || state.curveCanvas.height !== H) {
@@ -597,7 +597,7 @@ export function render() {
                 drawTile(h.x, h.y, sz, rot, false, null, tf, h.q, h.r, now, 1.0, 0.0);
             }
             if (state.showGrid && gridAlpha > 0.01) {
-                traceHexPathBatch(state.curveCtx, hexes, sz);
+                traceHexGridBatch(state.curveCtx, hexes, sz);
                 state.curveCtx.strokeStyle = COLORS.gridLine;
                 state.curveCtx.lineWidth = 1;
                 state.curveCtx.globalAlpha = gridAlpha;
@@ -614,7 +614,7 @@ export function render() {
                 drawTile(h.x, h.y, sz, rot, false, null, tf, h.q, h.r, now, 1.0, 0.0);
             }
             if (state.showGrid) {
-                traceHexPathBatch(state.ctx, hexes, sz);
+                traceHexGridBatch(state.ctx, hexes, sz);
                 state.ctx.strokeStyle = COLORS.gridLine;
                 state.ctx.lineWidth = 1;
                 state.ctx.stroke();

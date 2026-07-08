@@ -20,7 +20,7 @@ import {
     hash2D,
     isTileAlter,
     traceHexPath,
-    traceHexPathBatch
+    traceHexGridBatch
 } from './math.js';
 import {
     processQueue,
@@ -1004,7 +1004,7 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
     const now = state.exportFreezeTime || Date.now();
     offCtx.fillStyle = COLORS.bg;
     offCtx.fillRect(0, 0, eW, eH);
-    drawIDWGradient(eW, eH, scale, fx, fy); // Need to import drawIDWGradient
+    drawIDWGradient(eW, eH, scale, fx, fy);
     const expStarPanX5 = (state.starPanX5 - fx) * scale,
         expStarPanY5 = (state.starPanY5 - fy) * scale;
     const expStarPanX2 = (state.starPanX2 - fx) * scale,
@@ -1016,9 +1016,9 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
     for (const h of hexes) {
         const rot = tileRot(h.q, h.r);
         drawTile(h.x, h.y, eSz, rot, false, state.texImg, state.texTf, h.q, h.r, now, eCurveAlpha, 0.0);
-    } // Need to import drawTile
+    }
     if (state.showGrid && eGridAlpha > 0.01) {
-        traceHexPathBatch(state.ctx, hexes, eSz);
+        traceHexGridBatch(state.ctx, hexes, eSz);
         state.ctx.globalAlpha = eGridAlpha;
         state.ctx.strokeStyle = COLORS.gridLine;
         state.ctx.lineWidth = 1;
