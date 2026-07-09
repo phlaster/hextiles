@@ -86,6 +86,7 @@
                 gap: 8px;
                 width: 180px;
             }
+
             #lod-tuner h3 {
                 margin: 0 0 5px 0;
                 font-size: 12px;
@@ -94,22 +95,53 @@
                 letter-spacing: 1px;
                 text-align: center;
             }
-            #lod-tuner .lod-row { display: flex; flex-direction: column; gap: 3px; }
-            #lod-tuner .lod-top { display: flex; justify-content: space-between; align-items: center; }
-            #lod-tuner .lod-top span { font-size: 11px; color: var(--col-muted); }
-            #lod-tuner .lod-top .s-val { font-size: 11px; color: var(--col-accent); font-weight: 600; }
-            #lod-tuner input[type=range] {
-                -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
-                background: var(--col-border); border-radius: 2px; outline: none;
+
+            #lod-tuner .lod-row {
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
             }
+
+            #lod-tuner .lod-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            #lod-tuner .lod-top span {
+                font-size: 11px;
+                color: var(--col-muted);
+            }
+
+            #lod-tuner .lod-top .s-val {
+                font-size: 11px;
+                color: var(--col-accent);
+                font-weight: 600;
+            }
+
+            #lod-tuner input[type=range] {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 100%;
+                height: 4px;
+                background: var(--col-border);
+                border-radius: 2px;
+                outline: none;
+            }
+
             #lod-tuner input[type=range]::-webkit-slider-thumb {
-                -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
-                background: var(--col-accent); cursor: pointer;
+                -webkit-appearance: none;
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: var(--col-accent);
+                cursor: pointer;
             }
 
             #lod-tuner {
                 transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
             }
+
             body.sidebar-collapsed #lod-tuner,
             body.embed-mode #lod-tuner {
                 transform: translateX(calc(-100vw - 20px));
@@ -167,94 +199,92 @@
                 </label>
             </div>
             <div class="toggle-row" style="margin-top:10px">
-                <span><i class="fas fa-wind" style="margin-right:6px;color:var(--col-muted)"></i>Inertial panning</span>
+                <span><i class="fas fa-wind" style="margin-right:6px;color:var(--col-muted)"></i>Inertia</span>
                 <label class="switch">
                     <input type="checkbox" id="inertiaToggle" checked />
                     <span class="track"></span>
                 </label>
             </div>
 
-        <div class="sb-section">
-            <div class="section-header">
-                <button class="icon-btn" id="addMarkerBtn" title="Add Marker"><i class="fas fa-plus"></i></button>
-                <label>Color Gradient</label>
-                <button class="icon-btn" id="randGradColorsBtn" title="Randomize Gradient Colors"><i
-                    class="fas fa-dice"></i></button>
+            <div class="sb-section">
+                <div class="section-header">
+                    <button class="icon-btn" id="addMarkerBtn" title="Add Marker"><i class="fas fa-plus"></i></button>
+                    <label>Gradient Colors</label>
+                    <button class="icon-btn" id="randGradColorsBtn" title="Randomize Gradient Colors"><i class="fas fa-dice"></i></button>
+                </div>
+                <div id="gradientList" class="grad-list"></div>
             </div>
-            <div id="gradientList" class="grad-list"></div>
-        </div>
 
-        <div class="sb-section">
-            <div class="section-header">
-                <button class="icon-btn" id="addCurveBtn" title="Add Color"><i class="fas fa-plus"></i></button>
-                <label>Curve Colors</label>
-                <button class="icon-btn" id="randLineColorsBtn" title="Randomize Line Colors"><i
-                    class="fas fa-dice"></i></button>
+            <div class="sb-section">
+                <div class="section-header">
+                    <button class="icon-btn" id="addCurveBtn" title="Add Color"><i class="fas fa-plus"></i></button>
+                    <label>Curve Colors</label>
+                    <button class="icon-btn" id="randLineColorsBtn" title="Randomize Line Colors"><i class="fas fa-dice"></i></button>
+                </div>
+                <div id="curveList" class="grad-list"></div>
             </div>
-            <div id="curveList" class="grad-list"></div>
-        </div>
 
-        <div class="sb-section">
-            <label>Tile texture</label>
-            <div class="slider-row" style="margin-top: 14px; margin-bottom: 16px;">
-                <div class="s-top"><span>Curve Line Width</span><span class="s-val" id="vCurveW">1.0x</span></div>
-                <input type="range" id="sCurveW" min="0.0" max="2" step="0.05" value="1.0" />
+            <div class="sb-section">
+                <label>Tile texture</label>
+                <div class="slider-row" style="margin-top: 14px; margin-bottom: 16px;">
+                    <div class="s-top"><span>Line Width</span><span class="s-val" id="vCurveW">1.0x</span></div>
+                    <input type="range" id="sCurveW" min="0.0" max="2" step="0.05" value="1.0" />
+                </div>
+                <div class="slider-row" style="margin-bottom: 16px;">
+                    <div class="s-top"><span>Alternative Tiles</span><span class="s-val" id="vAlterTiles">0.00</span></div>
+                    <input type="range" id="sAlterTiles" min="0" max="1.0" step="0.01" value="0" />
+                </div>
+                <div class="upload-zone" id="uploadZone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Click or drop an image</p>
+                    <div class="filename" id="fileName"></div>
+                </div>
+                <input type="file" id="fileInput" accept="image/*" />
+                <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i class="fas fa-image"></i>Reset texture</button>
+                <div class="btn-row" style="margin-top: 8px;">
+                    <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i>Reset rotation</button>
+                </div>
+                <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%; margin-top: 8px;"><i class="fas fa-compass"></i>Randomize angles</button>
             </div>
-            <div class="slider-row" style="margin-bottom: 16px;">
-                <div class="s-top"><span>Alternative Tiles</span><span class="s-val" id="vAlterTiles">0.00</span></div>
-                <input type="range" id="sAlterTiles" min="0" max="1.0" step="0.01" value="0" />
-            </div>
-            <div class="upload-zone" id="uploadZone">
-                <i class="fas fa-cloud-upload-alt"></i>
-                <p>Click or drop an image</p>
-                <div class="filename" id="fileName"></div>
-            </div>
-            <input type="file" id="fileInput" accept="image/*" />
-            <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i class="fas fa-image"></i> Reset Texture</button>
-            <div class="btn-row" style="margin-top: 8px;">
-                <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i> Reset rotation</button>
-            </div>
-            <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%; margin-top: 8px;"><i class="fas fa-compass"></i> Randomize angles</button>
-        </div>
 
-        <div class="sb-section editor" id="editorPanel">
-            <label>Align Texture to Hex</label>
-            <div class="preview-wrap">
-                <canvas id="previewCanvas" width="220" height="220"></canvas>
+            <div class="sb-section editor" id="editorPanel">
+                <label>Align Texture to Hex</label>
+                <div class="preview-wrap">
+                    <canvas id="previewCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="slider-row">
+                    <div class="s-top"><span>Rotation</span><span class="s-val" id="vRot">0°</span></div>
+                    <input type="range" id="sRot" min="0" max="360" step="1" value="0" />
+                </div>
+                <div class="slider-row">
+                    <div class="s-top"><span>Scale</span><span class="s-val" id="vScale">1.00x</span></div>
+                    <input type="range" id="sScale" min="0.1" max="4" step="0.05" value="1" />
+                </div>
+                <div class="slider-row">
+                    <div class="s-top"><span>Stretch X</span><span class="s-val" id="vSX">1.00x</span></div>
+                    <input type="range" id="sSX" min="0.2" max="3" step="0.05" value="1" />
+                </div>
+                <div class="slider-row">
+                    <div class="s-top"><span>Stretch Y</span><span class="s-val" id="vSY">1.00x</span></div>
+                    <input type="range" id="sSY" min="0.2" max="3" step="0.05" value="1" />
+                </div>
+                <div class="slider-row">
+                    <div class="s-top"><span>Offset X</span><span class="s-val" id="vOX">0</span></div>
+                    <input type="range" id="sOX" min="-150" max="150" step="1" value="0" />
+                </div>
+                <div class="slider-row">
+                    <div class="s-top"><span>Offset Y</span><span class="s-val" id="vOY">0</span></div>
+                    <input type="range" id="sOY" min="-150" max="150" step="1" value="0" />
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-ghost" id="cancelEd">Close</button>
+                    <button class="btn btn-accent" id="applyEd">Apply Texture</button>
+                </div>
             </div>
-            <div class="slider-row">
-                <div class="s-top"><span>Rotation</span><span class="s-val" id="vRot">0°</span></div>
-                <input type="range" id="sRot" min="0" max="360" step="1" value="0" />
-            </div>
-            <div class="slider-row">
-                <div class="s-top"><span>Scale</span><span class="s-val" id="vScale">1.00x</span></div>
-                <input type="range" id="sScale" min="0.1" max="4" step="0.05" value="1" />
-            </div>
-            <div class="slider-row">
-                <div class="s-top"><span>Stretch X</span><span class="s-val" id="vSX">1.00x</span></div>
-                <input type="range" id="sSX" min="0.2" max="3" step="0.05" value="1" />
-            </div>
-            <div class="slider-row">
-                <div class="s-top"><span>Stretch Y</span><span class="s-val" id="vSY">1.00x</span></div>
-                <input type="range" id="sSY" min="0.2" max="3" step="0.05" value="1" />
-            </div>
-            <div class="slider-row">
-                <div class="s-top"><span>Offset X</span><span class="s-val" id="vOX">0</span></div>
-                <input type="range" id="sOX" min="-150" max="150" step="1" value="0" />
-            </div>
-            <div class="slider-row">
-                <div class="s-top"><span>Offset Y</span><span class="s-val" id="vOY">0</span></div>
-                <input type="range" id="sOY" min="-150" max="150" step="1" value="0" />
-            </div>
-            <div class="btn-row">
-                <button class="btn btn-ghost" id="cancelEd">Close</button>
-                <button class="btn btn-accent" id="applyEd">Apply Texture</button>
-            </div>
-        </div>
 
-        <div class="sb-footer">
-            <span id="deployInfo">%VITE_DEPLOY_INFO%</span>
-        </div>
+            <div class="sb-footer">
+                <span id="deployInfo">%VITE_DEPLOY_INFO%</span>
+            </div>
 
     </aside>
 
@@ -275,7 +305,7 @@
             <div class="export-menu-header">
                 <label>Export Settings</label>
             </div>
-            
+
             <div class="size-row">
                 <div class="size-input">
                     <span>Frame width</span>
@@ -287,17 +317,17 @@
                     <input type="number" id="exportH" value="600" min="50" max="8000" />
                 </div>
             </div>
-            
+
             <div class="size-input" style="margin-bottom: 14px;">
                 <span id="exportSideLabel">Exported sidelength (px)</span>
                 <input type="number" id="exportSide" value="1920" min="50" max="8000" />
             </div>
 
             <div class="btn-row">
-                <button class="btn btn-ghost export-tab-btn" id="exportImageBtn" style="flex:1"><i class="fas fa-image"></i> Image</button>
-                <button class="btn btn-ghost export-tab-btn" id="exportEmbedBtn" style="flex:1"><i class="fas fa-code"></i> Embed</button>
+                <button class="btn btn-ghost export-tab-btn" id="exportImageBtn" style="flex:1"><i class="fas fa-image"></i>Image</button>
+                <button class="btn btn-ghost export-tab-btn" id="exportEmbedBtn" style="flex:1"><i class="fas fa-code"></i>Embed</button>
             </div>
-            
+
             <div class="image-export-wrap" id="imageExportWrap">
                 <label>Choose export format</label>
                 <div class="format-row">
@@ -306,11 +336,11 @@
                     <button class="btn btn-ghost fmt-btn" id="fmtSvgBtn" style="flex:1">SVG</button>
                 </div>
             </div>
-            
+
             <div class="embed-code" id="embedCodeWrap">
                 <label>Embed Code</label>
                 <textarea id="embedCode" readonly></textarea>
-                <button class="btn btn-ghost" id="copyEmbedBtn" style="width:100%; margin-top:6px;"><i class="fas fa-copy"></i> Copy</button>
+                <button class="btn btn-ghost" id="copyEmbedBtn" style="width:100%; margin-top:6px;"><i class="fas fa-copy"></i>Copy</button>
             </div>
         </div>
     </div>
