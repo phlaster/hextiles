@@ -3,42 +3,52 @@ on:
   push:
     branches: ["main", "master"]
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: "pages"
   cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0 # Fetch all history to ensure git context is complete
           
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
           
       - name: Install dependencies
         run: npm ci
         
       - name: Prepare Deploy Info
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SHORT_SHA=${GITHUB_SHA:0:7}
-          PREV_SHA=$(git rev-parse HEAD^ 2>/dev/null || echo "")
+          
+          # Query GitHub API for the head_sha of the last successful run of this specific workflow
+          PREV_SHA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?status=success&per_page=1" | \
+            jq -r '.workflow_runs[0].head_sha')
+          
           DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           
-          # Check if a valid previous commit exists (handles the very first commit edge case)
-          if [ -n "$PREV_SHA" ] && [ "$PREV_SHA" != "0000000000000000000000000000000000000000" ]; then
+          # Validate the API response (handles the very first deployment where no previous runs exist)
+          if [ -n "$PREV_SHA" ] && [ "$PREV_SHA" != "null" ]; then
             PREV_SHORT_SHA=${PREV_SHA:0:7}
             DIFF_URL="https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_SHA}...${GITHUB_SHA}"
-            COMMIT_LINE="<div style='text-align: left;'>Commit: <a class='deploy-link' href='${DIFF_URL}' target='_blank'>${PREV_SHORT_SHA} -> ${SHORT_SHA}</a></div>"
+            COMMIT_LINE="<div style='text-align: left;'>Commit: <a class='deploy-link' href='${DIFF_URL}' target='_blank'>${PREV_SHORT_SHA}...${SHORT_SHA}</a></div>"
           else
             REPO_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
             COMMIT_LINE="<div style='text-align: left;'>Commit: <a class='deploy-link' href='${REPO_URL}' target='_blank'>${SHORT_SHA}</a></div>"
@@ -52,7 +62,7 @@ jobs:
         run: npm run build
         
       - name: Setup Pages
-        uses: actions/configure-pages@v6
+        uses: actions/configure-pages@v4
         
       - name: Remove existing artifacts
         uses: geekyeggo/delete-artifact@v5
@@ -60,7 +70,7 @@ jobs:
           name: github-pages
           
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
           
@@ -73,4 +83,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
