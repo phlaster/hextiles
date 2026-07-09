@@ -48,7 +48,7 @@ jobs:
           if [ -n "$PREV_SHA" ] && [ "$PREV_SHA" != "null" ]; then
             PREV_SHORT_SHA=${PREV_SHA:0:7}
             DIFF_URL="https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_SHA}...${GITHUB_SHA}"
-            COMMIT_LINE="<div style='text-align: left;'>Commit: <a class='deploy-link' href='${DIFF_URL}' target='_blank'>${PREV_SHORT_SHA}...${SHORT_SHA}</a></div>"
+            COMMIT_LINE="<div style='text-align: left;'>Changes: <a class='deploy-link' href='${DIFF_URL}' target='_blank'>${PREV_SHORT_SHA}...${SHORT_SHA}</a></div>"
           else
             REPO_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
             COMMIT_LINE="<div style='text-align: left;'>Commit: <a class='deploy-link' href='${REPO_URL}' target='_blank'>${SHORT_SHA}</a></div>"
