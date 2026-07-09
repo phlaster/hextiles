@@ -556,9 +556,24 @@ export function render() {
         if (Math.abs(state.panVY) < CONFIG.INERTIA_THRESHOLD) state.panVY = 0;
         if (state.panVX !== 0 || state.panVY !== 0) keepRendering = true;
     }
-    if (state.flowEnabled && state.flowIntensity > 0 && (!state.isDrag || state.isEmbedMode) && !state.isExporting) {
+
+    const isMousePanning = state.isDrag && state.dragMoved && !state.isMouseDrawMode && !state.isEmbedMode;
+    const isTouchPanning = state.touchState.mode === 'pan'; 
+    const isPanning = isMousePanning || isTouchPanning;
+
+    if (state.flowEnabled && state.flowIntensity > 0 && !state.isExporting && !isPanning) {
         state.panX += driftX;
         state.panY += driftY;
+        
+        if (state.isDrag) {
+            state.dragPX += driftX;
+            state.dragPY += driftY;
+        }
+        if (state.touchState.mode === 'pan_wait' || state.touchState.mode === 'draw') {
+            state.touchState.startPanX += driftX;
+            state.touchState.startPanY += driftY;
+        }
+
         state.starPanX5 += driftX * CONFIG.STAR_PARALLAX_LARGE;
         state.starPanY5 += driftY * CONFIG.STAR_PARALLAX_LARGE;
         state.starPanX2 += driftX * CONFIG.STAR_PARALLAX_MED;
@@ -678,23 +693,49 @@ export function render() {
         }
     }
 
+    // ──── HOVER & TOUCH OUTLINES ────
     if (lod >= 1 && visZoom > CONFIG.ZOOM_FADE_MID + 0.001 && !state.isExporting) {
-        if (!state.isTouchDevice && state.hoveredQ !== null && state.hoveredR !== null) {
+        const shouldShowHover = 
+            // Regular mode: mouse is not dragging and is over the canvas
+            (!state.isEmbedMode && !state.isDrag && state.hoveredQ !== null && state.hoveredR !== null) ||
+            // Embedded mode: mouse is over the canvas
+            (state.isEmbedMode && state.hoveredQ !== null && state.hoveredR !== null);
+
+        if (shouldShowHover) {
+            // FIX: Recalculate hovered hex based on current pan to keep it under the cursor during flow
+            const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+            const sidebarHidden = isCollapsed || state.isEmbedMode;
+            const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
+            
+            if (state.mouseScreenX >= 0 && state.mouseScreenX <= effectiveW && 
+                state.mouseScreenY >= 0 && state.mouseScreenY <= dom.cvs.height) {
+                const h = pixToHex(state.mouseScreenX, state.mouseScreenY, state.zoom, state.panX, state.panY);
+                state.hoveredQ = h.q;
+                state.hoveredR = h.r;
+            }
+
+            // Target is the exact center of the hovered tile
             const p = hexToPix(state.hoveredQ, state.hoveredR, z, px, py);
+            
             if (state.visHoverX === null) {
                 state.visHoverX = p.x;
                 state.visHoverY = p.y;
             } else {
+                // Smoothly slide to the new tile's center
                 state.visHoverX += (p.x - state.visHoverX) * CONFIG.HOVER_LERP;
                 state.visHoverY += (p.y - state.visHoverY) * CONFIG.HOVER_LERP;
-                if (Math.abs(p.x - state.visHoverX) > 0.5 || Math.abs(p.y - state.visHoverY) > 0.5) keepRendering = true;
-                else {
+                
+                if (Math.abs(p.x - state.visHoverX) > 0.5 || Math.abs(p.y - state.visHoverY) > 0.5) {
+                    keepRendering = true;
+                } else {
                     state.visHoverX = p.x;
                     state.visHoverY = p.y;
                 }
             }
             drawHoverStroke(state.visHoverX, state.visHoverY, sz, grid);
         }
+
+        // Handle touch outlines (ripples)
         if (state.touchOutlines.length > 0) {
             keepRendering = true;
             for (let i = state.touchOutlines.length - 1; i >= 0; i--) {

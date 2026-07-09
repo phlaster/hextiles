@@ -650,12 +650,18 @@ export function setupEvents() {
         state.hoveredR = null;
         state.visHoverX = null;
         state.visHoverY = null;
+
+        if (state.isDrag && !state.dragMoved && state.mouseDrawTimer) {
+            clearTimeout(state.mouseDrawTimer);
+            state.mouseDrawTimer = null;
+        }
     });
 
     dom.cvs.addEventListener('mousedown', e => {
         const r = dom.cvs.getBoundingClientRect(),
-            mx = e.clientX - r.left,
-            my = e.clientY - r.top;
+        mx = e.clientX - r.left,
+        my = e.clientY - r.top;
+
         if (state.isEmbedMode) {
             state.isDrag = true;
             state.dragMoved = false;
@@ -664,12 +670,13 @@ export function setupEvents() {
             state.embedDragLastTile = null;
             return;
         }
+
         if (state.markersVisible) {
             let clickedMarkerIdx = -1;
             for (let i = 0; i < state.gradientMarkers.length; i++) {
                 const m = state.gradientMarkers[i],
-                    dx = mx - m.x,
-                    dy = my - m.y;
+                dx = mx - m.x,
+                dy = my - m.y;
                 if (dx * dx + dy * dy < CONFIG.MARKER_HIT_RADIUS * CONFIG.MARKER_HIT_RADIUS) {
                     clickedMarkerIdx = i;
                     break;
@@ -684,14 +691,29 @@ export function setupEvents() {
                 return;
             }
         }
+
         state.isDrag = true;
         state.dragMoved = false;
+        state.isMouseDrawMode = false;
+        state.lastDraggedTile = null;
         state.dragSX = e.clientX;
         state.dragSY = e.clientY;
         state.dragPX = state.panX;
         state.dragPY = state.panY;
         state.panVX = 0;
         state.panVY = 0;
+
+        // FIX: Start draw mode timer
+        state.mouseDrawTimer = setTimeout(() => {
+            if (state.isDrag && !state.dragMoved) {
+                state.isMouseDrawMode = true;
+                const h = pixToHex(mx, my, state.zoom, state.panX, state.panY);
+                state.lastDraggedTile = hexKey(h.q, h.r);
+                rotateTile(h.q, h.r);
+                requestRender();
+            }
+        }, CONFIG.LONG_PRESS_DUR);
+
         requestRender();
     });
 
@@ -729,41 +751,62 @@ export function setupEvents() {
                 state.hoveredR = h.r;
             }
         }
+
         if (state.isDrag) {
             const dx = mx - state.dragSX,
-                dy = my - state.dragSY;
+            dy = my - state.dragSY;
+
             if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
-                if (!state.dragMoved) state.dragMoved = true;
+                if (!state.dragMoved) {
+                    state.dragMoved = true;
+                    
+                    if (!state.isMouseDrawMode && state.mouseDrawTimer) {
+                        clearTimeout(state.mouseDrawTimer);
+                        state.mouseDrawTimer = null;
+                    }
+                }
             }
-            if (state.isEmbedMode) {
-                if (state.dragMoved) {
+
+            if (state.isMouseDrawMode) {
+                const h = pixToHex(mx, my, state.zoom, state.panX, state.panY);
+                const hk = hexKey(h.q, h.r);
+                if (hk !== state.lastDraggedTile) {
+                    state.lastDraggedTile = hk;
+                    rotateTile(h.q, h.r);
+                }
+                requestRender();
+                return;
+            }
+
+            if (state.dragMoved) {
+                if (state.isEmbedMode) {
                     const hk = hexKey(h.q, h.r);
                     if (hk !== state.embedDragLastTile) {
                         state.embedDragLastTile = hk;
                         rotateTile(h.q, h.r);
                     }
-                }
-            } else {
-                let targetPanX = state.dragPX + dx,
-                    targetPanY = state.dragPY + dy;
-                const dPanX = targetPanX - state.panX,
-                    dPanY = targetPanY - state.panY;
-                if (state.inertiaEnabled) {
-                    state.panVX = dPanX;
-                    state.panVY = dPanY;
-                    state.lastPanMoveTime = Date.now();
                 } else {
-                    state.panVX = 0;
-                    state.panVY = 0;
+                    let targetPanX = state.dragPX + dx,
+                    targetPanY = state.dragPY + dy;
+                    const dPanX = targetPanX - state.panX,
+                    dPanY = targetPanY - state.panY;
+                    if (state.inertiaEnabled) {
+                        state.panVX = dPanX;
+                        state.panVY = dPanY;
+                        state.lastPanMoveTime = Date.now();
+                    } else {
+                        state.panVX = 0;
+                        state.panVY = 0;
+                    }
+                    state.panX = targetPanX;
+                    state.panY = targetPanY;
+                    state.starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
+                    state.starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
+                    state.starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
+                    state.starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
+                    state.starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
+                    state.starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
                 }
-                state.panX = targetPanX;
-                state.panY = targetPanY;
-                state.starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
-                state.starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
-                state.starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
-                state.starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
-                state.starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
-                state.starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
             }
         }
         requestRender();
@@ -776,10 +819,24 @@ export function setupEvents() {
             requestRender();
             return;
         }
+
         if (state.isDrag) {
-            if (!state.dragMoved) handleClick(e);
-            else checkIfSolved();
+            if (state.mouseDrawTimer) {
+                clearTimeout(state.mouseDrawTimer);
+                state.mouseDrawTimer = null;
+            }
+
+            if (state.isMouseDrawMode) {
+                state.isMouseDrawMode = false;
+            } else if (!state.dragMoved) {
+                handleClick(e);
+            } else {
+                checkIfSolved();
+            }
+
             state.isDrag = false;
+            state.isMouseDrawMode = false;
+            state.lastDraggedTile = null;
             state.targetInteractionFade = 1.0;
         }
         requestRender();

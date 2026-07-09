@@ -58,6 +58,9 @@ export const state = {
     touchOutlines: [],
     embedDragLastTile: null,
     lastTapTime: 0,
+    mouseDrawTimer: null,
+    isMouseDrawMode: false,
+    lastDraggedTile: null,
 
     // Render flags
     showGrid: true,
