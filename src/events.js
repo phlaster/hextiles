@@ -172,12 +172,25 @@ export function rotateTile(q, r) {
 }
 
 export function setupEvents() {
+    setupFullscreenAndIdle();
+    setupSidebarGestures();
+    setupCanvasTouchEvents();
+    setupCanvasMouseEvents();
+    setupZoomControls();
+    setupUITogglesAndSliders();
+    setupTextureEditor();
+    setupColorAndMarkerButtons();
+    setupKeyboardShortcuts();
+}
+
+function setupFullscreenAndIdle() {
+    let wasSidebarOpenBeforeFullscreen = false;
+    
     dom.fullscreenBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen mode not allowed'));
         else if (document.exitFullscreen) document.exitFullscreen();
     });
 
-    let wasSidebarOpenBeforeFullscreen = false;
     document.addEventListener('fullscreenchange', () => {
         const icon = dom.fullscreenBtn.querySelector('i');
         if (document.fullscreenElement) {
@@ -206,15 +219,14 @@ export function setupEvents() {
         requestRender();
     });
 
-    // Fullscreen Idle Listeners
     ['mousemove', 'mousedown', 'wheel', 'keydown', 'touchstart'].forEach(evt => {
         window.addEventListener(evt, () => {
             if (document.fullscreenElement) resetIdleTimer();
-        }, {
-            passive: true
-        });
+        }, { passive: true });
     });
+}
 
+function setupSidebarGestures() {
     dom.sidebarToggle.addEventListener('click', () => {
         dom.sidebar.classList.toggle('collapsed');
         dom.sidebarToggle.classList.toggle('collapsed');
@@ -227,11 +239,14 @@ export function setupEvents() {
             requestRender();
         });
         ro.observe(dom.wrap);
-    } else if (!state.isEmbedMode) window.addEventListener('resize', resize);
+    } else if (!state.isEmbedMode) {
+        window.addEventListener('resize', resize);
+    }
 
     let sbTouchStartX = null,
         sbTouchStartY = null,
         sbDragging = false;
+        
     dom.sidebar.addEventListener('touchstart', e => {
         if (dom.sidebar.classList.contains('collapsed')) return;
         const targetTag = e.target.tagName;
@@ -243,9 +258,8 @@ export function setupEvents() {
         sbTouchStartY = e.touches[0].clientY;
         sbDragging = false;
         dom.sidebar.style.transition = 'none';
-    }, {
-        passive: true
-    });
+    }, { passive: true });
+    
     dom.sidebar.addEventListener('touchmove', e => {
         if (sbTouchStartX === null) return;
         const dx = e.touches[0].clientX - sbTouchStartX,
@@ -261,9 +275,8 @@ export function setupEvents() {
             e.preventDefault();
             dom.sidebar.style.transform = dx > 0 ? `translateX(${dx}px)` : `translateX(0px)`;
         }
-    }, {
-        passive: false
-    });
+    }, { passive: false });
+    
     dom.sidebar.addEventListener('touchend', e => {
         if (sbTouchStartX === null) return;
         const dx = e.changedTouches[0].clientX - sbTouchStartX;
@@ -273,9 +286,7 @@ export function setupEvents() {
             document.body.classList.add('sidebar-collapsed');
             dom.sidebarToggle.classList.add('collapsed');
             dom.sidebar.style.transform = 'translateX(calc(100% + 10px))';
-            setTimeout(() => {
-                dom.sidebar.style.transform = '';
-            }, 300);
+            setTimeout(() => { dom.sidebar.style.transform = ''; }, 300);
         } else dom.sidebar.style.transform = '';
         sbTouchStartX = null;
         sbDragging = false;
@@ -284,6 +295,7 @@ export function setupEvents() {
     let sbToggleDragging = false,
         sbToggleStartX = 0,
         sbToggleCurrentX = 0;
+        
     dom.sidebarToggle.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
         sbToggleDragging = true;
@@ -292,9 +304,8 @@ export function setupEvents() {
         dom.sidebar.style.transition = 'none';
         dom.sidebarToggle.style.transition = 'none';
         e.preventDefault();
-    }, {
-        passive: false
-    });
+    }, { passive: false });
+    
     dom.sidebarToggle.addEventListener('touchmove', e => {
         if (!sbToggleDragging) return;
         sbToggleCurrentX = e.touches[0].clientX;
@@ -314,9 +325,8 @@ export function setupEvents() {
             }
         }
         e.preventDefault();
-    }, {
-        passive: false
-    });
+    }, { passive: false });
+    
     dom.sidebarToggle.addEventListener('touchend', e => {
         if (!sbToggleDragging) return;
         sbToggleDragging = false;
@@ -369,7 +379,9 @@ export function setupEvents() {
         }
         e.preventDefault();
     });
+}
 
+function setupCanvasTouchEvents() {
     dom.cvs.addEventListener('touchstart', e => {
         state.isTouchDevice = true;
         state.hoveredQ = null;
@@ -469,9 +481,7 @@ export function setupEvents() {
             state.zoomOutBlockedUntil = 0;
         }
         e.preventDefault();
-    }, {
-        passive: false
-    });
+    }, { passive: false });
 
     window.addEventListener('touchmove', e => {
         if (state.touchState.mode === 'none') return;
@@ -564,9 +574,7 @@ export function setupEvents() {
             requestRender();
         }
         e.preventDefault();
-    }, {
-        passive: false
-    });
+    }, { passive: false });
 
     window.addEventListener('touchend', e => {
         if (state.touchState.mode === 'none') return;
@@ -600,7 +608,6 @@ export function setupEvents() {
         if (e.touches.length === 0) {
             state.touchState.mode = 'none';
             state.isDrag = false;
-            
             if (wasMode !== 'pan' && wasMode !== 'marker_drag' && wasMode !== 'marker_wait') {
                 state.panVX = 0;
                 state.panVY = 0;
@@ -611,11 +618,12 @@ export function setupEvents() {
             state.panVX = 0;
             state.panVY = 0;
         }
-        
         requestRender();
         e.preventDefault();
     }, { passive: false });
+}
 
+function setupCanvasMouseEvents() {
     dom.cvs.addEventListener('wheel', e => {
         if (state.isEmbedMode) return;
         e.preventDefault();
@@ -641,9 +649,7 @@ export function setupEvents() {
         checkIfSolved();
         scheduleMagnetZoom();
         requestRender();
-    }, {
-        passive: false
-    });
+    }, { passive: false });
 
     dom.cvs.addEventListener('mouseleave', () => {
         state.hoveredQ = null;
@@ -659,8 +665,8 @@ export function setupEvents() {
 
     dom.cvs.addEventListener('mousedown', e => {
         const r = dom.cvs.getBoundingClientRect(),
-        mx = e.clientX - r.left,
-        my = e.clientY - r.top;
+            mx = e.clientX - r.left,
+            my = e.clientY - r.top;
 
         if (state.isEmbedMode) {
             state.isDrag = true;
@@ -675,8 +681,8 @@ export function setupEvents() {
             let clickedMarkerIdx = -1;
             for (let i = 0; i < state.gradientMarkers.length; i++) {
                 const m = state.gradientMarkers[i],
-                dx = mx - m.x,
-                dy = my - m.y;
+                    dx = mx - m.x,
+                    dy = my - m.y;
                 if (dx * dx + dy * dy < CONFIG.MARKER_HIT_RADIUS * CONFIG.MARKER_HIT_RADIUS) {
                     clickedMarkerIdx = i;
                     break;
@@ -703,7 +709,6 @@ export function setupEvents() {
         state.panVX = 0;
         state.panVY = 0;
 
-        // FIX: Start draw mode timer
         state.mouseDrawTimer = setTimeout(() => {
             if (state.isDrag && !state.dragMoved) {
                 state.isMouseDrawMode = true;
@@ -754,12 +759,11 @@ export function setupEvents() {
 
         if (state.isDrag) {
             const dx = mx - state.dragSX,
-            dy = my - state.dragSY;
+                dy = my - state.dragSY;
 
             if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
                 if (!state.dragMoved) {
                     state.dragMoved = true;
-                    
                     if (!state.isMouseDrawMode && state.mouseDrawTimer) {
                         clearTimeout(state.mouseDrawTimer);
                         state.mouseDrawTimer = null;
@@ -787,9 +791,9 @@ export function setupEvents() {
                     }
                 } else {
                     let targetPanX = state.dragPX + dx,
-                    targetPanY = state.dragPY + dy;
+                        targetPanY = state.dragPY + dy;
                     const dPanX = targetPanX - state.panX,
-                    dPanY = targetPanY - state.panY;
+                        dPanY = targetPanY - state.panY;
                     if (state.inertiaEnabled) {
                         state.panVX = dPanX;
                         state.panVY = dPanY;
@@ -811,6 +815,7 @@ export function setupEvents() {
         }
         requestRender();
     });
+    
     window.addEventListener('mouseup', e => {
         if (state.isDragMarker) {
             state.isDragMarker = false;
@@ -859,7 +864,9 @@ export function setupEvents() {
         }
         if (clickedMarkerIdx !== -1) removeMarkerAt(mx, my);
     });
+}
 
+function setupZoomControls() {
     dom.zoomIn.onclick = () => {
         state.zoomCx = dom.cvs.width / 2;
         state.zoomCy = dom.cvs.height / 2;
@@ -887,35 +894,9 @@ export function setupEvents() {
         scheduleMagnetZoom();
         requestRender();
     };
+}
 
-    window.addEventListener('keydown', e => {
-        if (state.isEmbedMode) return;
-        state.zoomCx = dom.cvs.width / 2;
-        state.zoomCy = dom.cvs.height / 2;
-        const now = Date.now();
-        if (e.key === '=' || e.key === '+') {
-            state.targetZoom = Math.min(MAX_Z, state.targetZoom * CONFIG.KEY_DELTA_IN);
-            if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH) state.zoomOutBlockedUntil = 0;
-            checkIfSolved();
-            scheduleMagnetZoom();
-        }
-        if (e.key === '-') {
-            let delta = CONFIG.KEY_DELTA_OUT;
-            if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH && state.targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
-                if (now < state.zoomOutBlockedUntil) return;
-                if (state.zoomOutBlockedUntil === 0) {
-                    state.zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
-                    return;
-                }
-            }
-            if (state.targetZoom < CONFIG.ZOOM_FADE_HIGH) delta = 1 + (delta - 1) * CONFIG.BTN_SLOW_MULT;
-            state.targetZoom = Math.max(MIN_Z, state.targetZoom * delta);
-            checkIfSolved();
-            scheduleMagnetZoom();
-        }
-        requestRender();
-    });
-
+function setupUITogglesAndSliders() {
     dom.gridToggle.addEventListener('change', function() {
         state.showGrid = this.checked;
         requestRender();
@@ -930,7 +911,6 @@ export function setupEvents() {
     });
     dom.flowToggle.addEventListener('change', function() {
         state.flowEnabled = this.checked;
-        
         if (!state.isEmbedMode) {
             if (!state.flowEnabled && state.inertiaEnabled) {
                 state.panVX += state.currentFlowVX;
@@ -940,7 +920,6 @@ export function setupEvents() {
                 state.panVY = 0;
             }
         }
-        
         requestRender();
     });
     dom.liveTwistsToggle.addEventListener('change', function() {
@@ -956,6 +935,7 @@ export function setupEvents() {
         }
         requestRender();
     });
+    
     dom.sCurveW.addEventListener('input', function() {
         state.curveLineWidth = +dom.sCurveW.value;
         dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
@@ -1007,7 +987,9 @@ export function setupEvents() {
         bulkAnimate('zero', 0);
         toast('All tile rotations reset to 0°');
     };
+}
 
+function setupTextureEditor() {
     dom.uploadZone.onclick = () => dom.fileInput.click();
     dom.uploadZone.ondragover = e => {
         e.preventDefault();
@@ -1050,7 +1032,9 @@ export function setupEvents() {
         syncSliderLabels();
         drawPreview();
     }));
+}
 
+function setupColorAndMarkerButtons() {
     dom.addMarkerBtn.onclick = () => {
         if (state.gradientMarkers.length >= CONFIG.MAX_MARKERS) {
             toast('Maximum of ' + CONFIG.MAX_MARKERS + ' gradient markers reached');
@@ -1092,6 +1076,36 @@ export function setupEvents() {
         initializeCentralTile();
         checkIfSolved();
     };
+}
+
+function setupKeyboardShortcuts() {
+    window.addEventListener('keydown', e => {
+        if (state.isEmbedMode) return;
+        state.zoomCx = dom.cvs.width / 2;
+        state.zoomCy = dom.cvs.height / 2;
+        const now = Date.now();
+        if (e.key === '=' || e.key === '+') {
+            state.targetZoom = Math.min(MAX_Z, state.targetZoom * CONFIG.KEY_DELTA_IN);
+            if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH) state.zoomOutBlockedUntil = 0;
+            checkIfSolved();
+            scheduleMagnetZoom();
+        }
+        if (e.key === '-') {
+            let delta = CONFIG.KEY_DELTA_OUT;
+            if (state.targetZoom >= CONFIG.ZOOM_FADE_HIGH && state.targetZoom * delta < CONFIG.ZOOM_FADE_HIGH) {
+                if (now < state.zoomOutBlockedUntil) return;
+                if (state.zoomOutBlockedUntil === 0) {
+                    state.zoomOutBlockedUntil = now + CONFIG.ZOOM_BLOCK_DELAY_BTN;
+                    return;
+                }
+            }
+            if (state.targetZoom < CONFIG.ZOOM_FADE_HIGH) delta = 1 + (delta - 1) * CONFIG.BTN_SLOW_MULT;
+            state.targetZoom = Math.max(MIN_Z, state.targetZoom * delta);
+            checkIfSolved();
+            scheduleMagnetZoom();
+        }
+        requestRender();
+    });
 
     window.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
@@ -1119,7 +1133,6 @@ export function scheduleLiveTwist() {
 }
 
 function performLiveTwist() {
-    // Don't interrupt user interaction or exports
     if (state.isDrag || state.touchState.mode !== 'none' || state.isExporting) return;
 
     const W = dom.cvs.width,
@@ -1127,13 +1140,11 @@ function performLiveTwist() {
     const visZoom = (state.isEmbedMode && state.embedData && state.embedData.origZoom) ? state.embedData.origZoom : state.zoom;
     const visSz = HEX_R * visZoom;
 
-    // Only twist if curves are visible enough
     if (visSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) return;
 
     const hexes = visibleHexes(state.zoom, state.panX, state.panY, W, H);
     const candidates = [];
 
-    // Filter to central 80% area
     for (const h of hexes) {
         if (h.x > W * 0.1 && h.x < W * 0.9 && h.y > H * 0.1 && h.y < H * 0.9) {
             candidates.push(h);
@@ -1145,7 +1156,6 @@ function performLiveTwist() {
     let bestImpact = -1;
     let bestHexes = [];
 
-    // Evaluate impact for each candidate
     for (const h of candidates) {
         const impact = predictTwistImpact(h.q, h.r);
         if (impact > bestImpact) {
@@ -1167,7 +1177,6 @@ function predictTwistImpact(q, r) {
     const alter = isTileAlter(q, r);
     const newK = (k + 1) % 6;
 
-    // Determine the new pairs if rotated by 60 degrees
     const newPairs = alter ? [
         [(0 + newK) % 6, (1 + newK) % 6],
         [(2 + newK) % 6, (3 + newK) % 6],
@@ -1180,7 +1189,6 @@ function predictTwistImpact(q, r) {
 
     let impact = 0;
 
-    // Check how many edges will change color due to new pairings
     for (const pair of newPairs) {
         const e1 = pair[0],
             e2 = pair[1];
@@ -1190,8 +1198,8 @@ function predictTwistImpact(q, r) {
         const c2 = state.curveMap.has(id2) ? state.curveMap.get(id2) : -1;
 
         if (c1 !== c2) {
-            if (c1 !== -1 && c2 !== -1) impact += 2; // Two colors merging
-            else if (c1 !== -1 || c2 !== -1) impact += 1; // One color expanding into blank
+            if (c1 !== -1 && c2 !== -1) impact += 2;
+            else if (c1 !== -1 || c2 !== -1) impact += 1;
         }
     }
     return impact;
