@@ -600,7 +600,8 @@ export function setupEvents() {
         if (e.touches.length === 0) {
             state.touchState.mode = 'none';
             state.isDrag = false;
-            if (wasMode !== 'pan') {
+            
+            if (wasMode !== 'pan' && wasMode !== 'marker_drag' && wasMode !== 'marker_wait') {
                 state.panVX = 0;
                 state.panVY = 0;
             }
@@ -610,11 +611,10 @@ export function setupEvents() {
             state.panVX = 0;
             state.panVY = 0;
         }
+        
         requestRender();
         e.preventDefault();
-    }, {
-        passive: false
-    });
+    }, { passive: false });
 
     dom.cvs.addEventListener('wheel', e => {
         if (state.isEmbedMode) return;
