@@ -40,6 +40,12 @@ import {
 import {
     getRandomMarkerPosition
 } from './events.js';
+import {
+    initGradientGL,
+    renderGradientGL
+} from './gradientGL.js';
+
+const hasGL = initGradientGL();
 
 state.ctx = dom.cvs.getContext('2d');
 
@@ -434,6 +440,12 @@ export function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offse
 
 export function drawIDWGradient(W, H, coordScale = 1, offsetX = 0, offsetY = 0) {
     if (state.gradientMarkersRGB.length === 0 && state.fadingMarkersRGB.length === 0) return;
+
+    if (hasGL) {
+        renderGradientGL(state.ctx, W, H, coordScale, offsetX, offsetY);
+        return;
+    }
+
     const targetLowW = Math.max(2, Math.ceil(W * 0.2));
     const targetLowH = Math.max(2, Math.ceil(H * 0.2));
     if (state.isGradientDirty || coordScale !== 1 || !state.gradientCanvas || state.gradientCanvas.width !== targetLowW || state.gradientCanvas.height !== targetLowH) {
