@@ -46,11 +46,24 @@ const PI_DIV_3 = CONFIG.PI_DIV_3;
 const TWO_PI_DIV_3 = CONFIG.TWO_PI_DIV_3;
 const FOUR_PI_DIV_3 = CONFIG.FOUR_PI_DIV_3;
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SETUP EXPORT ORCHESTRATOR
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 export function setupExport() {
+    setupOverlayToggles();
+    setupAspectLockAndDimensions();
+    setupExportFormatButtons();
+    setupExportFrameDragging();
+}
+
+function setupOverlayToggles() {
     dom.exportBtn.onclick = openExportOverlay;
     dom.closeExportBtn.onclick = closeExportOverlay;
     dom.exportBackdrop.onclick = closeExportOverlay;
+}
 
+function setupAspectLockAndDimensions() {
     dom.aspectLockBtn.addEventListener('click', () => {
         state.aspectLocked = !state.aspectLocked;
         dom.aspectLockBtn.classList.toggle('active', state.aspectLocked);
@@ -75,56 +88,80 @@ export function setupExport() {
             dom.exportH.value = Math.round(state.efRect.h);
         }
     });
+
     dom.exportW.addEventListener('change', () => {
         const cr = dom.cvs.getBoundingClientRect();
-        let valW = parseInt(dom.exportW.value) || 50;
+        let val = parseInt(dom.exportW.value) || 50;
         if (state.aspectLocked) {
-            let valH = valW / state.targetRatio;
+            let valH = val / state.targetRatio;
             if (valH > cr.height) {
                 valH = cr.height;
-                valW = valH * state.targetRatio;
+                val = valH * state.targetRatio;
             }
-            if (valW > cr.width) {
-                valW = cr.width;
-                valH = valW / state.targetRatio;
+            if (val > cr.width) {
+                val = cr.width;
+                valH = val / state.targetRatio;
             }
             dom.exportH.value = Math.round(valH);
-            dom.exportW.value = Math.round(valW);
-            state.efRect.w = valW;
+            dom.exportW.value = Math.round(val);
+            state.efRect.w = val;
             state.efRect.h = valH;
         } else {
-            valW = Math.min(valW, cr.width);
-            dom.exportW.value = valW;
-            state.efRect.w = valW;
+            val = Math.min(val, cr.width);
+            const prev = parseFloat(dom.exportW.dataset.prev || val);
+            if (prev > 0) {
+                const ratio = val / prev;
+                state.efRect.w *= ratio;
+            }
+            dom.exportW.value = val;
+            dom.exportW.dataset.prev = val;
         }
         clampFrameToCanvas();
         updateExportFrameDOM();
     });
+
     dom.exportH.addEventListener('change', () => {
         const cr = dom.cvs.getBoundingClientRect();
-        let valH = parseInt(dom.exportH.value) || 50;
+        let val = parseInt(dom.exportH.value) || 50;
         if (state.aspectLocked) {
-            let valW = valH * state.targetRatio;
+            let valW = val * state.targetRatio;
             if (valW > cr.width) {
                 valW = cr.width;
-                valH = valW / state.targetRatio;
+                val = valW / state.targetRatio;
             }
-            if (valH > cr.height) {
-                valH = cr.height;
-                valW = valH * state.targetRatio;
+            if (val > cr.height) {
+                val = cr.height;
+                valW = val * state.targetRatio;
             }
             dom.exportW.value = Math.round(valW);
-            dom.exportH.value = Math.round(valH);
+            dom.exportH.value = Math.round(val);
             state.efRect.w = valW;
-            state.efRect.h = valH;
+            state.efRect.h = val;
         } else {
-            valH = Math.min(valH, cr.height);
-            dom.exportH.value = valH;
-            state.efRect.h = valH;
+            val = Math.min(val, cr.height);
+            const prev = parseFloat(dom.exportH.dataset.prev || val);
+            if (prev > 0) {
+                const ratio = val / prev;
+                state.efRect.h *= ratio;
+            }
+            dom.exportH.value = val;
+            dom.exportH.dataset.prev = val;
         }
         clampFrameToCanvas();
         updateExportFrameDOM();
     });
+
+    dom.exportW.addEventListener('input', () => {
+        let val = parseInt(dom.exportW.value) || 50;
+        if (state.aspectLocked) dom.exportH.value = Math.round(val / state.targetRatio);
+    });
+    dom.exportH.addEventListener('input', () => {
+        let val = parseInt(dom.exportH.value) || 50;
+        if (state.aspectLocked) dom.exportW.value = Math.round(val * state.targetRatio);
+    });
+}
+
+function setupExportFormatButtons() {
     dom.exportImageBtn.onclick = () => {
         dom.exportImageBtn.classList.add('active');
         dom.exportEmbedBtn.classList.remove('active');
@@ -132,143 +169,14 @@ export function setupExport() {
         dom.embedCodeWrap.classList.remove('visible');
     };
 
-    dom.fmtPdfBtn.onclick = async () => {
-        const cr = dom.cvs.getBoundingClientRect(),
-            fx = state.efRect.x - cr.left,
-            fy = state.efRect.y - cr.top;
-        const targetLong = parseInt(dom.exportSide.value) || 1920,
-            currentLong = Math.max(state.efRect.w, state.efRect.h),
-            scale = targetLong / currentLong;
-        const eW = Math.round(state.efRect.w * scale),
-            eH = Math.round(state.efRect.h * scale),
-            eZoom = state.zoom * scale,
-            ePanX = (state.panX - fx) * scale,
-            ePanY = (state.panY - fy) * scale;
-        const svgString = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
-        const parser = new DOMParser(),
-            svgDoc = parser.parseFromString(svgString, "image/svg+xml"),
-            svgElement = svgDoc.documentElement;
-        const {
-            jsPDF
-        } = window.jspdf, orientation = eW > eH ? 'landscape' : 'portrait';
-        const pdf = new jsPDF({
-            orientation,
-            unit: 'px',
-            format: [eW, eH],
-            compress: true
-        });
-        await pdf.svg(svgElement, {
-            x: 0,
-            y: 0,
-            width: eW,
-            height: eH
-        });
-        pdf.save('hex-tiles-export.pdf');
-        toast('PDF exported (Vector)');
-    };
-    dom.fmtSvgBtn.onclick = () => {
-        const cr = dom.cvs.getBoundingClientRect(),
-            fx = state.efRect.x - cr.left,
-            fy = state.efRect.y - cr.top;
-        const targetLong = parseInt(dom.exportSide.value) || 1920,
-            currentLong = Math.max(state.efRect.w, state.efRect.h),
-            scale = targetLong / currentLong;
-        const eW = Math.round(state.efRect.w * scale),
-            eH = Math.round(state.efRect.h * scale),
-            eZoom = state.zoom * scale,
-            ePanX = (state.panX - fx) * scale,
-            ePanY = (state.panY - fy) * scale;
-        const svg = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
-        const blob = new Blob([svg], {
-                type: 'image/svg+xml'
-            }),
-            url = URL.createObjectURL(blob),
-            a = document.createElement('a');
-        a.href = url;
-        a.download = 'hex-tiles-export.svg';
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('SVG exported');
-    };
-    dom.fmtPngBtn.onclick = async () => {
-        const cr = dom.cvs.getBoundingClientRect(),
-            fx = state.efRect.x - cr.left,
-            fy = state.efRect.y - cr.top;
-        const targetLong = parseInt(dom.exportSide.value) || 1920,
-            currentLong = Math.max(state.efRect.w, state.efRect.h),
-            scale = targetLong / currentLong;
-        const eW = Math.round(state.efRect.w * scale),
-            eH = Math.round(state.efRect.h * scale);
-        const off = document.createElement('canvas');
-        renderToOffscreen(off, eW, eH, fx, fy, state.efRect.w, state.efRect.h);
-        const blob = await canvasToBlob(off, 'image/png'),
-            url = URL.createObjectURL(blob),
-            a = document.createElement('a');
-        a.href = url;
-        a.download = 'hex-tiles-export.png';
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('PNG exported');
-    };
     dom.exportEmbedBtn.onclick = () => {
         dom.exportImageBtn.classList.remove('active');
         dom.exportEmbedBtn.classList.add('active');
         dom.imageExportWrap.classList.remove('visible');
         dom.embedCodeWrap.classList.add('visible');
-        const cr = dom.cvs.getBoundingClientRect(),
-            fx = state.efRect.x - cr.left,
-            fy = state.efRect.y - cr.top;
-        const targetLong = parseInt(dom.exportSide.value) || 1920,
-            currentLong = Math.max(state.efRect.w, state.efRect.h),
-            scale = targetLong / currentLong;
-        const eW = Math.round(state.efRect.w * scale),
-            eH = Math.round(state.efRect.h * scale),
-            eZoom = state.zoom * scale,
-            ePanX = (state.panX - fx) * scale,
-            ePanY = (state.panY - fy) * scale;
-        const eMarkers = state.gradientMarkers.map(m => ({
-            x: (m.x - fx) * scale,
-            y: (m.y - fy) * scale,
-            color: m.color
-        }));
-        const data = {
-            w: eW,
-            h: eH,
-            zoom: eZoom,
-            panX: ePanX,
-            panY: ePanY,
-            origZoom: state.zoom,
-            showGrid: state.showGrid,
-            markersVisible: false,
-            showBgStars: state.showBgStars,
-            flowEnabled: state.flowEnabled,
-            inertiaEnabled: state.inertiaEnabled,
-            rotMode: state.rotMode,
-            randomSeed: state.randomSeed,
-            rotSeed: state.rotSeed,
-            curveLineWidth: state.curveLineWidth,
-            alterTilesRatio: state.alterTilesRatio,
-            texTf: {
-                ...state.texTf
-            },
-            curveColors: [...state.curveColors],
-            markers: eMarkers,
-            rotOverrides: serializeRotOverrides(),
-            texture: getTextureDataUrl(),
-            flowEnabled: state.flowEnabled,
-            liveTwistsEnabled: state.liveTwistsEnabled,
-        };
-        let encoded;
-        try {
-            encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-        } catch (e) {
-            toast('Too much data to encode');
-            return;
-        }
-        const baseUrl = location.href.split('#')[0];
-        dom.embedCode.value = `<iframe src="${baseUrl}#embed=${encoded}" width="${eW}" height="${eH}" frameborder="0" style="border:none;width:${eW}px;height:${eH}px;"></iframe>`;
-        toast('Embed code generated');
+        generateEmbedCode();
     };
+
     dom.copyEmbedBtn.onclick = async () => {
         try {
             await navigator.clipboard.writeText(dom.embedCode.value);
@@ -279,6 +187,12 @@ export function setupExport() {
         }
     };
 
+    dom.fmtPdfBtn.onclick = exportToPDF;
+    dom.fmtSvgBtn.onclick = exportToSVG;
+    dom.fmtPngBtn.onclick = exportToPNG;
+}
+
+function setupExportFrameDragging() {
     function simulateMouseEvent(e) {
         const tag = e.target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
@@ -300,15 +214,10 @@ export function setupExport() {
         e.target.dispatchEvent(evt);
         e.preventDefault();
     }
-    dom.exportOverlay.addEventListener('touchstart', simulateMouseEvent, {
-        passive: false
-    });
-    dom.exportOverlay.addEventListener('touchmove', simulateMouseEvent, {
-        passive: false
-    });
-    dom.exportOverlay.addEventListener('touchend', simulateMouseEvent, {
-        passive: false
-    });
+
+    dom.exportOverlay.addEventListener('touchstart', simulateMouseEvent, { passive: false });
+    dom.exportOverlay.addEventListener('touchmove', simulateMouseEvent, { passive: false });
+    dom.exportOverlay.addEventListener('touchend', simulateMouseEvent, { passive: false });
 
     dom.exportFrame.addEventListener('mousedown', e => {
         const h = e.target.dataset.h;
@@ -335,6 +244,7 @@ export function setupExport() {
         e.preventDefault();
         e.stopPropagation();
     });
+
     dom.exportBackdrop.addEventListener('mousedown', e => {
         state.efDrag = {
             mode: 'draw',
@@ -342,8 +252,7 @@ export function setupExport() {
             my: e.clientY,
             startX: e.clientX,
             startY: e.clientY,
-            prevRect: {
-                ...state.efRect
+            prevRect: { ...state.efRect
             },
             exportW: parseInt(dom.exportW.value),
             exportH: parseInt(dom.exportH.value)
@@ -356,6 +265,7 @@ export function setupExport() {
         e.preventDefault();
         e.stopPropagation();
     });
+
     window.addEventListener('mousemove', e => {
         if (!state.efDrag) return;
         const dx = e.clientX - state.efDrag.mx,
@@ -452,145 +362,111 @@ export function setupExport() {
         }
         updateExportFrameDOM();
     });
+
     window.addEventListener('mouseup', () => {
         if (state.efDrag && state.efDrag.mode === 'draw' && (state.efRect.w < 50 || state.efRect.h < 50)) closeExportOverlay();
         state.efDrag = null;
         requestRender();
     });
-
-    dom.exportW.addEventListener('input', () => {
-        let val = parseInt(dom.exportW.value) || 50;
-        if (state.aspectLocked) dom.exportH.value = Math.round(val / state.targetRatio);
-    });
-    dom.exportH.addEventListener('input', () => {
-        let val = parseInt(dom.exportH.value) || 50;
-        if (state.aspectLocked) dom.exportW.value = Math.round(val * state.targetRatio);
-    });
-    dom.exportW.addEventListener('change', () => {
-        if (!state.aspectLocked) {
-            const val = parseInt(dom.exportW.value) || 50,
-                prev = parseFloat(dom.exportW.dataset.prev || val);
-            if (prev > 0) {
-                const ratio = val / prev;
-                state.efRect.w *= ratio;
-                clampFrameToCanvas();
-                updateExportFrameDOM();
-            }
-            dom.exportW.dataset.prev = val;
-        }
-    });
-    dom.exportH.addEventListener('change', () => {
-        if (!state.aspectLocked) {
-            const val = parseInt(dom.exportH.value) || 50,
-                prev = parseFloat(dom.exportH.dataset.prev || val);
-            if (prev > 0) {
-                const ratio = val / prev;
-                state.efRect.h *= ratio;
-                clampFrameToCanvas();
-                updateExportFrameDOM();
-            }
-            dom.exportH.dataset.prev = val;
-        }
-    });
 }
 
-function decodeHexKey(k) {
-    const ku = k >>> 0,
-        qu = ku >>> 16,
-        ru = ku & 0xFFFF;
-    const r = (ru & 0x8000) ? (ru | 0xFFFF0000) | 0 : ru;
-    const qVal = (ru & 0x8000) ? ((qu ^ 0xFFFF) & 0xFFFF) : qu;
-    const q = (qVal & 0x8000) ? (qVal | 0xFFFF0000) | 0 : qVal;
-    return {
-        q,
-        r
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  EXPORT FORMAT HANDLERS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function getExportParams() {
+    const cr = dom.cvs.getBoundingClientRect(),
+        fx = state.efRect.x - cr.left,
+        fy = state.efRect.y - cr.top;
+    const targetLong = parseInt(dom.exportSide.value) || 1920,
+        currentLong = Math.max(state.efRect.w, state.efRect.h),
+        scale = targetLong / currentLong;
+    const eW = Math.round(state.efRect.w * scale),
+        eH = Math.round(state.efRect.h * scale),
+        eZoom = state.zoom * scale,
+        ePanX = (state.panX - fx) * scale,
+        ePanY = (state.panY - fy) * scale;
+    return { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY };
+}
+
+async function exportToPDF() {
+    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY } = getExportParams();
+    const svgString = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
+    const parser = new DOMParser(),
+        svgDoc = parser.parseFromString(svgString, "image/svg+xml"),
+        svgElement = svgDoc.documentElement;
+    const { jsPDF } = window.jspdf, orientation = eW > eH ? 'landscape' : 'portrait';
+    const pdf = new jsPDF({ orientation, unit: 'px', format: [eW, eH], compress: true });
+    await pdf.svg(svgElement, { x: 0, y: 0, width: eW, height: eH });
+    pdf.save('hex-tiles-export.pdf');
+    toast('PDF exported (Vector)');
+}
+
+function exportToSVG() {
+    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY } = getExportParams();
+    const svg = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
+    const blob = new Blob([svg], { type: 'image/svg+xml' }),
+        url = URL.createObjectURL(blob),
+        a = document.createElement('a');
+    a.href = url;
+    a.download = 'hex-tiles-export.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('SVG exported');
+}
+
+async function exportToPNG() {
+    const { fx, fy, scale, eW, eH } = getExportParams();
+    const off = document.createElement('canvas');
+    renderToOffscreen(off, eW, eH, fx, fy, state.efRect.w, state.efRect.h);
+    const blob = await canvasToBlob(off, 'image/png'),
+        url = URL.createObjectURL(blob),
+        a = document.createElement('a');
+    a.href = url;
+    a.download = 'hex-tiles-export.png';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('PNG exported');
+}
+
+function generateEmbedCode() {
+    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY } = getExportParams();
+    const eMarkers = state.gradientMarkers.map(m => ({
+        x: (m.x - fx) * scale,
+        y: (m.y - fy) * scale,
+        color: m.color
+    }));
+    const data = {
+        w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
+        origZoom: state.zoom, showGrid: state.showGrid,
+        markersVisible: false, showBgStars: state.showBgStars,
+        flowEnabled: state.flowEnabled, inertiaEnabled: state.inertiaEnabled,
+        rotMode: state.rotMode, randomSeed: state.randomSeed, rotSeed: state.rotSeed,
+        curveLineWidth: state.curveLineWidth, alterTilesRatio: state.alterTilesRatio,
+        texTf: { ...state.texTf }, curveColors: [...state.curveColors],
+        markers: eMarkers, rotOverrides: serializeRotOverrides(),
+        texture: getTextureDataUrl(), liveTwistsEnabled: state.liveTwistsEnabled
     };
-}
-
-function serializeRotOverrides() {
-    const out = [];
-    for (const [k, rot] of state.rotOverrides.entries()) {
-        const {
-            q,
-            r
-        } = decodeHexKey(k);
-        out.push([q, r, rot]);
-    }
-    return out;
-}
-
-function getTextureDataUrl() {
-    if (!state.texImg) return null;
+    let encoded;
     try {
-        const c = document.createElement('canvas');
-        c.width = state.texImg.naturalWidth || state.texImg.width;
-        c.height = state.texImg.naturalHeight || state.texImg.height;
-        c.getContext('2d').drawImage(state.texImg, 0, 0);
-        return c.toDataURL('image/png');
+        encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     } catch (e) {
-        return null;
+        toast('Too much data to encode');
+        return;
     }
+    const baseUrl = location.href.split('#')[0];
+    dom.embedCode.value = `<iframe src="${baseUrl}#embed=${encoded}" width="${eW}" height="${eH}" frameborder="0" style="border:none;width:${eW}px;height:${eH}px;"></iframe>`;
+    toast('Embed code generated');
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  OVERLAY & EXPORT FRAME UI
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function openExportOverlay() {
     let safety = 10000;
     while (safety-- > 0 && state.queue.length > 0) processQueue();
-
-    for (const [id, edgeData] of state.edgeRgbMap.entries()) {
-        let targetCurveID = -1,
-            targetRgb = null;
-        if (state.curveColors.length === 1) {
-            const c = state.curveColorsRGB[0];
-            if (c) targetRgb = {
-                r: c.tr !== undefined ? c.tr : c.r,
-                g: c.tg !== undefined ? c.tg : c.g,
-                b: c.tb !== undefined ? c.tb : c.b
-            };
-            targetCurveID = -2;
-        } else if (state.curveMap.has(id)) {
-            targetCurveID = state.curveMap.get(id);
-            const curve = state.curves.get(targetCurveID);
-            if (curve) {
-                let c = curve.color;
-                if (typeof c === 'number') {
-                    const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
-                    targetRgb = {
-                        r: cc.tr !== undefined ? cc.tr : cc.r,
-                        g: cc.tg !== undefined ? cc.tg : cc.g,
-                        b: cc.tb !== undefined ? cc.tb : cc.b
-                    };
-                } else {
-                    const rgb = hexToRgb(c);
-                    targetRgb = {
-                        r: rgb[0],
-                        g: rgb[1],
-                        b: rgb[2]
-                    };
-                }
-            }
-        }
-        if (targetRgb) {
-            if (!edgeData) state.edgeRgbMap.set(id, {
-                rgb: [targetRgb.r, targetRgb.g, targetRgb.b],
-                alpha: 1,
-                targetCurveID,
-                rippleTime: 0,
-                rippleQ: 0,
-                rippleR: 0,
-                rippleActive: false,
-                colorStr: ''
-            });
-            else {
-                edgeData.rgb[0] = targetRgb.r;
-                edgeData.rgb[1] = targetRgb.g;
-                edgeData.rgb[2] = targetRgb.b;
-                edgeData.alpha = 1.0;
-                edgeData.targetCurveID = targetCurveID;
-                edgeData.rippleActive = false;
-                edgeData.colorStr = '';
-            }
-        } else state.edgeRgbMap.delete(id);
-    }
+    processEdgeRgbMap();
 
     const cr = dom.cvs.getBoundingClientRect(),
         fw = cr.width / 2,
@@ -652,11 +528,9 @@ function updateExportFrameDOM() {
         return;
     }
     dom.exportMenu.style.display = 'block';
-    const menuW = 280,
-        menuH = 320;
-    let mx = 0,
-        my = 0,
-        placed = false;
+    const menuW = 280, menuH = 320;
+    let mx = 0, my = 0, placed = false;
+
     if (state.efRect.x + state.efRect.w + 16 + menuW <= window.innerWidth - 16) {
         mx = state.efRect.x + state.efRect.w + 16;
         my = state.efRect.y;
@@ -701,152 +575,145 @@ function clampFrameToCanvas() {
     state.efRect.h = Math.max(50, Math.min(state.efRect.h, cr.top + cr.height - state.efRect.y));
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SVG EXPORT RENDERING
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
     const now = state.exportFreezeTime || Date.now();
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
-    let exportBounds = {
-        minQ: Infinity,
-        maxQ: -Infinity,
-        minR: Infinity,
-        maxR: -Infinity
-    };
-    for (const h of exportHexes) {
-        if (h.q < exportBounds.minQ) exportBounds.minQ = h.q;
-        if (h.q > exportBounds.maxQ) exportBounds.maxQ = h.q;
-        if (h.r < exportBounds.minR) exportBounds.minR = h.r;
-        if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
-    }
+    const exportBounds = getHexBounds(exportHexes);
 
     const eSz = HEX_R * eZoom;
     const eCurveAlpha = computeFadeAlpha(state.zoom);
     const eGridAlpha = eCurveAlpha;
 
     if (state.curveColors.length >= 1 && eCurveAlpha > 0) {
-        let safety = 2000;
-        while (safety-- > 0) {
-            processQueue(exportBounds, false);
-            if (state.queue.length === 0) {
-                if (!findUncoloredTileInHexes(exportHexes)) break;
-            }
-        }
+        processExportCurves(exportBounds, exportHexes);
     }
 
     let svg = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${eW}" height="${eH}" viewBox="0 0 ${eW} ${eH}"><rect width="${eW}" height="${eH}" fill="${COLORS.bg}"/>`;
 
-    if (state.gradientMarkersRGB.length > 0) {
-        updateIDWGradientCanvas(eW, eH, scale, fx, fy, 0.5);
-        const gradUrl = state.gradientCanvas.toDataURL('image/png');
-        svg += `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
-    }
+    svg += buildSvgGradient(eW, eH, scale, fx, fy);
 
     if (state.showBgStars) {
-        const expStarPanX5 = (state.starPanX5 - fx) * scale,
-            expStarPanY5 = (state.starPanY5 - fy) * scale;
-        const expStarPanX2 = (state.starPanX2 - fx) * scale,
-            expStarPanY2 = (state.starPanY2 - fy) * scale;
-        const expStarPanX3 = (state.starPanX3 - fx) * scale,
-            expStarPanY3 = (state.starPanY3 - fy) * scale;
-        const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * scale,
-            spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * scale,
-            spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * scale;
-
-        function addStars(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime, offsetX, offsetY, blazeFade = 1.0) {
-            if (spacing < CONFIG.STAR_MIN_SPACING) return;
-            const kMin = Math.floor((0 - panX) / spacing) - 2,
-                kMax = Math.ceil((eW - panX) / spacing) + 2;
-            const jMin = Math.floor((0 - panY) / spacing) - 2,
-                jMax = Math.ceil((eH - panY) / spacing) + 2;
-            for (let k = kMin; k <= kMax; k++) {
-                for (let j = jMin; j <= jMax; j++) {
-                    const gx = panX + k * spacing,
-                        gy = panY + j * spacing;
-                    const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing,
-                        ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
-                    const x = gx + rx,
-                        y = gy + ry;
-                    if (x < -spacing || x > eW + spacing || y < -spacing || y > eH + spacing) continue;
-                    const bg = getBackgroundColorAt(x, y, coordScale, offsetX, offsetY);
-                    if (!bg) continue;
-                    const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
-                    let t = (lum - CONFIG.STAR_LUM_MIN) / CONFIG.STAR_LUM_RANGE;
-                    t = Math.max(0, Math.min(1, t));
-                    t = t * t * (3 - 2 * t);
-                    let sR = Math.round(255 * (1 - t)),
-                        sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult,
-                        r = Math.max(0.1, (size * coordScale) / 2);
-                    if (allowBlazing && zoomOutTime > 0) {
-                        const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
-                        const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration,
-                            phase = (now + offset) % cycleDuration;
-                        const blazeDuration = 1200 + hash2D(k * seed + 333, j * seed + 444) * 1800;
-                        if (phase < blazeDuration) {
-                            let blazeT = phase / blazeDuration,
-                                blazeGlow = 0,
-                                origSR = sR,
-                                origSA = sA,
-                                origR = r;
-                            if (blazeT < 0.25) {
-                                let t2 = blazeT / 0.25;
-                                r = origR * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
-                                sR = Math.round(origSR + (255 - origSR) * t2 * blazeFade);
-                                sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2 * blazeFade;
-                                blazeGlow = t2 * blazeFade;
-                            } else if (blazeT < 0.55) {
-                                let t2 = (blazeT - 0.25) / 0.30;
-                                r = origR * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeFade);
-                                sR = Math.round(origSR + (255 - origSR) * blazeFade);
-                                sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t2);
-                                blazeGlow = (1 - t2) * blazeFade;
-                            } else if (blazeT < 0.65) {
-                                sA = 0;
-                                blazeGlow = 0;
-                            } else {
-                                let t2 = (blazeT - 0.65) / 0.35;
-                                r = origR;
-                                sR = origSR;
-                                sA = origSA * t2;
-                                blazeGlow = 0;
-                            }
-                            if (blazeGlow > 0) {
-                                const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
-                                const steps = 90;
-                                for (let s = steps; s > 0; s--) {
-                                    const stepT = s / steps,
-                                        stepR = glowRadius * stepT,
-                                        stepA = (0.05 * blazeGlow) * Math.pow(1 - stepT, 1.5);
-                                    svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(150, 200, 255)" fill-opacity="${stepA.toFixed(3)}"/>`;
-                                }
-                                const steps2 = 45;
-                                for (let s = steps2; s > 0; s--) {
-                                    const stepT = s / steps2,
-                                        stepR = glowRadius * 0.5 * stepT,
-                                        stepA = (0.1 * blazeGlow) * Math.pow(1 - stepT, 1.5);
-                                    svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(255, 255, 240)" fill-opacity="${stepA.toFixed(3)}"/>`;
-                                }
-                            }
-                        }
-                    }
-                    const coreFill = `rgb(${sR},${sR},${sR})`;
-                    svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${coreFill}" fill-opacity="${sA.toFixed(3)}"/>`;
-                }
-            }
-        }
-        addStars(spacing5, CONFIG.STAR_SIZE_LARGE, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0, fx, fy);
-        addStars(spacing2, CONFIG.STAR_SIZE_MED, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0, fx, fy);
-        let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
-        if (l3Alpha > 0) {
-            let canBlaze = state.zoomOutStartTime > 0 && (now - state.zoomOutStartTime) > CONFIG.STAR_BLAZE_DELAY;
-            addStars(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, canBlaze, l3Alpha, state.zoomOutStartTime, fx, fy, 1.0);
-        }
+        svg += buildSvgStars(eW, eH, scale, fx, fy, eZoom, now);
     }
 
-    const pathsByColor = {};
-    const gridPaths = [];
+    svg += buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha);
+    
+    svg += `</svg>`;
+    return svg;
+}
+
+function buildSvgGradient(eW, eH, scale, fx, fy) {
+    if (state.gradientMarkersRGB.length === 0) return '';
+    updateIDWGradientCanvas(eW, eH, scale, fx, fy, 0.5);
+    const gradUrl = state.gradientCanvas.toDataURL('image/png');
+    return `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
+}
+
+function buildSvgStars(eW, eH, scale, fx, fy, eZoom, now) {
+    let svg = '';
+    const expStarPanX5 = (state.starPanX5 - fx) * scale, expStarPanY5 = (state.starPanY5 - fy) * scale;
+    const expStarPanX2 = (state.starPanX2 - fx) * scale, expStarPanY2 = (state.starPanY2 - fy) * scale;
+    const expStarPanX3 = (state.starPanX3 - fx) * scale, expStarPanY3 = (state.starPanY3 - fy) * scale;
+    const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * scale;
+    const spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * scale;
+    const spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * scale;
+
+    svg += addSvgStarLayer(spacing5, CONFIG.STAR_SIZE_LARGE, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0, fx, fy);
+    svg += addSvgStarLayer(spacing2, CONFIG.STAR_SIZE_MED, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0, fx, fy);
+    
+    let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
+    if (l3Alpha > 0) {
+        let canBlaze = state.zoomOutStartTime > 0 && (now - state.zoomOutStartTime) > CONFIG.STAR_BLAZE_DELAY;
+        svg += addSvgStarLayer(spacing3, CONFIG.STAR_SIZE_SMALL, 3, expStarPanX3, expStarPanY3, eW, eH, scale, now, canBlaze, l3Alpha, state.zoomOutStartTime, fx, fy, 1.0);
+    }
+    return svg;
+}
+
+function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, now, allowBlazing, alphaMult, zoomOutTime, offsetX, offsetY, blazeFade = 1.0) {
+    if (spacing < CONFIG.STAR_MIN_SPACING) return '';
+    let svg = '';
+    const kMin = Math.floor((0 - panX) / spacing) - 2,
+        kMax = Math.ceil((eW - panX) / spacing) + 2;
+    const jMin = Math.floor((0 - panY) / spacing) - 2,
+        jMax = Math.ceil((eH - panY) / spacing) + 2;
+    for (let k = kMin; k <= kMax; k++) {
+        for (let j = jMin; j <= jMax; j++) {
+            const gx = panX + k * spacing, gy = panY + j * spacing;
+            const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
+            const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
+            const x = gx + rx, y = gy + ry;
+            if (x < -spacing || x > eW + spacing || y < -spacing || y > eH + spacing) continue;
+            const bg = getBackgroundColorAt(x, y, coordScale, offsetX, offsetY);
+            if (!bg) continue;
+            const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
+            let t = (lum - CONFIG.STAR_LUM_MIN) / CONFIG.STAR_LUM_RANGE;
+            t = Math.max(0, Math.min(1, t));
+            t = t * t * (3 - 2 * t);
+            let sR = Math.round(255 * (1 - t)),
+                sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult,
+                r = Math.max(0.1, (size * coordScale) / 2);
+            if (allowBlazing && zoomOutTime > 0) {
+                const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
+                const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration,
+                    phase = (now + offset) % cycleDuration;
+                const blazeDuration = 1200 + hash2D(k * seed + 333, j * seed + 444) * 1800;
+                if (phase < blazeDuration) {
+                    let blazeT = phase / blazeDuration, blazeGlow = 0, origSR = sR, origSA = sA, origR = r;
+                    if (blazeT < 0.25) {
+                        let t2 = blazeT / 0.25;
+                        r = origR * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
+                        sR = Math.round(origSR + (255 - origSR) * t2 * blazeFade);
+                        sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2 * blazeFade;
+                        blazeGlow = t2 * blazeFade;
+                    } else if (blazeT < 0.55) {
+                        let t2 = (blazeT - 0.25) / 0.30;
+                        r = origR * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeFade);
+                        sR = Math.round(origSR + (255 - origSR) * blazeFade);
+                        sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t2);
+                        blazeGlow = (1 - t2) * blazeFade;
+                    } else if (blazeT < 0.65) {
+                        sA = 0;
+                        blazeGlow = 0;
+                    } else {
+                        let t2 = (blazeT - 0.65) / 0.35;
+                        r = origR;
+                        sR = origSR;
+                        sA = origSA * t2;
+                        blazeGlow = 0;
+                    }
+                    if (blazeGlow > 0) {
+                        const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
+                        const steps = 90;
+                        for (let s = steps; s > 0; s--) {
+                            const stepT = s / steps, stepR = glowRadius * stepT, stepA = (0.05 * blazeGlow) * Math.pow(1 - stepT, 1.5);
+                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(150, 200, 255)" fill-opacity="${stepA.toFixed(3)}"/>`;
+                        }
+                        const steps2 = 45;
+                        for (let s = steps2; s > 0; s--) {
+                            const stepT = s / steps2, stepR = glowRadius * 0.5 * stepT, stepA = (0.1 * blazeGlow) * Math.pow(1 - stepT, 1.5);
+                            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(255, 255, 240)" fill-opacity="${stepA.toFixed(3)}"/>`;
+                        }
+                    }
+                }
+            }
+            const coreFill = `rgb(${sR},${sR},${sR})`;
+            svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r.toFixed(2)}" fill="${coreFill}" fill-opacity="${sA.toFixed(3)}"/>`;
+        }
+    }
+    return svg;
+}
+
+function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
     const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : 
                 (eSz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH : 
                 (eSz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
 
-
+    const pathsByColor = {};
+    const gridPaths = [];
     const curveColorCache = new Map();
 
     function getCachedCurveColorStr(curveID) {
@@ -895,6 +762,7 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
             largeArc = Math.abs(endAngle - startAngle) > Math.PI ? 1 : 0;
         return `M ${tx1.toFixed(2)} ${ty1.toFixed(2)} A ${r.toFixed(2)} ${r.toFixed(2)} 0 ${largeArc} ${sweep} ${tx2.toFixed(2)} ${ty2.toFixed(2)}`;
     }
+
     if (eCurveAlpha > 0) {
         for (const h of exportHexes) {
             const rot = tileRot(h.q, h.r),
@@ -954,15 +822,21 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
             }
         }
     }
+    
+    let svg = '';
     const lw = (eSz / 3 * state.curveLineWidth).toFixed(2);
     const curveOpacityAttr = eCurveAlpha < 0.999 ? ` stroke-opacity="${eCurveAlpha.toFixed(3)}"` : '';
     for (const color in pathsByColor) svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"${curveOpacityAttr}/>`;
     
     const gridOpacityAttr = eGridAlpha < 0.999 ? ` stroke-opacity="${eGridAlpha.toFixed(3)}"` : '';
     if (state.showGrid && eGridAlpha > 0 && gridPaths.length > 0) svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-linecap="butt"${gridOpacityAttr}/>`;
-    svg += `</svg>`;
+    
     return svg;
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  OFFSCREEN RENDERING (PNG)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
     offCanvas.width = eW;
@@ -979,57 +853,161 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
     const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const centerHex = pixToHex(eW / 2, eH / 2, eZoom, ePanX, ePanY);
     hexes.sort((a, b) => hexDistance(a.q, a.r, centerHex.q, centerHex.r) - hexDistance(b.q, b.r, centerHex.q, centerHex.r));
-    let exportBounds = {
-        minQ: Infinity,
-        maxQ: -Infinity,
-        minR: Infinity,
-        maxR: -Infinity
-    };
-    for (const h of hexes) {
-        if (h.q < exportBounds.minQ) exportBounds.minQ = h.q;
-        if (h.q > exportBounds.maxQ) exportBounds.maxQ = h.q;
-        if (h.r < exportBounds.minR) exportBounds.minR = h.r;
-        if (h.r > exportBounds.maxR) exportBounds.maxR = h.r;
-    }
+    const exportBounds = getHexBounds(hexes);
 
     if (state.curveColors.length >= 1 && eCurveAlpha > 0) {
-        let safety = 2000;
-        while (safety-- > 0) {
-            processQueue(exportBounds, false);
-            if (state.queue.length === 0) {
-                if (!findUncoloredTileInHexes(hexes)) break;
-            }
-        }
+        processExportCurves(exportBounds, hexes);
     }
 
     const oldCtx = state.ctx;
     state.ctx = offCtx;
     const now = state.exportFreezeTime || Date.now();
+    
+    drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom);
+    drawOffscreenHexTiles(offCtx, hexes, eSz, now, eCurveAlpha, eGridAlpha);
+    
+    state.ctx = oldCtx;
+    return offCanvas;
+}
+
+function drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom) {
     offCtx.fillStyle = COLORS.bg;
     offCtx.fillRect(0, 0, eW, eH);
     drawIDWGradient(eW, eH, scale, fx, fy);
-    const expStarPanX5 = (state.starPanX5 - fx) * scale,
-        expStarPanY5 = (state.starPanY5 - fy) * scale;
-    const expStarPanX2 = (state.starPanX2 - fx) * scale,
-        expStarPanY2 = (state.starPanY2 - fy) * scale;
-    const expStarPanX3 = (state.starPanX3 - fx) * scale,
-        expStarPanY3 = (state.starPanY3 - fy) * scale;
-    drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, state.zoomOutStartTime, fx, fy); // Need to import
+    const expStarPanX5 = (state.starPanX5 - fx) * scale, expStarPanY5 = (state.starPanY5 - fy) * scale;
+    const expStarPanX2 = (state.starPanX2 - fx) * scale, expStarPanY2 = (state.starPanY2 - fy) * scale;
+    const expStarPanX3 = (state.starPanX3 - fx) * scale, expStarPanY3 = (state.starPanY3 - fy) * scale;
+    
+    const oldCtx = state.ctx;
+    state.ctx = offCtx;
+    drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, state.zoomOutStartTime, fx, fy);
+    state.ctx = oldCtx;
+}
 
+function drawOffscreenHexTiles(offCtx, hexes, eSz, now, eCurveAlpha, eGridAlpha) {
+    const oldCtx = state.ctx;
+    state.ctx = offCtx;
     for (const h of hexes) {
         const rot = tileRot(h.q, h.r);
         drawTile(h.x, h.y, eSz, rot, false, state.texImg, state.texTf, h.q, h.r, now, eCurveAlpha, 0.0);
     }
     if (state.showGrid && eGridAlpha > 0.01) {
-        traceHexGridBatch(state.ctx, hexes, eSz);
-        state.ctx.globalAlpha = eGridAlpha;
-        state.ctx.strokeStyle = COLORS.gridLine;
-        state.ctx.lineWidth = 1;
-        state.ctx.stroke();
-        state.ctx.globalAlpha = 1.0;
+        traceHexGridBatch(offCtx, hexes, eSz);
+        offCtx.globalAlpha = eGridAlpha;
+        offCtx.strokeStyle = COLORS.gridLine;
+        offCtx.lineWidth = 1;
+        offCtx.stroke();
+        offCtx.globalAlpha = 1.0;
     }
     state.ctx = oldCtx;
-    return offCanvas;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SHARED EXPORT UTILITIES
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function getHexBounds(hexes) {
+    let bounds = {
+        minQ: Infinity, maxQ: -Infinity,
+        minR: Infinity, maxR: -Infinity
+    };
+    for (const h of hexes) {
+        if (h.q < bounds.minQ) bounds.minQ = h.q;
+        if (h.q > bounds.maxQ) bounds.maxQ = h.q;
+        if (h.r < bounds.minR) bounds.minR = h.r;
+        if (h.r > bounds.maxR) bounds.maxR = h.r;
+    }
+    return bounds;
+}
+
+function processExportCurves(exportBounds, exportHexes) {
+    let safety = 2000;
+    while (safety-- > 0) {
+        processQueue(exportBounds, false);
+        if (state.queue.length === 0) {
+            if (!findUncoloredTileInHexes(exportHexes)) break;
+        }
+    }
+}
+
+function processEdgeRgbMap() {
+    for (const [id, edgeData] of state.edgeRgbMap.entries()) {
+        let targetCurveID = -1, targetRgb = null;
+        if (state.curveColors.length === 1) {
+            const c = state.curveColorsRGB[0];
+            if (c) targetRgb = {
+                r: c.tr !== undefined ? c.tr : c.r,
+                g: c.tg !== undefined ? c.tg : c.g,
+                b: c.tb !== undefined ? c.tb : c.b
+            };
+            targetCurveID = -2;
+        } else if (state.curveMap.has(id)) {
+            targetCurveID = state.curveMap.get(id);
+            const curve = state.curves.get(targetCurveID);
+            if (curve) {
+                let c = curve.color;
+                if (typeof c === 'number') {
+                    const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
+                    targetRgb = {
+                        r: cc.tr !== undefined ? cc.tr : cc.r,
+                        g: cc.tg !== undefined ? cc.tg : cc.g,
+                        b: cc.tb !== undefined ? cc.tb : cc.b
+                    };
+                } else {
+                    const rgb = hexToRgb(c);
+                    targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
+                }
+            }
+        }
+        if (targetRgb) {
+            if (!edgeData) state.edgeRgbMap.set(id, {
+                rgb: [targetRgb.r, targetRgb.g, targetRgb.b],
+                alpha: 1, targetCurveID, rippleTime: 0, rippleQ: 0, rippleR: 0,
+                rippleActive: false, colorStr: ''
+            });
+            else {
+                edgeData.rgb[0] = targetRgb.r;
+                edgeData.rgb[1] = targetRgb.g;
+                edgeData.rgb[2] = targetRgb.b;
+                edgeData.alpha = 1.0;
+                edgeData.targetCurveID = targetCurveID;
+                edgeData.rippleActive = false;
+                edgeData.colorStr = '';
+            }
+        } else state.edgeRgbMap.delete(id);
+    }
+}
+
+function decodeHexKey(k) {
+    const ku = k >>> 0,
+        qu = ku >>> 16,
+        ru = ku & 0xFFFF;
+    const r = (ru & 0x8000) ? (ru | 0xFFFF0000) | 0 : ru;
+    const qVal = (ru & 0x8000) ? ((qu ^ 0xFFFF) & 0xFFFF) : qu;
+    const q = (qVal & 0x8000) ? (qVal | 0xFFFF0000) | 0 : qVal;
+    return { q, r };
+}
+
+function serializeRotOverrides() {
+    const out = [];
+    for (const [k, rot] of state.rotOverrides.entries()) {
+        const { q, r } = decodeHexKey(k);
+        out.push([q, r, rot]);
+    }
+    return out;
+}
+
+function getTextureDataUrl() {
+    if (!state.texImg) return null;
+    try {
+        const c = document.createElement('canvas');
+        c.width = state.texImg.naturalWidth || state.texImg.width;
+        c.height = state.texImg.naturalHeight || state.texImg.height;
+        c.getContext('2d').drawImage(state.texImg, 0, 0);
+        return c.toDataURL('image/png');
+    } catch (e) {
+        return null;
+    }
 }
 
 function canvasToBlob(canvas, type) {
