@@ -106,7 +106,7 @@ body.exporting .zoom-bar { opacity: 0; pointer-events: none; }
 
 .fullscreen-btn {
     position: absolute;
-    top: 12px;
+    top: calc(12px + env(safe-area-inset-top, 0px)); 
     left: 10px;
     width: 34px;
     height: 34px;
@@ -130,7 +130,7 @@ body.exporting .zoom-bar { opacity: 0; pointer-events: none; }
 
 .stats-bar {
     position: absolute;
-    bottom: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)); 
     left: 10px;
     font-size: 7px;
     background: var(--col-fg);
@@ -179,7 +179,8 @@ body.exporting .zoom-bar { opacity: 0; pointer-events: none; }
     overflow-x: hidden;
     transition: transform .3s cubic-bezier(.4,0,.2,1);
     flex-shrink: 0;
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .sidebar::-webkit-scrollbar { width: 5px; }
@@ -192,8 +193,8 @@ body.exporting .zoom-bar { opacity: 0; pointer-events: none; }
 
 .sidebar-toggle {
     position: fixed;
-    top: 12px; 
-    right: 310px; 
+    top: calc(12px + env(safe-area-inset-top, 0px)); 
+    right: 310px;
     transform: translateX(50%); 
     z-index: 1000;
     width: 34px;
@@ -650,13 +651,24 @@ input[type=range]::-moz-range-thumb {
 }
 
 .export-close-btn {
-    position: fixed; top: 16px; right: 16px;
-    width: 38px; height: 38px;
-    border-radius: 50%; background: var(--col-card2);
-    border: 1px solid var(--col-border); color: var(--col-fg);
-    font-size: 16px; cursor: pointer; transition: all .2s;
-    display: flex; align-items: center; justify-content: center; padding: 0;
-    z-index: 520; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px)); 
+    right: 16px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--col-card2);
+    border: 1px solid var(--col-border);
+    color: var(--col-fg);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 520;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 @media (hover: hover) {
     .export-close-btn:hover {
