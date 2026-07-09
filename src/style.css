@@ -47,7 +47,7 @@ body.fullscreen-idle * {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 .zoom-bar {
     position: absolute;
-    bottom: 24px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -537,7 +537,8 @@ input[type=range]::-moz-range-thumb {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 .toast {
     position: fixed;
-    bottom: 24px; left: 50%;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px)); 
+    left: 50%;
     transform: translateX(-50%) translateY(80px);
     background: var(--col-card2);
     border: 1px solid var(--col-accent);
