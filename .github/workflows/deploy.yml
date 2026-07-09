@@ -1,60 +1,69 @@
 name: Deploy to GitHub Pages
-
 on:
   push:
     branches: ["main", "master"]
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: "pages"
   cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
+        with:
+          fetch-depth: 2
+          
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
-
+          
       - name: Install dependencies
         run: npm ci
-
+        
       - name: Prepare Deploy Info
         run: |
           SHORT_SHA=${GITHUB_SHA:0:7}
+          PREV_SHA=$(git rev-parse HEAD^ 2>/dev/null || echo "")
           DEPLOY_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          REPO_URL="https://github.com/${GITHUB_REPOSITORY}/commit/$SHORT_SHA"
-          echo "VITE_DEPLOY_INFO=<div style='text-align: left;'>Deployed: ${DEPLOY_DATE}</div><div style='text-align: left;'>Commit: <a class='deploy-link' href='${REPO_URL}' target='_blank'>${SHORT_SHA}</a></div>" >> $GITHUB_ENV
+          
+          # Check if a valid previous commit exists (handles the very first commit edge case)
+          if [ -n "$PREV_SHA" ] && [ "$PREV_SHA" != "0000000000000000000000000000000000000000" ]; then
+            PREV_SHORT_SHA=${PREV_SHA:0:7}
+            DIFF_URL="https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_SHA}...${GITHUB_SHA}"
+            COMMIT_LINE="<div style='text-align: left;'>Commit: <a class='deploy-link' href='${DIFF_URL}' target='_blank'>${PREV_SHORT_SHA} -> ${SHORT_SHA}</a></div>"
+          else
+            REPO_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+            COMMIT_LINE="<div style='text-align: left;'>Commit: <a class='deploy-link' href='${REPO_URL}' target='_blank'>${SHORT_SHA}</a></div>"
+          fi
+          
+          echo "VITE_DEPLOY_INFO=<div style='text-align: left;'>Deployed: ${DEPLOY_DATE}</div>${COMMIT_LINE}" >> $GITHUB_ENV
           
       - name: Build
         env:
           VITE_DEPLOY_INFO: ${{ env.VITE_DEPLOY_INFO }}
         run: npm run build
-
+        
       - name: Setup Pages
         uses: actions/configure-pages@v6
-
+        
       - name: Remove existing artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
           name: github-pages
-
+          
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
           path: './dist'
-
+          
   deploy:
     environment:
       name: github-pages
