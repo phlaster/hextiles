@@ -52,6 +52,7 @@ import {
     for (const [key, val] of Object.entries(map)) r.setProperty(key, val);
 })();
 
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  APPLICATION
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -163,6 +163,13 @@ export const state = {
     isRenderScheduled: false,
     lastStatsUpdate: 0,
 
+    // Fullscreen Idle Mode
+    isIdle: false,
+    idleTimer: null,
+    sidebarWasOpenBeforeIdle: false,
+    gridWasVisibleBeforeIdle: false,
+    markersWereVisibleBeforeIdle: false,
+
     // Export State
     efRect: {
         x: 0,

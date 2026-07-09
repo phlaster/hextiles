@@ -17,6 +17,11 @@ body {
     display: flex;
 }
 
+body.fullscreen-idle,
+body.fullscreen-idle * {
+    cursor: none !important;
+}
+
 #canvas-wrap {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -33,6 +38,7 @@ body {
 }
 
 #hexCanvas:active { cursor: grabbing; }
+
 
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

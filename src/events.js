@@ -189,6 +189,7 @@ export function setupEvents() {
                 document.body.classList.add('sidebar-collapsed');
                 dom.sidebarToggle.classList.add('collapsed');
             }
+            setTimeout(resetIdleTimer, 400);
         } else {
             icon.classList.remove('fa-compress');
             icon.classList.add('fa-expand');
@@ -197,9 +198,21 @@ export function setupEvents() {
                 document.body.classList.remove('sidebar-collapsed');
                 dom.sidebarToggle.classList.remove('collapsed');
             }
+            clearTimeout(state.idleTimer);
+            exitIdleState();
+            document.body.classList.remove('fullscreen-idle');
         }
         resize();
         requestRender();
+    });
+
+    // Fullscreen Idle Listeners
+    ['mousemove', 'mousedown', 'wheel', 'keydown', 'touchstart'].forEach(evt => {
+        window.addEventListener(evt, () => {
+            if (document.fullscreenElement) resetIdleTimer();
+        }, {
+            passive: true
+        });
     });
 
     dom.sidebarToggle.addEventListener('click', () => {
@@ -1040,29 +1053,30 @@ export function scheduleLiveTwist() {
 function performLiveTwist() {
     // Don't interrupt user interaction or exports
     if (state.isDrag || state.touchState.mode !== 'none' || state.isExporting) return;
-    
-    const W = dom.cvs.width, H = dom.cvs.height;
+
+    const W = dom.cvs.width,
+        H = dom.cvs.height;
     const visZoom = (state.isEmbedMode && state.embedData && state.embedData.origZoom) ? state.embedData.origZoom : state.zoom;
     const visSz = HEX_R * visZoom;
-    
+
     // Only twist if curves are visible enough
     if (visSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) return;
-    
+
     const hexes = visibleHexes(state.zoom, state.panX, state.panY, W, H);
     const candidates = [];
-    
+
     // Filter to central 80% area
     for (const h of hexes) {
         if (h.x > W * 0.1 && h.x < W * 0.9 && h.y > H * 0.1 && h.y < H * 0.9) {
             candidates.push(h);
         }
     }
-    
+
     if (candidates.length === 0) return;
-    
+
     let bestImpact = -1;
     let bestHexes = [];
-    
+
     // Evaluate impact for each candidate
     for (const h of candidates) {
         const impact = predictTwistImpact(h.q, h.r);
@@ -1073,7 +1087,7 @@ function performLiveTwist() {
             bestHexes.push(h);
         }
     }
-    
+
     if (bestHexes.length > 0 && bestImpact > 0) {
         const chosen = bestHexes[Math.floor(Math.random() * bestHexes.length)];
         rotateTile(chosen.q, chosen.r);
@@ -1084,7 +1098,7 @@ function predictTwistImpact(q, r) {
     const k = (tileRot(q, r) / 60) % 6;
     const alter = isTileAlter(q, r);
     const newK = (k + 1) % 6;
-    
+
     // Determine the new pairs if rotated by 60 degrees
     const newPairs = alter ? [
         [(0 + newK) % 6, (1 + newK) % 6],
@@ -1095,17 +1109,18 @@ function predictTwistImpact(q, r) {
         [(4 + newK) % 6, (0 + newK) % 6],
         [(1 + newK) % 6, (5 + newK) % 6]
     ];
-    
+
     let impact = 0;
-    
+
     // Check how many edges will change color due to new pairings
     for (const pair of newPairs) {
-        const e1 = pair[0], e2 = pair[1];
+        const e1 = pair[0],
+            e2 = pair[1];
         const id1 = edgeID(q, r, e1);
         const id2 = edgeID(q, r, e2);
         const c1 = state.curveMap.has(id1) ? state.curveMap.get(id1) : -1;
         const c2 = state.curveMap.has(id2) ? state.curveMap.get(id2) : -1;
-        
+
         if (c1 !== c2) {
             if (c1 !== -1 && c2 !== -1) impact += 2; // Two colors merging
             else if (c1 !== -1 || c2 !== -1) impact += 1; // One color expanding into blank
@@ -1307,6 +1322,61 @@ function drawPreview() {
         pctx.fillStyle = COLORS.previewDot;
         pctx.fill();
     }
+}
+
+export function resetIdleTimer() {
+    if (!document.fullscreenElement) return;
+    clearTimeout(state.idleTimer);
+    if (state.isIdle) exitIdleState();
+    state.idleTimer = setTimeout(enterIdleState, 5000);
+}
+
+function enterIdleState() {
+    if (!document.fullscreenElement) return;
+    state.isIdle = true;
+
+    state.hoveredQ = null;
+    state.hoveredR = null;
+    state.visHoverX = null;
+    state.visHoverY = null;
+
+    document.body.classList.add('fullscreen-idle');
+    document.body.style.cursor = 'none';
+    dom.cvs.style.cursor = 'none';
+
+    state.sidebarWasOpenBeforeIdle = !dom.sidebar.classList.contains('collapsed');
+    if (state.sidebarWasOpenBeforeIdle) {
+        dom.sidebar.classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
+        dom.sidebarToggle.classList.add('collapsed');
+    }
+
+    state.gridWasVisibleBeforeIdle = state.showGrid;
+    if (state.gridWasVisibleBeforeIdle) state.showGrid = false;
+
+    state.markersWereVisibleBeforeIdle = state.markersVisible;
+    if (state.markersWereVisibleBeforeIdle) state.markersVisible = false;
+
+    requestRender();
+}
+
+function exitIdleState() {
+    if (!state.isIdle) return;
+    state.isIdle = false;
+    document.body.classList.remove('fullscreen-idle');
+    document.body.style.cursor = '';
+    dom.cvs.style.cursor = '';
+
+    if (state.sidebarWasOpenBeforeIdle) {
+        dom.sidebar.classList.remove('collapsed');
+        document.body.classList.remove('sidebar-collapsed');
+        dom.sidebarToggle.classList.remove('collapsed');
+    }
+
+    if (state.gridWasVisibleBeforeIdle) state.showGrid = true;
+    if (state.markersWereVisibleBeforeIdle) state.markersVisible = true;
+
+    requestRender();
 }
 
 state.setZoom = setZoom;
