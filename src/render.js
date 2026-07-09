@@ -694,7 +694,7 @@ export function render() {
     }
 
     // ──── HOVER & TOUCH OUTLINES ────
-    if (lod >= 1 && visZoom > CONFIG.ZOOM_FADE_MID + 0.001 && !state.isExporting) {
+    if (visZoom > CONFIG.ZOOM_FADE_MID + 0.001 && !state.isExporting) {
         const shouldShowHover = 
             // Regular mode: mouse is not dragging and is over the canvas
             (!state.isEmbedMode && !state.isDrag && state.hoveredQ !== null && state.hoveredR !== null) ||
@@ -732,7 +732,7 @@ export function render() {
                     state.visHoverY = p.y;
                 }
             }
-            drawHoverStroke(state.visHoverX, state.visHoverY, sz, grid);
+            drawHoverStroke(state.visHoverX, state.visHoverY, sz, grid, gridAlpha);
         }
 
         // Handle touch outlines (ripples)
@@ -748,7 +748,7 @@ export function render() {
                 const p = hexToPix(t.q, t.r, z, px, py);
                 state.ctx.save();
                 traceHexPath(state.ctx, p.x, p.y, grid ? sz * 0.95 : sz);
-                state.ctx.globalAlpha = t.alpha;
+                state.ctx.globalAlpha = t.alpha * gridAlpha;
                 state.ctx.lineWidth = 3;
                 state.ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
                 state.ctx.stroke();
@@ -814,6 +814,49 @@ export function render() {
             for (const id of state.edgeRgbMap.keys())
                 if (!visibleEdgeIDs.has(id)) state.edgeRgbMap.delete(id);
         }
+    }
+
+    // ──── CUSTOM LUMINOSITY CURSOR ────
+    // Only draw if using a mouse, not exporting, not idle, and within canvas bounds
+    if (!state.isTouchDevice && !state.isExporting && !state.isIdle && !state.isDragMarker &&
+        state.mouseScreenX >= 0 && state.mouseScreenX <= W &&
+        state.mouseScreenY >= 0 && state.mouseScreenY <= H) {
+
+        // 1. Sample the underlying background color at the cursor's exact position
+        const bg = getBackgroundColorAt(state.mouseScreenX, state.mouseScreenY);
+        let r = parseInt(COLORS.bg.slice(1, 3), 16);
+        let g = parseInt(COLORS.bg.slice(3, 5), 16);
+        let b = parseInt(COLORS.bg.slice(5, 7), 16);
+
+        if (bg) {
+            r = bg[0]; g = bg[1]; b = bg[2];
+        }
+
+        // 2. Calculate perceived luminance
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        const isDark = lum < 140; // Threshold to flip between white/black for max contrast
+
+        const cx = state.mouseScreenX;
+        const cy = state.mouseScreenY;
+        const radius = 12;
+        const cursorColor = isDark ? '255, 255, 255' : '0, 0, 0';
+
+        state.ctx.save();
+
+        // 3. Draw the semi-transparent filled circle
+        state.ctx.globalAlpha = 0.5;
+        state.ctx.fillStyle = `rgba(${cursorColor}, 1)`;
+        state.ctx.beginPath();
+        state.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        state.ctx.fill();
+
+        // 4. Draw a crisp outer ring for definition against any background
+        // state.ctx.globalAlpha = 0.8;
+        // state.ctx.lineWidth = 1.5;
+        // state.ctx.strokeStyle = `rgba(${cursorColor}, 1)`;
+        // state.ctx.stroke();
+
+        state.ctx.restore();
     }
 
     if (keepRendering || state.edgeColorAnimating || gradColorAnimating || curveColorAnimating) requestRender();
@@ -1151,14 +1194,11 @@ function applyCurveStyle(q, r, e, sz, now) {
     return true;
 }
 
-function drawHoverStroke(cx, cy, sz, grid) {
-    if (state.interactionFade < 0.01) return;
-    
+function drawHoverStroke(cx, cy, sz, grid, alpha = 1) {
+    if (state.interactionFade < 0.01 || alpha < 0.01) return;
     const rSz = grid ? sz * 0.95 : sz;
     state.ctx.save();
-    
-    state.ctx.globalAlpha = state.interactionFade;
-    
+    state.ctx.globalAlpha = state.interactionFade * alpha;
     traceHexPath(state.ctx, cx, cy, rSz);
     state.ctx.lineWidth = 3;
     state.ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
