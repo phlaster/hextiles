@@ -453,46 +453,84 @@ export function render() {
         }
     }
 
-    let driftX = 0,
-        driftY = 0;
-    if (state.flowEnabled && !state.isExporting) {
-        let speedMult = (visZoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
-        let isHovering = state.hoveredQ !== null && state.hoveredR !== null;
-        if (isHovering && state.flowState === 'drift' && (state.flowStateEndTime - now) > 2000) state.flowStateEndTime = now + 2000;
-        if (now > state.flowStateEndTime) {
-            if (state.flowState === 'drift') {
-                state.flowState = 'turn';
-                state.flowStateEndTime = now + (isHovering ? 1000 : CONFIG.FLOW_TURN_DURATION);
-                let baseAngle = state.driftAngle;
-                if (isHovering) {
-                    baseAngle = Math.atan2(state.mouseScreenY - H / 2, state.mouseScreenX - W / 2) + Math.PI;
-                }
-                let turnAmount = 0;
-                while (true) {
-                    let theta = (Math.random() - 0.5) * Math.PI * 2;
-                    if (Math.random() <= (1 + Math.cos(theta)) / 2) {
-                        turnAmount = theta;
-                        break;
-                    }
-                }
-                state.driftTargetAngle = baseAngle + turnAmount;
-            } else {
-                state.flowState = 'drift';
-                state.driftAngle = state.driftTargetAngle;
-                state.flowStateEndTime = now + (isHovering ? 5000 : (CONFIG.DRIFT_TIMER_MIN + Math.random() * CONFIG.DRIFT_TIMER_RANGE));
-                state.driftTargetSpeed = (CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE) * speedMult;
-            }
+    let driftX = 0, driftY = 0;
+
+    // 1. Smooth Enable/Disable Transition
+    const targetFlowIntensity = state.flowEnabled && !state.isExporting ? 1 : 0;
+    if (state.flowIntensity !== targetFlowIntensity) {
+        state.flowIntensity += (targetFlowIntensity - state.flowIntensity) * 0.05; // Lerp factor for smoothness
+        if (Math.abs(state.flowIntensity - targetFlowIntensity) < 0.001) {
+            state.flowIntensity = targetFlowIntensity;
         }
-        if (state.flowState === 'turn') {
-            let angleDiff = state.driftTargetAngle - state.driftAngle;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            state.driftAngle += angleDiff * 0.03;
+        keepRendering = true;
+    }
+
+    // 2. Core Flow Animation
+    if (state.flowIntensity > 0 && !state.isExporting) {
+        // Initialize on first run
+        if (!state.flowCycleStarted) {
+            state.flowCycleStarted = true;
+            state.flowTargetAngle = getHippopedeAngle();
+            state.flowStartAngle = state.flowTargetAngle;
+            state.flowCurrentAngle = state.flowTargetAngle;
+            state.flowTime = 0;
+            state.flowLastTime = now;
+            state.flowLastCycle = 0;
+            state.flowMaxSpeed = CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE;
         }
-        let fluctuation = Math.sin(now / 800) * 0.2 + Math.sin(now / 350) * 0.1;
-        state.driftSpeed += ((state.driftTargetSpeed + (state.driftTargetSpeed * fluctuation)) - state.driftSpeed) * 0.02;
-        driftX = Math.cos(state.driftAngle) * state.driftSpeed;
-        driftY = Math.sin(state.driftAngle) * state.driftSpeed;
+
+        // Advance time (capped at 50ms to prevent huge jumps on tab refocus)
+        const dtMs = Math.min(now - state.flowLastTime, 50);
+        state.flowLastTime = now;
+        state.flowTime += dtMs;
+
+        const cycleDuration = 20000; // 12 seconds
+        const t = (state.flowTime % cycleDuration) / cycleDuration * 2 * Math.PI;
+        const currentCycle = Math.floor(state.flowTime / cycleDuration);
+
+        // Cycle completion: pick new target angle and max speed
+        if (currentCycle > state.flowLastCycle) {
+            state.flowLastCycle = currentCycle;
+            state.flowStartAngle = state.flowCurrentAngle;
+            state.flowTargetAngle = getHippopedeAngle();
+            state.flowMaxSpeed = CONFIG.DRIFT_SPEED_BASE + Math.random() * CONFIG.DRIFT_SPEED_RANGE;
+        }
+
+        // Angle Lerp: Transition from startAngle to targetAngle during t in (0, pi/2)
+        const halfPi = Math.PI / 2;
+        if (t <= halfPi) {
+            const lerpFactor = t / halfPi;
+            let diff = state.flowTargetAngle - state.flowStartAngle;
+            // Ensure we take the shortest path around the circle
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            state.flowCurrentAngle = state.flowStartAngle + diff * lerpFactor;
+        } else {
+            state.flowCurrentAngle = state.flowTargetAngle;
+        }
+
+        // Speed Law: -(1 - cos(t + pi))^3 / 9 + 1
+        // Note: cos(t + pi) = -cos(t), so 1 - cos(t + pi) = 1 + cos(t)
+        const timeSpeedMult = 1 - Math.pow(1 + Math.cos(t), 3) / 9;
+        
+        // Apply zoom scaling (preserving your original low-zoom behavior)
+        const zoomSpeedMult = (visZoom <= CONFIG.ZOOM_FADE_MID) ? CONFIG.FLOW_SPEED_MULT_LOW_ZOOM : 1.0;
+        
+        // Final speed incorporates base max, time pulse, zoom scale, and smooth intensity
+        const finalSpeed = state.flowMaxSpeed * zoomSpeedMult * timeSpeedMult * state.flowIntensity;
+
+        driftX = Math.cos(state.flowCurrentAngle) * finalSpeed;
+        driftY = Math.sin(state.flowCurrentAngle) * finalSpeed;
+        
+        // Store current flow velocity for inertia handoff
+        state.currentFlowVX = driftX;
+        state.currentFlowVY = driftY;
+        
+        keepRendering = true;
+    } else {
+        // Reset tracked velocity when flow is fully off
+        state.currentFlowVX = 0;
+        state.currentFlowVY = 0;
     }
 
     if ((state.isDrag || state.touchState.mode === 'pan' || state.touchState.mode === 'pan_wait') && Date.now() - state.lastPanMoveTime > 60) {
@@ -518,7 +556,7 @@ export function render() {
         if (Math.abs(state.panVY) < CONFIG.INERTIA_THRESHOLD) state.panVY = 0;
         if (state.panVX !== 0 || state.panVY !== 0) keepRendering = true;
     }
-    if (state.flowEnabled && (!state.isDrag || state.isEmbedMode) && !state.isExporting) {
+    if (state.flowEnabled && state.flowIntensity > 0 && (!state.isDrag || state.isEmbedMode) && !state.isExporting) {
         state.panX += driftX;
         state.panY += driftY;
         state.starPanX5 += driftX * CONFIG.STAR_PARALLAX_LARGE;
@@ -1088,4 +1126,19 @@ function drawHoverStroke(cx, cy, sz, grid) {
     state.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
     state.ctx.stroke();
     state.ctx.restore();
+}
+
+// Samples an angle from the normalized Hippopede distribution: r^2 = 2.8(1 - 0.7*sin^2(theta))
+// Uses Newton-Raphson to invert the exact CDF: F(theta) = (0.65*theta + 0.175*sin(2*theta)) / (1.3*PI)
+function getHippopedeAngle() {
+    const U = Math.random();
+    let theta = U * 2 * Math.PI; // Initial guess
+    for (let i = 0; i < 5; i++) {
+        const sin2t = Math.sin(2 * theta);
+        const cos2t = Math.cos(2 * theta);
+        const F = (0.65 * theta + 0.175 * sin2t) / (1.3 * Math.PI);
+        const f = (0.65 + 0.35 * cos2t) / (1.3 * Math.PI); // Derivative
+        theta -= (F - U) / f;
+    }
+    return ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 }

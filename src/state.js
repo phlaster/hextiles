@@ -76,12 +76,17 @@ export const state = {
     panVX: 0,
     panVY: 0,
     lastPanMoveTime: 0,
-    driftAngle: Math.random() * Math.PI * 2,
-    driftTargetAngle: Math.random() * Math.PI * 2,
-    flowState: 'drift',
-    flowStateEndTime: 0,
-    driftSpeed: 0.5,
-    driftTargetSpeed: 0.5,
+    flowIntensity: 0,
+    flowTime: 0,
+    flowLastTime: 0,
+    flowLastCycle: -1,
+    flowStartAngle: 0,
+    flowTargetAngle: 0,
+    flowCurrentAngle: 0,
+    flowMaxSpeed: 0.5,
+    flowCycleStarted: false,
+    currentFlowVX: 0,
+    currentFlowVY: 0,
 
     // Grid & Rotation
     rotMode: 'hash',
@@ -190,4 +195,3 @@ export const state = {
 };
 
 state.curveCtx = state.curveCanvas.getContext('2d');
-state.driftTargetAngle = state.driftAngle;

@@ -873,6 +873,17 @@ export function setupEvents() {
     });
     dom.flowToggle.addEventListener('change', function() {
         state.flowEnabled = this.checked;
+        
+        if (!state.isEmbedMode) {
+            if (!state.flowEnabled && state.inertiaEnabled) {
+                state.panVX += state.currentFlowVX;
+                state.panVY += state.currentFlowVY;
+            } else if (state.flowEnabled) {
+                state.panVX = 0;
+                state.panVY = 0;
+            }
+        }
+        
         requestRender();
     });
     dom.liveTwistsToggle.addEventListener('change', function() {
