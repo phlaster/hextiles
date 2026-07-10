@@ -57,16 +57,6 @@ const PI_DIV_3 = CONFIG.PI_DIV_3;
 const TWO_PI_DIV_3 = CONFIG.TWO_PI_DIV_3;
 const FOUR_PI_DIV_3 = CONFIG.FOUR_PI_DIV_3;
 
-export function computeFadeAlpha(zoom) {
-    const visSz = HEX_R * zoom;
-    const fadeStartSz = HEX_R * CONFIG.ZOOM_FADE_START_MULT;
-    const fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
-    if (visSz <= fadeEndSz + 0.5) return 0;
-    if (visSz >= fadeStartSz) return 1;
-    const t = (visSz - fadeEndSz) / (fadeStartSz - fadeEndSz);
-    return t * t * (3 - 2 * t);
-}
-
 export function requestRender() {
     if (!state.isRenderScheduled) {
         state.isRenderScheduled = true;
@@ -566,22 +556,22 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
     }
     const rSz = grid ? sz * 0.95 : sz;
     state.ctx.save();
+    
+    state.ctx.globalAlpha = curveAlpha;
+
     if (img) {
         traceHexPath(state.ctx, cx, cy, rSz);
         state.ctx.clip();
         state.ctx.translate(cx, cy);
         state.ctx.rotate(rot * CONFIG.DEG2RAD);
         
-		if (state.isEmbedMode) {
-			const drawSz = sz * 2.6;
-			if (state.elementsFade !== undefined) {
-				state.ctx.globalAlpha = state.elementsFade;
-			}
-			state.ctx.drawImage(img, -drawSz / 2, -drawSz / 2, drawSz, drawSz);
-			if (state.elementsFade !== undefined) {
-				state.ctx.globalAlpha = 1.0;
-			}
-		} else {
+        const needsAlpha = curveAlpha < 0.999;
+        if (needsAlpha) state.ctx.globalAlpha = curveAlpha;
+
+        if (state.isEmbedMode) {
+            const drawSz = sz * 2.6;
+            state.ctx.drawImage(img, -drawSz / 2, -drawSz / 2, drawSz, drawSz);
+        } else {
             state.ctx.rotate(tf.rot * CONFIG.DEG2RAD);
             const baseHexSize = 88;
             const sizeScale = sz / baseHexSize;
@@ -591,18 +581,19 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
             const iSz = baseHexSize * 2.6;
             state.ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
         }
+
+        if (needsAlpha) state.ctx.globalAlpha = 1.0;
     } else {
         state.ctx.translate(cx, cy);
         state.ctx.rotate(rot * CONFIG.DEG2RAD);
         const a = sz * SQRT3 / 2;
         state.ctx.lineCap = 'butt';
-        const ext = sz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : 
-            (sz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH : 
+        const ext = sz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH :
+            (sz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH :
             (sz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
         const logicalRot = tileRot(hq, hr);
         const k = (logicalRot / 60) % 6;
         if (curveAlpha > 0.01) {
-            state.ctx.globalAlpha = curveAlpha;
             const alter = isTileAlter(hq, hr);
             if (alter) {
                 if (applyCurveStyle(hq, hr, (0 + k) % 6, sz, now)) {
@@ -638,7 +629,6 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
                 }
             }
             state.ctx.setLineDash([]);
-            state.ctx.globalAlpha = 1.0;
         }
     }
     state.ctx.restore();
@@ -884,21 +874,27 @@ function updateZoomOutTime(visZoom, now) {
 }
 
 function computeAlphas(visZoom) {
-    // 1. Use effectiveZoom to prevent embed resolution scaling from breaking the fade threshold
+    const ZOOM_THRESHOLD = 0.24;
     const effectiveZoom = state.isEmbedMode && state.embedData ? state.embedData.origZoom : visZoom;
     
-    // 2. Restore the continuous fade using the existing computeFadeAlpha function
-    const curveAlpha = computeFadeAlpha(effectiveZoom);
-    let gridAlpha = curveAlpha;
-
+    // Trigger at 24% zoom, but animate the transition
+    state.targetElementsFade = effectiveZoom < ZOOM_THRESHOLD ? 0.0 : 1.0;
+    
+    const fadeSpeed = state.targetElementsFade > state.elementsFade ? 0.3 : 0.5;
+    state.elementsFade += (state.targetElementsFade - state.elementsFade) * fadeSpeed;
+    if (Math.abs(state.targetElementsFade - state.elementsFade) < 0.005) {
+        state.elementsFade = state.targetElementsFade;
+    }
+    
     // Interaction fade (driven by targetInteractionFade)
     const intFadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.5;
     state.interactionFade += (state.targetInteractionFade - state.interactionFade) * intFadeSpeed;
     
-    const fadeAnimating = Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001;
+    const finalCurveAlpha = state.elementsFade * state.interactionFade;
+    const finalGridAlpha = state.elementsFade * state.interactionFade;
     
-    const finalCurveAlpha = curveAlpha * state.interactionFade;
-    const finalGridAlpha = gridAlpha * state.interactionFade;
+    const fadeAnimating = Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001 || 
+                          Math.abs(state.targetElementsFade - state.elementsFade) > 0.005;
     
     return { curveAlpha: finalCurveAlpha, gridAlpha: finalGridAlpha, fadeAnimating };
 }

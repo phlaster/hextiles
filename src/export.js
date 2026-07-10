@@ -34,8 +34,7 @@ import {
     drawTile,
     drawBackgroundStars,
     drawIDWGradient,
-    updateIDWGradientCanvas,
-    computeFadeAlpha
+    updateIDWGradientCanvas
 } from './render.js';
 import {
     toast
@@ -428,7 +427,7 @@ function exportToSVG() {
 async function exportToPNG() {
     const params = getExportParams();
     const off = document.createElement('canvas');
-    renderToOffscreen(off, params); 
+    renderToOffscreen(off, params);
     const blob = await canvasToBlob(off, 'image/png'),
         url = URL.createObjectURL(blob),
         a = document.createElement('a');
@@ -631,8 +630,8 @@ function buildExportSVG(params) {
     const now = state.exportFreezeTime || Date.now();
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const exportBounds = getHexBounds(exportHexes);
-
     const eSz = HEX_R * eZoom;
+    
     const eCurveAlpha = state.elementsFade;
     const eGridAlpha = eCurveAlpha;
 
@@ -857,10 +856,9 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
     let svg = '';
 
     // 3. Add Texture (Rasterized raw, clipped via SVG clipPath)
-    if (state.texImg) {
+    if (state.texImg && eCurveAlpha > 0) {
         const { dataUrl, width, height } = rasterizeRawTexture(eSz);
         
-        // Define the raw texture image and the unrotated hex clip path
         svg += `<defs>`;
         svg += `<image id="hexTexRaw" href="${dataUrl}" width="${width}" height="${height}" x="${-width/2}" y="${-height/2}"/>`;
         
@@ -876,6 +874,9 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
         svg += `<clipPath id="hexClip"><path d="${hexClipPath}"/></clipPath>`;
         svg += `</defs>`;
         
+        const texOpacityAttr = eCurveAlpha < 0.999 ? ` opacity="${eCurveAlpha.toFixed(3)}"` : '';
+        svg += `<g${texOpacityAttr}>`;
+        
         // Draw each hex: translate to center, apply unrotated clip, then rotate the raw texture inside
         for (const h of exportHexes) {
             const rot = tileRot(h.q, h.r);
@@ -883,6 +884,7 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
             svg += `<use href="#hexTexRaw" transform="rotate(${rot})"/>`;
             svg += `</g>`;
         }
+        svg += `</g>`;
     }
 
     // 4. Add Curves
@@ -907,12 +909,12 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
 
 function renderToOffscreen(offCanvas, params) {
     const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = params;
-    
+    const offCtx = offCanvas.getContext('2d');
+    const eSz = HEX_R * eZoom;
+
     offCanvas.width = eW;
     offCanvas.height = eH;
     
-    const offCtx = offCanvas.getContext('2d');
-    const eSz = HEX_R * eZoom;
     const eCurveAlpha = state.elementsFade;
     const eGridAlpha = eCurveAlpha;
 
