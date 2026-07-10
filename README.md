@@ -4,8 +4,6 @@
   <img src="public/assets/banner.svg" alt="Hextiles Banner" width="800px" />
 </a>
 
-An infinite hexagonal tiling sandbox.
-
 [![Vite](https://img.shields.io/badge/Built%20with-Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![WebGL2](https://img.shields.io/badge/Engine-WebGL2%20%2B%20Canvas2D-990000?style=for-the-badge&logo=webgl&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API)
 [![JavaScript](https://img.shields.io/badge/Language-Vanilla%20JS-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
