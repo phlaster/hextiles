@@ -3,6 +3,10 @@ export const dom = {
     cvs: document.getElementById('hexCanvas'),
     wrap: document.getElementById('canvas-wrap'),
 
+    sidebarToggle: document.getElementById('sidebarToggle'),
+    fullscreenBtn: document.getElementById('fullscreenBtn'),
+    cursor: document.getElementById('lum-cursor'),
+
     zoomLabel: document.getElementById('zoomLabel'),
     zoomIn: document.getElementById('zoomIn'),
     zoomOut: document.getElementById('zoomOut'),

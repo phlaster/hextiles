@@ -9,10 +9,6 @@ import { setupEvents, scheduleLiveTwist } from './events.js';
 import { requestRender, resize, render } from './render.js';
 import { setupExport } from './export.js';
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  INITIALIZATION ORCHESTRATOR
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 function initializeApp() {
     injectCssVariables();
     setupLodTuner();
@@ -35,10 +31,6 @@ function initializeApp() {
 
     setupFaviconAndGhLink();
 }
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  SETUP SUBFUNCTIONS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function injectCssVariables() {
     const root = document.documentElement.style;
@@ -210,10 +202,6 @@ function setupFaviconAndGhLink() {
     }
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  MODE INITIALIZATIONS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 function initializeStandardMode() {
     state.showGrid = dom.gridToggle.checked;
     state.showBgStars = dom.bgStarsToggle.checked;
@@ -308,10 +296,6 @@ function startEmbedRender() {
     render();
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  FAVICON GENERATOR
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 function generateFavicon() {
     const favCanvas = document.createElement('canvas');
     favCanvas.width = 64;
@@ -370,8 +354,5 @@ function generateFavicon() {
     return url;
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  START APP
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 initializeApp();

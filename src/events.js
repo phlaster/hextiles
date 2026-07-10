@@ -657,6 +657,8 @@ function setupCanvasMouseEvents() {
         state.visHoverX = null;
         state.visHoverY = null;
 
+        if (dom.cursor) dom.cursor.style.opacity = '0';
+
         if (state.isDrag && !state.dragMoved && state.mouseDrawTimer) {
             clearTimeout(state.mouseDrawTimer);
             state.mouseDrawTimer = null;
@@ -726,6 +728,16 @@ function setupCanvasMouseEvents() {
         const r = dom.cvs.getBoundingClientRect(),
             mx = e.clientX - r.left,
             my = e.clientY - r.top;
+            
+        if (!state.isTouchDevice && dom.cursor) {
+            if (state.isDragMarker || e.target !== dom.cvs) {
+                dom.cursor.style.opacity = '0';
+            } else {
+                dom.cursor.style.opacity = '0.6';
+                dom.cursor.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+            }
+        }
+
         if (state.isDragMarker && state.draggedMarkerIndex !== -1) {
             state.gradientMarkers[state.draggedMarkerIndex].x = mx - state.dragMarkerOffsetX;
             state.gradientMarkers[state.draggedMarkerIndex].y = my - state.dragMarkerOffsetY;
@@ -740,14 +752,16 @@ function setupCanvasMouseEvents() {
         }
         state.mouseScreenX = mx;
         state.mouseScreenY = my;
-        const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-        const sidebarHidden = isCollapsed || state.isEmbedMode;
-        const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
-        const h = pixToHex(state.mouseScreenX, state.mouseScreenY, state.zoom, state.panX, state.panY);
-        if (state.isTouchDevice) {
+        
+        if (state.isTouchDevice || e.target !== dom.cvs) {
             state.hoveredQ = null;
             state.hoveredR = null;
         } else {
+            const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+            const sidebarHidden = isCollapsed || state.isEmbedMode;
+            const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
+            const h = pixToHex(state.mouseScreenX, state.mouseScreenY, state.zoom, state.panX, state.panY);
+            
             if (!sidebarHidden && mx > effectiveW) {
                 state.hoveredQ = null;
                 state.hoveredR = null;
