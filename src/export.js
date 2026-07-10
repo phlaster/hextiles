@@ -619,7 +619,7 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
     const exportBounds = getHexBounds(exportHexes);
 
     const eSz = HEX_R * eZoom;
-    const eCurveAlpha = computeFadeAlpha(state.zoom);
+    const eCurveAlpha = state.elementsFade;
     const eGridAlpha = eCurveAlpha;
 
     if (state.curveColors.length >= 1 && eCurveAlpha > 0) {
@@ -958,7 +958,7 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
         ePanX = (state.panX - fx) * scale,
         ePanY = (state.panY - fy) * scale;
     const eSz = HEX_R * eZoom;
-    const eCurveAlpha = computeFadeAlpha(state.zoom);
+    const eCurveAlpha = state.elementsFade;
     const eGridAlpha = eCurveAlpha;
 
     const hexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);

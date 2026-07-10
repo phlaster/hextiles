@@ -591,6 +591,11 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
     const rSz = grid ? sz * 0.95 : sz;
     state.ctx.save();
     if (img) {
+        if (alpha < 0.05) {
+            state.ctx.restore();
+            return;
+        }
+        
         traceHexPath(state.ctx, cx, cy, rSz);
         state.ctx.clip();
         state.ctx.translate(cx, cy);
@@ -604,6 +609,7 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
         state.ctx.translate(tf.ox, tf.oy);
         
         const iSz = baseHexSize * 2.6;
+        state.ctx.globalAlpha = alpha; 
         state.ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
     } else {
         state.ctx.translate(cx, cy);
@@ -916,13 +922,26 @@ function updateZoomOutTime(visZoom, now) {
 }
 
 function computeAlphas(visZoom) {
-    const curveAlpha = computeFadeAlpha(visZoom);
+    // 1. Trigger-based threshold instead of continuous zoom mapping
+    const ZOOM_THRESHOLD = 0.24;
+    state.targetElementsFade = (visZoom < ZOOM_THRESHOLD) ? 0.0 : 1.0;
+    
+    // 2. Smooth interpolation for fade in/out
+    const fadeSpeed = state.targetElementsFade > state.elementsFade ? 0.25 : 0.5;
+    state.elementsFade += (state.targetElementsFade - state.elementsFade) * fadeSpeed;
+    if (Math.abs(state.targetElementsFade - state.elementsFade) < 0.05) {
+        state.elementsFade = state.targetElementsFade;
+    }
+
+    const curveAlpha = state.elementsFade;
     let gridAlpha = curveAlpha;
 
     // Interaction fade (driven by targetInteractionFade)
-    const fadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.4;
-    state.interactionFade += (state.targetInteractionFade - state.interactionFade) * fadeSpeed;
-    const fadeAnimating = Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001;
+    const intFadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.4;
+    state.interactionFade += (state.targetInteractionFade - state.interactionFade) * intFadeSpeed;
+    
+    const fadeAnimating = Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001 || 
+                          Math.abs(state.targetElementsFade - state.elementsFade) > 0.005;
 
     const finalCurveAlpha = curveAlpha * state.interactionFade;
     const finalGridAlpha = gridAlpha * state.interactionFade;
