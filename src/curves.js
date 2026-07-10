@@ -317,6 +317,31 @@ function selectColorFromPool(pool, seed1, seed2) {
     return pool[h % pool.length];
 }
 
+export function getCurveRgb(curveID) {
+    if (curveID === -2 || (state.curveColors.length === 1 && curveID === -1)) {
+        const c = state.curveColorsRGB[0];
+        if (c) return { r: c.tr ?? c.r, g: c.tg ?? c.g, b: c.tb ?? c.b };
+        const rgb = hexToRgb(state.curveColors[0]);
+        return { r: rgb[0], g: rgb[1], b: rgb[2] };
+    }
+
+    const curve = state.curves.get(curveID);
+    if (!curve) return null;
+    
+    let c = curve.color;
+    if (typeof c === 'number') {
+        const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
+        if (cc) return { r: cc.tr ?? cc.r, g: cc.tg ?? cc.g, b: cc.tb ?? cc.b };
+    }
+    
+    if (typeof c === 'string') {
+        const rgb = hexToRgb(c);
+        return { r: rgb[0], g: rgb[1], b: rgb[2] };
+    }
+    
+    return null;
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  CURVE SPLITTING
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

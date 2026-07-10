@@ -26,7 +26,8 @@ import {
     processQueue,
     findUncoloredTileInHexes,
     edgeID,
-    getBackgroundColorAt
+    getBackgroundColorAt,
+    getCurveRgb
 } from './curves.js';
 import {
     requestRender,
@@ -789,31 +790,28 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
     function getCachedCurveColorStr(curveID) {
         let cached = curveColorCache.get(curveID);
         if (cached !== undefined) return cached;
-        const curve = state.curves.get(curveID);
-        if (!curve) {
+        
+        const rgb = getCurveRgb(curveID);
+        if (!rgb) {
             curveColorCache.set(curveID, null);
             return null;
         }
-        const c = curve.color;
-        let colorStr;
-        if (typeof c === 'number') {
-            const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
-            colorStr = `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
-        } else {
-            colorStr = c;
-        }
+        
+        const colorStr = `rgb(${Math.round(rgb.r)},${Math.round(rgb.g)},${Math.round(rgb.b)})`;
         curveColorCache.set(curveID, colorStr);
         return colorStr;
     }
 
     function getSvgEdgeColor(q, r, e) {
+        let curveID;
         if (state.curveColors.length === 1) {
-            const cc = state.curveColorsRGB[0];
-            return `rgb(${Math.round(cc.tr !== undefined ? cc.tr : cc.r)},${Math.round(cc.tg !== undefined ? cc.tg : cc.g)},${Math.round(cc.tb !== undefined ? cc.tb : cc.b)})`;
+            curveID = -2;
+        } else {
+            const id = edgeID(q, r, e);
+            if (!state.curveMap.has(id)) return null;
+            curveID = state.curveMap.get(id);
         }
-        const id = edgeID(q, r, e);
-        if (!state.curveMap.has(id)) return null;
-        return getCachedCurveColorStr(state.curveMap.get(id));
+        return getCachedCurveColorStr(curveID);
     }
 
     function arcToPath(tx, ty, rot, cx, cy, r, startAngle, endAngle, anticlockwise) {
@@ -1045,30 +1043,11 @@ function processEdgeRgbMap() {
     for (const [id, edgeData] of state.edgeRgbMap.entries()) {
         let targetCurveID = -1, targetRgb = null;
         if (state.curveColors.length === 1) {
-            const c = state.curveColorsRGB[0];
-            if (c) targetRgb = {
-                r: c.tr !== undefined ? c.tr : c.r,
-                g: c.tg !== undefined ? c.tg : c.g,
-                b: c.tb !== undefined ? c.tb : c.b
-            };
             targetCurveID = -2;
+            targetRgb = getCurveRgb(-2);
         } else if (state.curveMap.has(id)) {
             targetCurveID = state.curveMap.get(id);
-            const curve = state.curves.get(targetCurveID);
-            if (curve) {
-                let c = curve.color;
-                if (typeof c === 'number') {
-                    const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
-                    targetRgb = {
-                        r: cc.tr !== undefined ? cc.tr : cc.r,
-                        g: cc.tg !== undefined ? cc.tg : cc.g,
-                        b: cc.tb !== undefined ? cc.tb : cc.b
-                    };
-                } else {
-                    const rgb = hexToRgb(c);
-                    targetRgb = { r: rgb[0], g: rgb[1], b: rgb[2] };
-                }
-            }
+            targetRgb = getCurveRgb(targetCurveID);
         }
         if (targetRgb) {
             if (!edgeData) state.edgeRgbMap.set(id, {

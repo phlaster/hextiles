@@ -31,7 +31,8 @@ import {
     edgeID,
     decodeEdgeID,
     getBackgroundColorAt,
-    initializeCentralTile
+    initializeCentralTile,
+    getCurveRgb
 } from './curves.js';
 import {
     renderGradientList,
@@ -464,42 +465,11 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
         let targetRgb = null,
             targetCurveID = -1;
         if (state.curveColors.length === 1) {
-            const c = state.curveColorsRGB[0];
-            if (c) targetRgb = {
-                r: c.tr !== undefined ? c.tr : c.r,
-                g: c.tg !== undefined ? c.tg : c.g,
-                b: c.tb !== undefined ? c.tb : c.b
-            };
-            else {
-                const rgb = hexToRgb(state.curveColors[0]);
-                targetRgb = {
-                    r: rgb[0],
-                    g: rgb[1],
-                    b: rgb[2]
-                };
-            }
             targetCurveID = -2;
+            targetRgb = getCurveRgb(-2);
         } else if (state.curveMap.has(id)) {
             targetCurveID = state.curveMap.get(id);
-            let curve = state.curves.get(targetCurveID);
-            if (curve) {
-                let c = curve.color;
-                if (typeof c === 'number') {
-                    const cc = state.curveColorsRGB[c % state.curveColorsRGB.length];
-                    targetRgb = {
-                        r: cc.tr !== undefined ? cc.tr : cc.r,
-                        g: cc.tg !== undefined ? cc.tg : cc.g,
-                        b: cc.tb !== undefined ? cc.tb : cc.b
-                    };
-                } else {
-                    const rgb = hexToRgb(c);
-                    targetRgb = {
-                        r: rgb[0],
-                        g: rgb[1],
-                        b: rgb[2]
-                    };
-                }
-            }
+            targetRgb = getCurveRgb(targetCurveID);
         }
 
         if (targetRgb) {
