@@ -272,6 +272,7 @@ function initializeEmbedMode() {
         const img = new Image();
         img.onload = () => {
             state.texImg = img;
+            dom.resetTexBtn.style.display = 'block';
             startEmbedRender();
         };
         img.onerror = startEmbedRender;

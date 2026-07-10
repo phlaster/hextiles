@@ -1020,32 +1020,151 @@ function setupTextureEditor() {
     dom.fileInput.onchange = () => {
         if (dom.fileInput.files[0]) loadFile(dom.fileInput.files[0]);
     };
-
-    dom.cancelEd.onclick = closeEditor;
-    dom.applyEd.onclick = applyTexture;
+    
     dom.resetTexBtn.onclick = () => {
         state.texImg = null;
         state.texTf = {
-            rot: 0,
-            scale: 1,
-            sx: 1,
-            sy: 1,
-            ox: 0,
-            oy: 0
+            rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0
         };
-        if (dom.editorPanel.classList.contains('open')) {
-            writeSliders(state.texTf);
-            drawPreview();
-        }
-        state.pendImg = null;
-        closeEditor();
+        
+        // Close the editor panel immediately
+        closeEditor(); 
+        
         dom.fileName.textContent = '';
         toast('Texture reset to default');
+        dom.resetTexBtn.style.display = 'none';
+        requestRender();
     };
+    
     [dom.sRot, dom.sScale, dom.sSX, dom.sSY, dom.sOX, dom.sOY].forEach(el => el.addEventListener('input', () => {
+        state.texTf = readSliders();
         syncSliderLabels();
         drawPreview();
+        requestRender(); 
     }));
+
+    // --- PREVIEW IMAGE DRAGGING LOGIC ---
+    const maxDrag = 105; 
+    let pDrag = false, pStartX = 0, pStartY = 0, pStartOX = 0, pStartOY = 0;
+
+    const startDrag = (clientX, clientY) => {
+        pDrag = true;
+        pStartX = clientX;
+        pStartY = clientY;
+        pStartOX = state.texTf.ox;
+        pStartOY = state.texTf.oy;
+        dom.previewCanvas.style.cursor = 'grabbing';
+    };
+
+    const moveDrag = (clientX, clientY) => {
+        if (!pDrag) return;
+        const dx = clientX - pStartX;
+        const dy = clientY - pStartY;
+        
+        const tf = state.texTf; // Read current state directly
+        const R = tf.rot * DEG2RAD;
+        const cosR = Math.cos(R);
+        const sinR = Math.sin(R);
+        
+        const Sx = Math.max(0.01, tf.sx * tf.scale);
+        const Sy = Math.max(0.01, tf.sy * tf.scale);
+        
+        const dOx = (dx * cosR + dy * sinR) / Sx;
+        const dOy = (-dx * sinR + dy * cosR) / Sy;
+        
+        let newOX = Math.max(-maxDrag, Math.min(maxDrag, pStartOX + dOx));
+        let newOY = Math.max(-maxDrag, Math.min(maxDrag, pStartOY + dOy));
+        
+        state.texTf.ox = newOX;
+        state.texTf.oy = newOY;
+        dom.sOX.value = newOX;
+        dom.sOY.value = newOY;
+        syncSliderLabels();
+        drawPreview();
+        requestRender(); // Update main canvas live during drag
+    };
+
+    const endDrag = () => {
+        if (pDrag) {
+            pDrag = false;
+            dom.previewCanvas.style.cursor = 'grab';
+        }
+    };
+
+    dom.previewCanvas.style.cursor = 'grab';
+
+    dom.previewCanvas.addEventListener('mousedown', e => {
+        e.preventDefault();
+        startDrag(e.clientX, e.clientY);
+    });
+    window.addEventListener('mousemove', e => {
+        if (pDrag) {
+            e.preventDefault();
+            moveDrag(e.clientX, e.clientY);
+        }
+    });
+    window.addEventListener('mouseup', endDrag);
+
+    dom.previewCanvas.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) {
+            e.preventDefault();
+            startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    }, { passive: false });
+    window.addEventListener('touchmove', e => {
+        if (pDrag && e.touches.length === 1) {
+            e.preventDefault();
+            moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    }, { passive: false });
+    window.addEventListener('touchend', endDrag);
+}
+
+function drawPreview() {
+    const pc = dom.previewCanvas,
+        pctx = pc.getContext('2d'),
+        cX = 90,
+        cY = 80,
+        rSz = 88; 
+        
+    pctx.clearRect(0, 0, 180, 160);
+    pctx.fillStyle = COLORS.bg;
+    pctx.fillRect(0, 0, 180, 160);
+    
+    pctx.save();
+    traceHexPath(pctx, cX, cY, rSz);
+    pctx.clip();
+    pctx.translate(cX, cY);
+    
+    const img = state.texImg; // Directly use the applied texture
+    if (img) {
+        const tf = state.texTf; // Read current state directly
+        pctx.rotate(tf.rot * DEG2RAD);
+        pctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
+        pctx.translate(tf.ox, tf.oy);
+        
+        const iSz = rSz * 2.6; 
+        pctx.imageSmoothingEnabled = true;
+        pctx.imageSmoothingQuality = 'high';
+        pctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
+    } else {
+        pctx.fillStyle = COLORS.previewPlaceholder;
+        pctx.fillRect(-rSz, -rSz, rSz * 2, rSz * 2);
+    }
+    pctx.restore();
+    
+    traceHexPath(pctx, cX, cY, rSz);
+    pctx.strokeStyle = COLORS.previewStroke;
+    pctx.lineWidth = 2;
+    pctx.stroke();
+    
+    for (let i = 0; i < 6; i++) {
+        const a = PI_DIV_3 * i;
+        pctx.beginPath();
+        pctx.arc(cX + rSz * Math.cos(a), cY + rSz * Math.sin(a), 3, 0, Math.PI * 2);
+        pctx.fillStyle = COLORS.previewDot;
+        pctx.fill();
+    }
 }
 
 function setupColorAndMarkerButtons() {
@@ -1346,8 +1465,10 @@ function loadFile(file) {
     reader.onload = ev => {
         const img = new Image();
         img.onload = () => {
-            state.pendImg = img;
+            state.texImg = img; // Apply immediately
+            dom.resetTexBtn.style.display = 'block'; // Show reset button
             openEditor();
+            requestRender(); // Update main canvas instantly
         };
         img.src = ev.target.result;
     };
@@ -1383,13 +1504,6 @@ function openEditor() {
 
 function closeEditor() {
     dom.editorPanel.classList.remove('open');
-    state.pendImg = null;
-}
-
-function applyTexture() {
-    if (state.pendImg) state.texImg = state.pendImg;
-    state.texTf = readSliders();
-    toast('Texture applied — keep adjusting or close the editor');
 }
 
 function syncSliderLabels() {
@@ -1399,45 +1513,6 @@ function syncSliderLabels() {
     dom.vSY.textContent = (+dom.sSY.value).toFixed(2) + 'x';
     dom.vOX.textContent = dom.sOX.value;
     dom.vOY.textContent = dom.sOY.value;
-}
-
-function drawPreview() {
-    const pc = dom.previewCanvas,
-        pctx = pc.getContext('2d'),
-        cX = 110,
-        cY = 110,
-        rSz = 85;
-    pctx.clearRect(0, 0, 220, 220);
-    pctx.fillStyle = COLORS.bg;
-    pctx.fillRect(0, 0, 220, 220);
-    pctx.save();
-    traceHexPath(pctx, cX, cY, rSz);
-    pctx.clip();
-    pctx.translate(cX, cY);
-    const img = state.pendImg || state.texImg;
-    if (img) {
-        const tf = readSliders();
-        pctx.rotate(tf.rot * DEG2RAD);
-        pctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
-        pctx.translate(tf.ox, tf.oy);
-        const iSz = rSz * 2.6;
-        pctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
-    } else {
-        pctx.fillStyle = COLORS.previewPlaceholder;
-        pctx.fillRect(-rSz, -rSz, rSz * 2, rSz * 2);
-    }
-    pctx.restore();
-    traceHexPath(pctx, cX, cY, rSz);
-    pctx.strokeStyle = COLORS.previewStroke;
-    pctx.lineWidth = 2;
-    pctx.stroke();
-    for (let i = 0; i < 6; i++) {
-        const a = PI_DIV_3 * i;
-        pctx.beginPath();
-        pctx.arc(cX + rSz * Math.cos(a), cY + rSz * Math.sin(a), 3, 0, Math.PI * 2);
-        pctx.fillStyle = COLORS.previewDot;
-        pctx.fill();
-    }
 }
 
 export function resetIdleTimer() {

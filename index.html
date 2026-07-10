@@ -228,7 +228,13 @@
 
             <div class="sb-section">
                 <label>Tile texture</label>
-                <div class="slider-row" style="margin-top: 14px; margin-bottom: 16px;">
+                
+                <div class="btn-row" style="margin-top: 14px;">
+                    <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i>Reset angles</button>
+                    <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%"><i class="fas fa-compass"></i>Random angles</button>
+                </div>
+                
+                <div class="slider-row" style="margin-top: 16px; margin-bottom: 16px;">
                     <div class="s-top"><span>Line Width</span><span class="s-val" id="vCurveW">1.0x</span></div>
                     <input type="range" id="sCurveW" min="0.0" max="2" step="0.05" value="1.0" />
                 </div>
@@ -236,23 +242,21 @@
                     <div class="s-top"><span>Alternative Tiles</span><span class="s-val" id="vAlterTiles">0.00</span></div>
                     <input type="range" id="sAlterTiles" min="0" max="1.0" step="0.01" value="0" />
                 </div>
+                
                 <div class="upload-zone" id="uploadZone">
                     <i class="fas fa-cloud-upload-alt"></i>
                     <p>Click or drop an image</p>
                     <div class="filename" id="fileName"></div>
                 </div>
                 <input type="file" id="fileInput" accept="image/*" />
-                <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px;"><i class="fas fa-image"></i>Reset texture</button>
-                <div class="btn-row" style="margin-top: 8px;">
-                    <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i>Reset rotation</button>
-                </div>
-                <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%; margin-top: 8px;"><i class="fas fa-compass"></i>Randomize angles</button>
+                
+                <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px; display: none;"><i class="fas fa-image"></i> Reset texture</button>
             </div>
 
             <div class="sb-section editor" id="editorPanel">
                 <label>Align Texture to Hex</label>
                 <div class="preview-wrap">
-                    <canvas id="previewCanvas" width="220" height="220"></canvas>
+                    <canvas id="previewCanvas" width="180" height="160"></canvas>
                 </div>
                 <div class="slider-row">
                     <div class="s-top"><span>Rotation</span><span class="s-val" id="vRot">0°</span></div>
@@ -277,10 +281,6 @@
                 <div class="slider-row">
                     <div class="s-top"><span>Offset Y</span><span class="s-val" id="vOY">0</span></div>
                     <input type="range" id="sOY" min="-150" max="150" step="1" value="0" />
-                </div>
-                <div class="btn-row">
-                    <button class="btn btn-ghost" id="cancelEd">Close</button>
-                    <button class="btn btn-accent" id="applyEd">Apply Texture</button>
                 </div>
             </div>
 

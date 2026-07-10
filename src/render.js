@@ -596,9 +596,16 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
         state.ctx.translate(cx, cy);
         state.ctx.rotate(rot * CONFIG.DEG2RAD);
         state.ctx.rotate(tf.rot * CONFIG.DEG2RAD);
+        
+        // 88 is the base hex radius used in the texture preview editor
+        const baseHexSize = 88;
+        const sizeScale = sz / baseHexSize;
+        
+        state.ctx.scale(sizeScale, sizeScale);
         state.ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
         state.ctx.translate(tf.ox, tf.oy);
-        const iSz = sz * 2.6;
+        
+        const iSz = baseHexSize * 2.6;
         state.ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
     } else {
         state.ctx.translate(cx, cy);
