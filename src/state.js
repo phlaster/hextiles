@@ -103,6 +103,7 @@ export const state = {
     // Textures
     texImg: null,
     pendImg: null,
+    embedTexBaseSize: 88,
     texTf: {
         rot: 0,
         scale: 1,

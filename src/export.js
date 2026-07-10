@@ -169,12 +169,12 @@ function setupExportFormatButtons() {
         dom.embedCodeWrap.classList.remove('visible');
     };
 
-    dom.exportEmbedBtn.onclick = () => {
+    dom.exportEmbedBtn.onclick = async () => {
         dom.exportImageBtn.classList.remove('active');
         dom.exportEmbedBtn.classList.add('active');
         dom.imageExportWrap.classList.remove('visible');
         dom.embedCodeWrap.classList.add('visible');
-        generateEmbedCode();
+        await generateEmbedCode();
     };
 
     dom.copyEmbedBtn.onclick = async () => {
@@ -429,13 +429,18 @@ async function exportToPNG() {
     toast('PNG exported');
 }
 
-function generateEmbedCode() {
+async function generateEmbedCode() {
     const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY } = getExportParams();
+    
+    const targetHexSize = Math.round(HEX_R * eZoom);
+    const maxAllowed = parseInt(dom.exportSide.value) || 1920;
+    const rasterSize = Math.max(64, Math.min(targetHexSize, maxAllowed));
     const eMarkers = state.gradientMarkers.map(m => ({
         x: (m.x - fx) * scale,
         y: (m.y - fy) * scale,
         color: m.color
     }));
+
     const data = {
         w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
         origZoom: state.zoom, showGrid: state.showGrid,
@@ -443,20 +448,49 @@ function generateEmbedCode() {
         flowEnabled: state.flowEnabled, inertiaEnabled: state.inertiaEnabled,
         rotMode: state.rotMode, randomSeed: state.randomSeed, rotSeed: state.rotSeed,
         curveLineWidth: state.curveLineWidth, alterTilesRatio: state.alterTilesRatio,
-        texTf: { ...state.texTf }, curveColors: [...state.curveColors],
+        texTf: { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 },
+        texBaseSize: rasterSize,
+        curveColors: [...state.curveColors],
         markers: eMarkers, rotOverrides: serializeRotOverrides(),
-        texture: getTextureDataUrl(), liveTwistsEnabled: state.liveTwistsEnabled
+        texture: getTextureDataUrl(rasterSize), liveTwistsEnabled: state.liveTwistsEnabled
     };
+
     let encoded;
     try {
-        encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+        const jsonStr = JSON.stringify(data);
+
+        if (typeof CompressionStream !== 'undefined') {
+            // 1. Compress using native browser API (deflate)
+            const inputStream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode(jsonStr));
+                    controller.close();
+                }
+            });
+            const compressedStream = inputStream.pipeThrough(new CompressionStream('deflate'));
+            const compressedBuffer = await new Response(compressedStream).arrayBuffer();
+            const bytes = new Uint8Array(compressedBuffer);
+
+            // 2. Convert binary to URL-safe Base64
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+            encoded = btoa(binary)
+                .replace(/\+/g, '-')  // Make URL safe
+                .replace(/\//g, '_')  // Make URL safe
+                .replace(/=+$/, '');  // Strip padding
+        } else {
+            // Fallback for very old browsers without CompressionStream
+            encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+        }
     } catch (e) {
+        console.error('Embed compression error', e);
         toast('Too much data to encode');
         return;
     }
+
     const baseUrl = location.href.split('#')[0];
     dom.embedCode.value = `<iframe src="${baseUrl}#embed=${encoded}" width="${eW}" height="${eH}" frameborder="0" style="border:none;width:${eW}px;height:${eH}px;"></iframe>`;
-    toast('Embed code generated');
+    toast('Embed code generated (Compressed)');
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1074,25 +1108,41 @@ function serializeRotOverrides() {
     return out;
 }
 
-function getTextureDataUrl() {
+function getTextureDataUrl(rasterSize) {
     if (!state.texImg) return null;
     try {
+        const cW = Math.ceil(2 * rasterSize);
+        const cH = Math.ceil(CONFIG.SQRT3 * rasterSize);
         const c = document.createElement('canvas');
-        let w = state.texImg.naturalWidth || state.texImg.width;
-        let h = state.texImg.naturalHeight || state.texImg.height;
-        
-        const MAX_DIM = 1024;
-        if (w > MAX_DIM || h > MAX_DIM) {
-            const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-            w = Math.round(w * scale);
-            h = Math.round(h * scale);
-        }
-        
-        c.width = w;
-        c.height = h;
+        c.width = cW;
+        c.height = cH;
         const ctx = c.getContext('2d');
-        ctx.drawImage(state.texImg, 0, 0, w, h);
-        
+
+        // FIX: Translate to the center of the canvas BEFORE defining the clip path
+        ctx.translate(cW / 2, cH / 2);
+
+        // 1. Clip to hex frame (strips outside to alpha=0)
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = CONFIG.PI_DIV_3 * i;
+            const vx = rasterSize * Math.cos(a);
+            const vy = rasterSize * Math.sin(a);
+            if (i === 0) ctx.moveTo(vx, vy);
+            else ctx.lineTo(vx, vy);
+        }
+        ctx.closePath();
+        ctx.clip();
+
+        // 2. Apply texTf to bake the transform into the image
+        const tf = state.texTf;
+        ctx.rotate(tf.rot * CONFIG.DEG2RAD);
+        ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
+        ctx.translate(tf.ox, tf.oy);
+
+        const iSz = rasterSize * 2.6;
+        ctx.drawImage(state.texImg, -iSz / 2, -iSz / 2, iSz, iSz);
+
+        // 3. Compress using WebP (supports alpha)
         let url = c.toDataURL('image/webp', 0.8);
         
         if (url.startsWith('data:image/webp') && url.length < 1500000) {

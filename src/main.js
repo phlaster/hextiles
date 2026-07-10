@@ -9,10 +9,10 @@ import { setupEvents, scheduleLiveTwist } from './events.js';
 import { requestRender, resize, render } from './render.js';
 import { setupExport } from './export.js';
 
-function initializeApp() {
+async function initializeApp() {
     injectCssVariables();
     setupLodTuner();
-    parseEmbedData();
+    await parseEmbedData();
     setupCacheBridges();
     setupDeployInfo();
     startMemoryMonitor();
@@ -93,17 +93,52 @@ function setupLodTuner() {
     });
 }
 
-function parseEmbedData() {
+async function parseEmbedData() {
     const embedMatch = location.hash.match(/^#embed=(.+)$/);
     state.isEmbedMode = !!embedMatch;
+    
     if (state.isEmbedMode) {
         try {
-            state.embedData = JSON.parse(decodeURIComponent(escape(atob(embedMatch[1]))));
+            const raw = embedMatch[1];
+            let jsonStr = '';
+
+            // Try native decompression first (new compressed format)
+            try {
+                if (typeof DecompressionStream !== 'undefined') {
+                    // 1. Restore standard Base64 from URL-safe Base64
+                    let base64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+                    while (base64.length % 4) base64 += '='; // Restore padding
+
+                    // 2. Decode to binary Uint8Array
+                    const binary = atob(base64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+                    // 3. Decompress using native browser API
+                    const inputStream = new ReadableStream({
+                        start(controller) {
+                            controller.enqueue(bytes);
+                            controller.close();
+                        }
+                    });
+                    const decompressedStream = inputStream.pipeThrough(new DecompressionStream('deflate'));
+                    jsonStr = await new Response(decompressedStream).text();
+                } else {
+                    throw new Error('DecompressionStream not supported');
+                }
+            } catch (e) {
+                // FALLBACK: If decompression fails, it's either an old browser 
+                // OR an old uncompressed embed link. Try the legacy method.
+                jsonStr = decodeURIComponent(escape(atob(raw)));
+            }
+
+            state.embedData = JSON.parse(jsonStr);
         } catch (e) {
             console.error('Embed parse error', e);
             state.isEmbedMode = false;
         }
     }
+    
     if (state.isEmbedMode) document.body.classList.add('embed-mode');
 }
 
@@ -243,6 +278,7 @@ function initializeEmbedMode() {
     state.inertiaEnabled = d.inertiaEnabled !== undefined ? d.inertiaEnabled : true;
     dom.inertiaToggle.checked = state.inertiaEnabled;
     state.texTf = d.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+    state.embedTexBaseSize = d.texBaseSize || 88;
     
     state.curveColors.length = 0;
     state.curveColors.push(...(d.curveColors && d.curveColors.length > 0 ? [...d.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']));
