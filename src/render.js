@@ -39,7 +39,8 @@ import {
     renderCurveList
 } from './ui.js';
 import {
-    getRandomMarkerPosition
+    getRandomMarkerPosition,
+    applyPanDelta
 } from './events.js';
 import {
     initGradientGL,
@@ -830,14 +831,7 @@ function applyPanAndDrift(driftX, driftY, visZoom) {
     }
 
     if (!state.isEmbedMode && state.inertiaEnabled && !state.isDrag && !state.isExporting) {
-        state.panX += state.panVX;
-        state.panY += state.panVY;
-        state.starPanX5 += state.panVX * CONFIG.STAR_PARALLAX_LARGE;
-        state.starPanY5 += state.panVY * CONFIG.STAR_PARALLAX_LARGE;
-        state.starPanX2 += state.panVX * CONFIG.STAR_PARALLAX_MED;
-        state.starPanY2 += state.panVY * CONFIG.STAR_PARALLAX_MED;
-        state.starPanX3 += state.panVX * CONFIG.STAR_PARALLAX_SMALL;
-        state.starPanY3 += state.panVY * CONFIG.STAR_PARALLAX_SMALL;
+        applyPanDelta(state.panVX, state.panVY);
         
         const damping = (visZoom < CONFIG.ZOOM_FADE_START_MULT)
                         ? CONFIG.INERTIA_DAMPING_LOW
@@ -853,8 +847,6 @@ function applyPanAndDrift(driftX, driftY, visZoom) {
     const isPanning = (state.isDrag && state.dragMoved && !state.isMouseDrawMode && !state.isEmbedMode)
                     || state.touchState.mode === 'pan';
     if (state.flowEnabled && state.flowIntensity > 0 && !state.isExporting && !isPanning) {
-        state.panX += driftX;
-        state.panY += driftY;
         if (state.isDrag) {
             state.dragPX += driftX;
             state.dragPY += driftY;
@@ -863,12 +855,7 @@ function applyPanAndDrift(driftX, driftY, visZoom) {
             state.touchState.startPanX += driftX;
             state.touchState.startPanY += driftY;
         }
-        state.starPanX5 += driftX * CONFIG.STAR_PARALLAX_LARGE;
-        state.starPanY5 += driftY * CONFIG.STAR_PARALLAX_LARGE;
-        state.starPanX2 += driftX * CONFIG.STAR_PARALLAX_MED;
-        state.starPanY2 += driftY * CONFIG.STAR_PARALLAX_MED;
-        state.starPanX3 += driftX * CONFIG.STAR_PARALLAX_SMALL;
-        state.starPanY3 += driftY * CONFIG.STAR_PARALLAX_SMALL;
+        applyPanDelta(driftX, driftY);
         panAnimating = true;
     }
 
@@ -897,7 +884,7 @@ function computeAlphas(visZoom) {
     state.targetElementsFade = (visZoom < ZOOM_THRESHOLD) ? 0.0 : 1.0;
     
     // 2. Smooth interpolation for fade in/out
-    const fadeSpeed = state.targetElementsFade > state.elementsFade ? 0.25 : 0.5;
+    const fadeSpeed = state.targetElementsFade > state.elementsFade ? 0.3 : 0.5;
     state.elementsFade += (state.targetElementsFade - state.elementsFade) * fadeSpeed;
     if (Math.abs(state.targetElementsFade - state.elementsFade) < 0.05) {
         state.elementsFade = state.targetElementsFade;
@@ -907,7 +894,7 @@ function computeAlphas(visZoom) {
     let gridAlpha = curveAlpha;
 
     // Interaction fade (driven by targetInteractionFade)
-    const intFadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.4;
+    const intFadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.5;
     state.interactionFade += (state.targetInteractionFade - state.interactionFade) * intFadeSpeed;
     
     const fadeAnimating = Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001 || 

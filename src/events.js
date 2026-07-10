@@ -566,14 +566,7 @@ function setupCanvasTouchEvents() {
                     state.panVX = 0;
                     state.panVY = 0;
                 }
-                state.panX = targetPanX;
-                state.panY = targetPanY;
-                state.starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
-                state.starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
-                state.starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
-                state.starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
-                state.starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
-                state.starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
+                applyPanDelta(dPanX, dPanY);
             }
             requestRender();
         } else if (state.touchState.mode === 'pinch' && e.touches.length === 2) {
@@ -845,14 +838,7 @@ function setupCanvasMouseEvents() {
                         state.panVX = 0;
                         state.panVY = 0;
                     }
-                    state.panX = targetPanX;
-                    state.panY = targetPanY;
-                    state.starPanX5 += dPanX * CONFIG.STAR_PARALLAX_LARGE;
-                    state.starPanY5 += dPanY * CONFIG.STAR_PARALLAX_LARGE;
-                    state.starPanX2 += dPanX * CONFIG.STAR_PARALLAX_MED;
-                    state.starPanY2 += dPanY * CONFIG.STAR_PARALLAX_MED;
-                    state.starPanX3 += dPanX * CONFIG.STAR_PARALLAX_SMALL;
-                    state.starPanY3 += dPanY * CONFIG.STAR_PARALLAX_SMALL;
+                    applyPanDelta(dPanX, dPanY);
                 }
             }
         }
@@ -1294,6 +1280,17 @@ export function scheduleLiveTwist() {
             scheduleLiveTwist();
         }
     }, delay);
+}
+
+export function applyPanDelta(dx, dy) {
+    state.panX += dx;
+    state.panY += dy;
+    state.starPanX5 += dx * CONFIG.STAR_PARALLAX_LARGE;
+    state.starPanY5 += dy * CONFIG.STAR_PARALLAX_LARGE;
+    state.starPanX2 += dx * CONFIG.STAR_PARALLAX_MED;
+    state.starPanY2 += dy * CONFIG.STAR_PARALLAX_MED;
+    state.starPanX3 += dx * CONFIG.STAR_PARALLAX_SMALL;
+    state.starPanY3 += dy * CONFIG.STAR_PARALLAX_SMALL;
 }
 
 function performLiveTwist() {
