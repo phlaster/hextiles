@@ -1,24 +1,63 @@
-# [hextiles](https://phlaster.github.io/hextiles/)
+<div align="center">
+  
+<a href="https://phlaster.github.io/hextiles/" target="_blank">
+  <img src="public/assets/banner.svg" alt="Hextiles Banner" width="800px" />
+</a>
 
-![Horizontal Ornament](public/assets/tiles.png)
+An infinite hexagonal tiling sandbox.
 
-An infinite, interactive hexagonal tile canvas for exploring peculiar pattens emerging from simple rule.
+[![Vite](https://img.shields.io/badge/Built%20with-Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![WebGL2](https://img.shields.io/badge/Engine-WebGL2%20%2B%20Canvas2D-990000?style=for-the-badge&logo=webgl&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API)
+[![JavaScript](https://img.shields.io/badge/Language-Vanilla%20JS-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
-## Features
-
-- **Infinite Canvas**: Pan and zoom infinitely across a procedurally generated hexagonal grid.
-- **Per-Tile Rotation**: Click any tile to rotate it by 60° with a smooth full-circle animation. Double-click to reset it to the default orientation.
-- **Custom Textures**: Upload your own image to replace the default pattern. A built-in alignment editor allows you to rotate, scale, stretch, and offset the image to perfectly fit the hexagonal shape before applying.
-- **Grid Toggle**: Hide the grid lines to view the pure, seamless tessellation.
-- **Bulk Actions**: Randomize all tile angles or reset them all to the default orientation with smooth bulk animations.
+</div>
 
 ## Controls
 
-| Action                       | Effect                                  |
-| :--------------------------- | :-------------------------------------- |
-| **Scroll Wheel**       | Zoom in / out towards cursor            |
-| **Click + Drag**       | Pan the canvas                          |
-| **Left Click**         | Rotate tile by 60°                     |
-| **`+` / `-` Keys** | Zoom in / out from center               |
+| Action | Desktop | Touch |
+| :--- | :--- | :--- |
+| **Rotate Tile** | `Left Click` | `Tap` |
+| **Continuous Rotate** | `Long Left Click, then draw` | `Long Press, then draw` |
+| **Pan / Drag** | `Left Click + Drag` | `Swipe` |
+| **Zoom** | `Scroll Wheel` / `+` / `-` | `Two-Finger Pinch` |
+| **Move Gradient Marker**| `Drag Marker` | `Long press, then drag marker` |
+| **Delete Marker** | `Double Click Marker` | `Double Tap Marker` |
 
-> Built with assistance of [GLM 5.1](https://z.ai)
+## Getting Started
+
+To run Hextiles locally or contribute to its development:
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/phlaster/hextiles.git
+   cd hextiles
+   ```
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+3. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+   The app will be available at `http://127.0.0.1:5173`.
+
+4. **Build for production**
+   ```bash
+   npm run build
+   ```
+
+## Tech Stack
+
+- **Build Tool**: Vite
+- **Rendering**: WebGL2 (Gradient Engine), Canvas2D (Hex/Curve Engine)
+- **Math/Logic**: Custom Hex Grid Math, BFS Curve Tracing
+- **Exporting**: `jsPDF`, `svg2pdf.js`
+
+## License
+
+This project is licensed under the Apache 2.0 [LICENSE](LICENSE).
+
+<div align="center">
+  <sub>Built with passion by <a href="https://github.com/phlaster">phlaster</a>.</sub>
+</div>
