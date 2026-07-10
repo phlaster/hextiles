@@ -260,12 +260,26 @@ function initializeStandardMode() {
 }
 
 function initializeEmbedMode() {
-    const d = state.embedData;
-    state.zoom = d.zoom;
-    state.targetZoom = d.zoom;
-    state.panX = d.panX;
-    state.panY = d.panY;
-    state.showGrid = d.showGrid;
+	const d = state.embedData;
+	state.zoom = d.zoom;
+	state.targetZoom = d.zoom;
+	state.panX = d.panX;
+	state.panY = d.panY;
+	
+	const origZoom = d.origZoom || d.zoom;
+	
+	state.starPanX5 = d.starPanX5 !== undefined ? d.starPanX5 : state.panX;
+	state.starPanY5 = d.starPanY5 !== undefined ? d.starPanY5 : state.panY;
+	state.starPanX2 = d.starPanX2 !== undefined ? d.starPanX2 : state.panX;
+	state.starPanY2 = d.starPanY2 !== undefined ? d.starPanY2 : state.panY;
+	state.starPanX3 = d.starPanX3 !== undefined ? d.starPanX3 : state.panX;
+	state.starPanY3 = d.starPanY3 !== undefined ? d.starPanY3 : state.panY;
+	
+	state.starZoom5 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+	state.starZoom2 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_MED);
+	state.starZoom3 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_SMALL);
+
+	state.showGrid = d.showGrid;
     state.markersVisible = d.markersVisible;
     state.showBgStars = d.showBgStars !== undefined ? d.showBgStars : true;
     state.rotMode = d.rotMode || 'hash';

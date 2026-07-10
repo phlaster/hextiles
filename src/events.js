@@ -156,7 +156,7 @@ export function rotateTile(q, r) {
         duration: CLICK_DUR
     });
 
-    const visZoom = (state.isEmbedMode && state.embedData && state.embedData.origZoom) ? state.embedData.origZoom : state.zoom;
+    const visZoom = state.zoom;
     const visSz = HEX_R * visZoom,
         fadeEndSz = HEX_R * CONFIG.ZOOM_FADE_END_MULT;
     if (visSz > fadeEndSz) {
@@ -1295,12 +1295,10 @@ export function applyPanDelta(dx, dy) {
 
 function performLiveTwist() {
     if (state.isDrag || state.touchState.mode !== 'none' || state.isExporting) return;
-
     const W = dom.cvs.width,
         H = dom.cvs.height;
-    const visZoom = (state.isEmbedMode && state.embedData && state.embedData.origZoom) ? state.embedData.origZoom : state.zoom;
+    const visZoom = state.zoom;
     const visSz = HEX_R * visZoom;
-
     if (visSz <= HEX_R * CONFIG.ZOOM_FADE_END_MULT) return;
 
     const hexes = visibleHexes(state.zoom, state.panX, state.panY, W, H);

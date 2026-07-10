@@ -217,124 +217,129 @@ export function checkIfSolved() {
 }
 
 export function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dPanY2, dPanX3, dPanY3, now, currentZoom, zoomOutTime, offsetX = 0, offsetY = 0) {
-    function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime, offsetX = 0, offsetY = 0, blazeFade = 1.0) {
-        if (spacing < CONFIG.STAR_MIN_SPACING) return;
-        const kMin = Math.floor((0 - panX) / spacing) - 2;
-        const kMax = Math.ceil((W - panX) / spacing) + 2;
-        const jMin = Math.floor((0 - panY) / spacing) - 2;
-        const jMax = Math.ceil((H - panY) / spacing) + 2;
+	const starVisualScale = state.isEmbedMode 
+		? (state.zoom / (state.embedData.origZoom || state.zoom)) 
+		: coordScale;
+		
+	const effectiveZoom = state.isEmbedMode ? (state.embedData.origZoom || state.zoom) : currentZoom;
 
-        for (let k = kMin; k <= kMax; k++) {
-            for (let j = jMin; j <= jMax; j++) {
-                const gx = panX + k * spacing;
-                const gy = panY + j * spacing;
-                const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
-                const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
-                const x = gx + rx;
-                const y = gy + ry;
-                if (x < -spacing || x > W + spacing || y < -spacing || y > H + spacing) continue;
+	function drawDotLayer(W, H, spacing, size, seed, coordScale, panX, panY, now, allowBlazing, alphaMult, zoomOutTime, offsetX = 0, offsetY = 0, blazeFade = 1.0) {
+		if (spacing < CONFIG.STAR_MIN_SPACING) return;
+		const kMin = Math.floor((0 - panX) / spacing) - 2;
+		const kMax = Math.ceil((W - panX) / spacing) + 2;
+		const jMin = Math.floor((0 - panY) / spacing) - 2;
+		const jMax = Math.ceil((H - panY) / spacing) + 2;
+		for (let k = kMin; k <= kMax; k++) {
+			for (let j = jMin; j <= jMax; j++) {
+				const gx = panX + k * spacing;
+				const gy = panY + j * spacing;
+				const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
+				const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
+				const x = gx + rx;
+				const y = gy + ry;
+				if (x < -spacing || x > W + spacing || y < -spacing || y > H + spacing) continue;
+				const bg = getBackgroundColorAt(x, y, coordScale, offsetX, offsetY);
+				if (!bg) continue;
+				const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
+				let t = (lum - CONFIG.STAR_LUM_MIN) / CONFIG.STAR_LUM_RANGE;
+				t = Math.max(0, Math.min(1, t));
+				t = t * t * (3 - 2 * t);
+				let sR = Math.round(255 * (1 - t));
+				let sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult;
+				
+				// FIX: Use starVisualScale for physical size
+				let drawSize = (size * starVisualScale) / 2;
+				
+				if (allowBlazing && zoomOutTime > 0) {
+					const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
+					const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
+					const phase = (now + offset) % cycleDuration;
+					const blazeDuration = 1200 + hash2D(k * seed + 333, j * seed + 444) * 1800;
+					if (phase < blazeDuration) {
+						let blazeT = phase / blazeDuration;
+						let blazeGlow = 0;
+						const origSR = sR, origSA = sA, origDrawSize = drawSize;
+						if (blazeT < 0.25) {
+							let t2 = blazeT / 0.25;
+							drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
+							sR = Math.round(origSR + (255 - origSR) * t2 * blazeFade);
+							sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2 * blazeFade;
+							blazeGlow = t2 * blazeFade;
+						} else if (blazeT < 0.55) {
+							let t2 = (blazeT - 0.25) / 0.30;
+							drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeFade);
+							sR = Math.round(origSR + (255 - origSR) * blazeFade);
+							sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t2);
+							blazeGlow = (1 - t2) * blazeFade;
+						} else if (blazeT < 0.65) {
+							sA = 0;
+							blazeGlow = 0;
+						} else {
+							let t2 = (blazeT - 0.65) / 0.35;
+							drawSize = origDrawSize;
+							sR = origSR;
+							sA = origSA * t2;
+							blazeGlow = 0;
+						}
+						if (blazeGlow > 0) {
+							const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * starVisualScale;
+							const glow = state.ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
+							glow.addColorStop(0, `rgba(255, 255, 240, ${0.4 * blazeGlow})`);
+							glow.addColorStop(0.4, `rgba(150, 200, 255, ${0.2 * blazeGlow})`);
+							glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+							state.ctx.save();
+							state.ctx.globalCompositeOperation = 'lighter';
+							state.ctx.fillStyle = glow;
+							state.ctx.beginPath();
+							state.ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+							state.ctx.fill();
+							state.ctx.restore();
+						}
+					}
+				}
+				let fillKey = `${sR},${sA.toFixed(3)}`;
+				let fillStyle = state.starColorCache.get(fillKey);
+				if (!fillStyle) {
+					fillStyle = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
+					state.starColorCache.set(fillKey, fillStyle);
+				}
+				state.ctx.fillStyle = fillStyle;
+				state.ctx.beginPath();
+				state.ctx.arc(x, y, drawSize, 0, Math.PI * 2);
+				state.ctx.fill();
+			}
+		}
+	}
 
-                const bg = getBackgroundColorAt(x, y, coordScale, offsetX, offsetY);
-                if (!bg) continue;
-                const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
-                let t = (lum - CONFIG.STAR_LUM_MIN) / CONFIG.STAR_LUM_RANGE;
-                t = Math.max(0, Math.min(1, t));
-                t = t * t * (3 - 2 * t);
-
-                let sR = Math.round(255 * (1 - t));
-                let sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult;
-                let drawSize = (size * coordScale) / 2;
-
-                if (allowBlazing && zoomOutTime > 0) {
-                    const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
-                    const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
-                    const phase = (now + offset) % cycleDuration;
-                    const blazeDuration = 1200 + hash2D(k * seed + 333, j * seed + 444) * 1800;
-
-                    if (phase < blazeDuration) {
-                        let blazeT = phase / blazeDuration;
-                        let blazeGlow = 0;
-                        const origSR = sR,
-                            origSA = sA,
-                            origDrawSize = drawSize;
-                        if (blazeT < 0.25) {
-                            let t2 = blazeT / 0.25;
-                            drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
-                            sR = Math.round(origSR + (255 - origSR) * t2 * blazeFade);
-                            sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2 * blazeFade;
-                            blazeGlow = t2 * blazeFade;
-                        } else if (blazeT < 0.55) {
-                            let t2 = (blazeT - 0.25) / 0.30;
-                            drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeFade);
-                            sR = Math.round(origSR + (255 - origSR) * blazeFade);
-                            sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t2);
-                            blazeGlow = (1 - t2) * blazeFade;
-                        } else if (blazeT < 0.65) {
-                            sA = 0;
-                            blazeGlow = 0;
-                        } else {
-                            let t2 = (blazeT - 0.65) / 0.35;
-                            drawSize = origDrawSize;
-                            sR = origSR;
-                            sA = origSA * t2;
-                            blazeGlow = 0;
-                        }
-                        if (blazeGlow > 0) {
-                            const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
-                            const glow = state.ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
-                            glow.addColorStop(0, `rgba(255, 255, 240, ${0.4 * blazeGlow})`);
-                            glow.addColorStop(0.4, `rgba(150, 200, 255, ${0.2 * blazeGlow})`);
-                            glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                            state.ctx.save();
-                            state.ctx.globalCompositeOperation = 'lighter';
-                            state.ctx.fillStyle = glow;
-                            state.ctx.beginPath();
-                            state.ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
-                            state.ctx.fill();
-                            state.ctx.restore();
-                        }
-                    }
-                }
-
-                let fillKey = `${sR},${sA.toFixed(3)}`;
-                let fillStyle = state.starColorCache.get(fillKey);
-                if (!fillStyle) {
-                    fillStyle = `rgba(${sR},${sR},${sR},${sA.toFixed(3)})`;
-                    state.starColorCache.set(fillKey, fillStyle);
-                }
-                state.ctx.fillStyle = fillStyle;
-                state.ctx.beginPath();
-                state.ctx.arc(x, y, drawSize, 0, Math.PI * 2);
-                state.ctx.fill();
-            }
-        }
-    }
-
-    if (!state.showBgStars) return;
-    state.ctx.save();
-    const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * coordScale;
-    drawDotLayer(W, H, spacing5, CONFIG.STAR_SIZE_LARGE, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0, offsetX, offsetY);
-    const spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * coordScale;
-    drawDotLayer(W, H, spacing2, CONFIG.STAR_SIZE_MED, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0, offsetX, offsetY);
-
-    let layer3Alpha = 0,
-        canBlaze = false,
-        blazeFade = 1.0;
-    if (currentZoom < CONFIG.ZOOM_BLAZE_FADE_START + 0.001) {
-        layer3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - currentZoom) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
-        if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > CONFIG.STAR_BLAZE_DELAY) {
-            canBlaze = true;
-            const fadeInDur = 3000;
-            let fadeT = (now - zoomOutTime - CONFIG.STAR_BLAZE_DELAY) / fadeInDur;
-            blazeFade = Math.max(0, Math.min(1, fadeT));
-            blazeFade = blazeFade * blazeFade * (3 - 2 * blazeFade);
-        }
-    }
-    if (layer3Alpha > 0) {
-        const spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * coordScale;
-        drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime, offsetX, offsetY, blazeFade);
-    }
-    state.ctx.restore();
+	if (!state.showBgStars) return;
+	state.ctx.save();
+	
+	const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * starVisualScale;
+	drawDotLayer(W, H, spacing5, CONFIG.STAR_SIZE_LARGE, 1, coordScale, dPanX5, dPanY5, now, false, 1, 0, offsetX, offsetY);
+	
+	const spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * starVisualScale;
+	drawDotLayer(W, H, spacing2, CONFIG.STAR_SIZE_MED, 2, coordScale, dPanX2, dPanY2, now, false, 1, 0, offsetX, offsetY);
+	
+	let layer3Alpha = 0,
+		canBlaze = false,
+		blazeFade = 1.0;
+		
+	if (effectiveZoom < CONFIG.ZOOM_BLAZE_FADE_START + 0.001) {
+		layer3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - effectiveZoom) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
+		if (layer3Alpha > 0 && zoomOutTime > 0 && (now - zoomOutTime) > CONFIG.STAR_BLAZE_DELAY) {
+			canBlaze = true;
+			const fadeInDur = 3000;
+			let fadeT = (now - zoomOutTime - CONFIG.STAR_BLAZE_DELAY) / fadeInDur;
+			blazeFade = Math.max(0, Math.min(1, fadeT));
+			blazeFade = blazeFade * blazeFade * (3 - 2 * blazeFade);
+		}
+	}
+	
+	if (layer3Alpha > 0) {
+		const spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * starVisualScale;
+		drawDotLayer(W, H, spacing3, CONFIG.STAR_SIZE_SMALL, 3, coordScale, dPanX3, dPanY3, now, canBlaze, layer3Alpha, zoomOutTime, offsetX, offsetY, blazeFade);
+	}
+	state.ctx.restore();
 }
 
 export function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offsetY = 0, qualityScale = 0.2) {
@@ -562,26 +567,30 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
     const rSz = grid ? sz * 0.95 : sz;
     state.ctx.save();
     if (img) {
-        if (alpha < 0.05) {
-            state.ctx.restore();
-            return;
-        }
-        
         traceHexPath(state.ctx, cx, cy, rSz);
         state.ctx.clip();
         state.ctx.translate(cx, cy);
         state.ctx.rotate(rot * CONFIG.DEG2RAD);
-        state.ctx.rotate(tf.rot * CONFIG.DEG2RAD);
         
-        const baseHexSize = state.isEmbedMode ? (state.embedTexBaseSize || 88) : 88;
-        const sizeScale = sz / baseHexSize;
-        state.ctx.scale(sizeScale, sizeScale);
-        state.ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
-        state.ctx.translate(tf.ox, tf.oy);
-        
-        const iSz = baseHexSize * 2.6;
-        state.ctx.globalAlpha = alpha; 
-        state.ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
+		if (state.isEmbedMode) {
+			const drawSz = sz * 2.6;
+			if (state.elementsFade !== undefined) {
+				state.ctx.globalAlpha = state.elementsFade;
+			}
+			state.ctx.drawImage(img, -drawSz / 2, -drawSz / 2, drawSz, drawSz);
+			if (state.elementsFade !== undefined) {
+				state.ctx.globalAlpha = 1.0;
+			}
+		} else {
+            state.ctx.rotate(tf.rot * CONFIG.DEG2RAD);
+            const baseHexSize = 88;
+            const sizeScale = sz / baseHexSize;
+            state.ctx.scale(sizeScale, sizeScale);
+            state.ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
+            state.ctx.translate(tf.ox, tf.oy);
+            const iSz = baseHexSize * 2.6;
+            state.ctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
+        }
     } else {
         state.ctx.translate(cx, cy);
         state.ctx.rotate(rot * CONFIG.DEG2RAD);
@@ -638,7 +647,6 @@ export function drawTile(cx, cy, sz, rot, grid, img, tf, hq, hr, now, curveAlpha
 function initRenderState(now) {
     const W = dom.cvs.width,
         H = dom.cvs.height;
-    
     if (state.isExporting) {
         if (!state.exportFreezeTime) state.exportFreezeTime = now;
         now = state.exportFreezeTime;
@@ -652,14 +660,11 @@ function initRenderState(now) {
         img = state.texImg,
         tf = state.texTf;
         
-    const visZoom = (state.isEmbedMode && state.embedData && state.embedData.origZoom)
-                    ? state.embedData.origZoom
-                    : z;
+    const visZoom = z; 
 
     for (const [k, a] of state.animMap) {
         if (now - a.start >= a.duration) state.animMap.delete(k);
     }
-
     return { W, H, now, z, px, py, grid, img, tf, visZoom };
 }
 
@@ -879,30 +884,22 @@ function updateZoomOutTime(visZoom, now) {
 }
 
 function computeAlphas(visZoom) {
-    // 1. Trigger-based threshold instead of continuous zoom mapping
-    const ZOOM_THRESHOLD = 0.24;
-    state.targetElementsFade = (visZoom < ZOOM_THRESHOLD) ? 0.0 : 1.0;
+    // 1. Use effectiveZoom to prevent embed resolution scaling from breaking the fade threshold
+    const effectiveZoom = state.isEmbedMode && state.embedData ? state.embedData.origZoom : visZoom;
     
-    // 2. Smooth interpolation for fade in/out
-    const fadeSpeed = state.targetElementsFade > state.elementsFade ? 0.3 : 0.5;
-    state.elementsFade += (state.targetElementsFade - state.elementsFade) * fadeSpeed;
-    if (Math.abs(state.targetElementsFade - state.elementsFade) < 0.05) {
-        state.elementsFade = state.targetElementsFade;
-    }
-
-    const curveAlpha = state.elementsFade;
+    // 2. Restore the continuous fade using the existing computeFadeAlpha function
+    const curveAlpha = computeFadeAlpha(effectiveZoom);
     let gridAlpha = curveAlpha;
 
     // Interaction fade (driven by targetInteractionFade)
     const intFadeSpeed = state.targetInteractionFade > state.interactionFade ? 0.3 : 0.5;
     state.interactionFade += (state.targetInteractionFade - state.interactionFade) * intFadeSpeed;
     
-    const fadeAnimating = Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001 || 
-                          Math.abs(state.targetElementsFade - state.elementsFade) > 0.005;
-
+    const fadeAnimating = Math.abs(state.targetInteractionFade - state.interactionFade) > 0.001;
+    
     const finalCurveAlpha = curveAlpha * state.interactionFade;
     const finalGridAlpha = gridAlpha * state.interactionFade;
-
+    
     return { curveAlpha: finalCurveAlpha, gridAlpha: finalGridAlpha, fadeAnimating };
 }
 

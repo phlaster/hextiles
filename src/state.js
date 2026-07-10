@@ -72,8 +72,6 @@ export const state = {
     inertiaEnabled: true,
     interactionFade: 1.0,
     targetInteractionFade: 1.0,
-    elementsFade: 1.0,
-    targetElementsFade: 1.0,
     isExporting: false,
     exportFreezeTime: 0,
 

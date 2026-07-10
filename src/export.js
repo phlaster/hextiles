@@ -379,33 +379,42 @@ function getExportParams() {
     const cr = dom.cvs.getBoundingClientRect(),
         fx = state.efRect.x - cr.left,
         fy = state.efRect.y - cr.top;
+        
     const targetLong = parseInt(dom.exportSide.value) || 1920,
         currentLong = Math.max(state.efRect.w, state.efRect.h),
         scale = targetLong / currentLong;
+        
     const eW = Math.round(state.efRect.w * scale),
         eH = Math.round(state.efRect.h * scale),
         eZoom = state.zoom * scale,
         ePanX = (state.panX - fx) * scale,
         ePanY = (state.panY - fy) * scale;
-    return { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY };
+
+    const expStarPans = {
+        x5: (state.starPanX5 - fx) * scale, y5: (state.starPanY5 - fy) * scale,
+        x2: (state.starPanX2 - fx) * scale, y2: (state.starPanY2 - fy) * scale,
+        x3: (state.starPanX3 - fx) * scale, y3: (state.starPanY3 - fy) * scale
+    };
+
+    return { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans };
 }
 
 async function exportToPDF() {
-    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY } = getExportParams();
-    const svgString = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
+    const params = getExportParams();
+    const svgString = buildExportSVG(params);
     const parser = new DOMParser(),
         svgDoc = parser.parseFromString(svgString, "image/svg+xml"),
         svgElement = svgDoc.documentElement;
-    const { jsPDF } = window.jspdf, orientation = eW > eH ? 'landscape' : 'portrait';
-    const pdf = new jsPDF({ orientation, unit: 'px', format: [eW, eH], compress: true });
-    await pdf.svg(svgElement, { x: 0, y: 0, width: eW, height: eH });
+    const { jsPDF } = window.jspdf, orientation = params.eW > params.eH ? 'landscape' : 'portrait';
+    const pdf = new jsPDF({ orientation, unit: 'px', format: [params.eW, params.eH], compress: true });
+    await pdf.svg(svgElement, { x: 0, y: 0, width: params.eW, height: params.eH });
     pdf.save('hex-tiles-export.pdf');
     toast('PDF exported (Vector)');
 }
 
 function exportToSVG() {
-    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY } = getExportParams();
-    const svg = buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY);
+    const params = getExportParams();
+    const svg = buildExportSVG(params);
     const blob = new Blob([svg], { type: 'image/svg+xml' }),
         url = URL.createObjectURL(blob),
         a = document.createElement('a');
@@ -417,9 +426,9 @@ function exportToSVG() {
 }
 
 async function exportToPNG() {
-    const { fx, fy, scale, eW, eH } = getExportParams();
+    const params = getExportParams();
     const off = document.createElement('canvas');
-    renderToOffscreen(off, eW, eH, fx, fy, state.efRect.w, state.efRect.h);
+    renderToOffscreen(off, params); 
     const blob = await canvasToBlob(off, 'image/png'),
         url = URL.createObjectURL(blob),
         a = document.createElement('a');
@@ -431,7 +440,7 @@ async function exportToPNG() {
 }
 
 async function generateEmbedCode() {
-    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY } = getExportParams();
+    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = getExportParams();
     
     const targetHexSize = Math.round(HEX_R * eZoom);
     const maxAllowed = parseInt(dom.exportSide.value) || 1920;
@@ -445,6 +454,9 @@ async function generateEmbedCode() {
     const data = {
         w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
         origZoom: state.zoom, showGrid: state.showGrid,
+        starPanX5: expStarPans.x5, starPanY5: expStarPans.y5,
+        starPanX2: expStarPans.x2, starPanY2: expStarPans.y2,
+        starPanX3: expStarPans.x3, starPanY3: expStarPans.y3,
         markersVisible: false, showBgStars: state.showBgStars,
         flowEnabled: state.flowEnabled, inertiaEnabled: state.inertiaEnabled,
         rotMode: state.rotMode, randomSeed: state.randomSeed, rotSeed: state.rotSeed,
@@ -614,7 +626,8 @@ function clampFrameToCanvas() {
 //  SVG EXPORT RENDERING
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
+function buildExportSVG(params) {
+    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = params;
     const now = state.exportFreezeTime || Date.now();
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const exportBounds = getHexBounds(exportHexes);
@@ -632,7 +645,7 @@ function buildExportSVG(fx, fy, scale, eW, eH, eZoom, ePanX, ePanY) {
     svg += buildSvgGradient(eW, eH, scale, fx, fy);
 
     if (state.showBgStars) {
-        svg += buildSvgStars(eW, eH, scale, fx, fy, eZoom, now);
+        svg += buildSvgStars(eW, eH, scale, fx, fy, eZoom, now, expStarPans);
     }
 
     svg += buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha);
@@ -648,11 +661,9 @@ function buildSvgGradient(eW, eH, scale, fx, fy) {
     return `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
 }
 
-function buildSvgStars(eW, eH, scale, fx, fy, eZoom, now) {
+function buildSvgStars(eW, eH, scale, fx, fy, eZoom, now, expStarPans) {
     let svg = '';
-    const expStarPanX5 = (state.starPanX5 - fx) * scale, expStarPanY5 = (state.starPanY5 - fy) * scale;
-    const expStarPanX2 = (state.starPanX2 - fx) * scale, expStarPanY2 = (state.starPanY2 - fy) * scale;
-    const expStarPanX3 = (state.starPanX3 - fx) * scale, expStarPanY3 = (state.starPanY3 - fy) * scale;
+    const { x5: expStarPanX5, y5: expStarPanY5, x2: expStarPanX2, y2: expStarPanY2, x3: expStarPanX3, y3: expStarPanY3 } = expStarPans;
     const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * scale;
     const spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * scale;
     const spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * scale;
@@ -742,41 +753,6 @@ function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, no
     return svg;
 }
 
-function rasterizeRawTexture(eSz) {
-    let targetW = Math.ceil(2 * eSz);
-    let targetH = Math.ceil(CONFIG.SQRT3 * eSz);
-    
-    // Cap maximum dimension to prevent memory issues on huge exports
-    const MAX_DIM = 4096;
-    let drawScale = 1;
-    if (targetW > MAX_DIM || targetH > MAX_DIM) {
-        drawScale = Math.min(MAX_DIM / targetW, MAX_DIM / targetH);
-    }
-    
-    const W = Math.ceil(targetW * drawScale);
-    const H = Math.ceil(targetH * drawScale);
-    
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const ctx = c.getContext('2d');
-        
-    ctx.save();
-    ctx.translate(W / 2, H / 2);
-    ctx.scale(drawScale, drawScale);
-    
-    const tf = state.texTf;
-    ctx.rotate(tf.rot * CONFIG.DEG2RAD);
-    ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
-    ctx.translate(tf.ox, tf.oy);
-    
-    const iSz = eSz * 2.6;
-    ctx.drawImage(state.texImg, -iSz / 2, -iSz / 2, iSz, iSz);
-    
-    ctx.restore();
-    
-    return { dataUrl: c.toDataURL('image/png'), width: W, height: H };
-}
 
 function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
     const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH :
@@ -786,6 +762,12 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
     const pathsByColor = {};
     const gridPaths = [];
     const curveColorCache = new Map();
+
+    const pushPath = (color, pathData) => {
+        if (!color) return;
+        if (!pathsByColor[color]) pathsByColor[color] = [];
+        pathsByColor[color].push(pathData);
+    };
 
     function getCachedCurveColorStr(curveID) {
         let cached = curveColorCache.get(curveID);
@@ -843,37 +825,13 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
             
             const a = eSz * SQRT3 / 2;
             if (alter) {
-                let c = getSvgEdgeColor(h.q, h.r, (0 + k) % 6);
-                if (c) {
-                    pathsByColor[c] = pathsByColor[c] || [];
-                    pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz / 2, a, eSz / 2, Math.PI - ext, 5 * PI_DIV_3 + ext, false));
-                }
-                c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6);
-                if (c) {
-                    pathsByColor[c] = pathsByColor[c] || [];
-                    pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false));
-                }
-                c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6);
-                if (c) {
-                    pathsByColor[c] = pathsByColor[c] || [];
-                    pathsByColor[c].push(arcToPath(h.x, h.y, rot, eSz / 2, -a, eSz / 2, PI_DIV_3 - ext, Math.PI + ext, false));
-                }
+                pushPath(getSvgEdgeColor(h.q, h.r, (0 + k) % 6), arcToPath(h.x, h.y, rot, eSz / 2, a, eSz / 2, Math.PI - ext, 5 * PI_DIV_3 + ext, false));
+                pushPath(getSvgEdgeColor(h.q, h.r, (2 + k) % 6), arcToPath(h.x, h.y, rot, -eSz, 0, eSz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false));
+                pushPath(getSvgEdgeColor(h.q, h.r, (4 + k) % 6), arcToPath(h.x, h.y, rot, eSz / 2, -a, eSz / 2, PI_DIV_3 - ext, Math.PI + ext, false));
             } else {
-                let c = getSvgEdgeColor(h.q, h.r, (2 + k) % 6);
-                if (c) {
-                    pathsByColor[c] = pathsByColor[c] || [];
-                    pathsByColor[c].push(arcToPath(h.x, h.y, rot, -eSz, 0, eSz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false));
-                }
-                c = getSvgEdgeColor(h.q, h.r, (4 + k) % 6);
-                if (c) {
-                    pathsByColor[c] = pathsByColor[c] || [];
-                    pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, -a, 1.5 * eSz, TWO_PI_DIV_3 - ext, Math.PI + ext, false));
-                }
-                c = getSvgEdgeColor(h.q, h.r, (1 + k) % 6);
-                if (c) {
-                    pathsByColor[c] = pathsByColor[c] || [];
-                    pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, a, 1.5 * eSz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false));
-                }
+                pushPath(getSvgEdgeColor(h.q, h.r, (2 + k) % 6), arcToPath(h.x, h.y, rot, -eSz, 0, eSz / 2, -PI_DIV_3 - ext, PI_DIV_3 + ext, false));
+                pushPath(getSvgEdgeColor(h.q, h.r, (4 + k) % 6), arcToPath(h.x, h.y, rot, 1.5 * eSz, -a, 1.5 * eSz, TWO_PI_DIV_3 - ext, Math.PI + ext, false));
+                pushPath(getSvgEdgeColor(h.q, h.r, (1 + k) % 6), arcToPath(h.x, h.y, rot, 1.5 * eSz, a, 1.5 * eSz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false));
             }
         }
     }
@@ -947,14 +905,13 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
 //  OFFSCREEN RENDERING (PNG)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
+function renderToOffscreen(offCanvas, params) {
+    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = params;
+    
     offCanvas.width = eW;
     offCanvas.height = eH;
+    
     const offCtx = offCanvas.getContext('2d');
-    const scale = eW / fw,
-        eZoom = state.zoom * scale,
-        ePanX = (state.panX - fx) * scale,
-        ePanY = (state.panY - fy) * scale;
     const eSz = HEX_R * eZoom;
     const eCurveAlpha = state.elementsFade;
     const eGridAlpha = eCurveAlpha;
@@ -972,24 +929,22 @@ function renderToOffscreen(offCanvas, eW, eH, fx, fy, fw, fh) {
     state.ctx = offCtx;
     const now = state.exportFreezeTime || Date.now();
     
-    drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom);
+    drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom, expStarPans);
     drawOffscreenHexTiles(offCtx, hexes, eSz, now, eCurveAlpha, eGridAlpha);
     
     state.ctx = oldCtx;
     return offCanvas;
 }
 
-function drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom) {
+function drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom, expStarPans) {
     offCtx.fillStyle = COLORS.bg;
     offCtx.fillRect(0, 0, eW, eH);
     drawIDWGradient(eW, eH, scale, fx, fy);
-    const expStarPanX5 = (state.starPanX5 - fx) * scale, expStarPanY5 = (state.starPanY5 - fy) * scale;
-    const expStarPanX2 = (state.starPanX2 - fx) * scale, expStarPanY2 = (state.starPanY2 - fy) * scale;
-    const expStarPanX3 = (state.starPanX3 - fx) * scale, expStarPanY3 = (state.starPanY3 - fy) * scale;
     
     const oldCtx = state.ctx;
     state.ctx = offCtx;
-    drawBackgroundStars(eW, eH, scale, expStarPanX5, expStarPanY5, expStarPanX2, expStarPanY2, expStarPanX3, expStarPanY3, now, eZoom / scale, state.zoomOutStartTime, fx, fy);
+    const { x5, y5, x2, y2, x3, y3 } = expStarPans;
+    drawBackgroundStars(eW, eH, scale, x5, y5, x2, y2, x3, y3, now, eZoom / scale, state.zoomOutStartTime, fx, fy);
     state.ctx = oldCtx;
 }
 
@@ -1087,52 +1042,95 @@ function serializeRotOverrides() {
     return out;
 }
 
-function getTextureDataUrl(rasterSize) {
-    if (!state.texImg) return null;
-    try {
-        const cW = Math.ceil(2 * rasterSize);
-        const cH = Math.ceil(CONFIG.SQRT3 * rasterSize);
-        const c = document.createElement('canvas');
-        c.width = cW;
-        c.height = cH;
-        const ctx = c.getContext('2d');
+function canvasToBlob(canvas, type) {
+    return new Promise(resolve => canvas.toBlob(resolve, type));
+}
 
-        // FIX: Translate to the center of the canvas BEFORE defining the clip path
-        ctx.translate(cW / 2, cH / 2);
+function rasterizeTexture(baseHexSize, options = {}) {
+    const { clipToHex = false, maxDim = 4096, preferWebP = false } = options;
+    if (!state.texImg) return { dataUrl: null, width: 0, height: 0 };
 
-        // 1. Clip to hex frame (strips outside to alpha=0)
+    const iSz = baseHexSize * 2.6;
+    let targetSize = Math.ceil(iSz);
+    
+    let drawScale = 1;
+    if (targetSize > maxDim) {
+        drawScale = maxDim / targetSize;
+    }
+    
+    const W = Math.ceil(targetSize * drawScale);
+    const H = W; // Force square canvas
+
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(drawScale, drawScale);
+
+    // Apply hexagonal clip if requested (used for Embed mode)
+    if (clipToHex) {
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const a = CONFIG.PI_DIV_3 * i;
-            const vx = rasterSize * Math.cos(a);
-            const vy = rasterSize * Math.sin(a);
+            const vx = baseHexSize * Math.cos(a);
+            const vy = baseHexSize * Math.sin(a);
             if (i === 0) ctx.moveTo(vx, vy);
             else ctx.lineTo(vx, vy);
         }
         ctx.closePath();
         ctx.clip();
-
-        // 2. Apply texTf to bake the transform into the image
-        const tf = state.texTf;
-        ctx.rotate(tf.rot * CONFIG.DEG2RAD);
-        ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
-        ctx.translate(tf.ox, tf.oy);
-
-        const iSz = rasterSize * 2.6;
-        ctx.drawImage(state.texImg, -iSz / 2, -iSz / 2, iSz, iSz);
-
-        // 3. Compress using WebP (supports alpha)
-        let url = c.toDataURL('image/webp', 0.8);
-        
-        if (url.startsWith('data:image/webp') && url.length < 1500000) {
-            return url;
-        }
-        return c.toDataURL('image/png');
-    } catch (e) {
-        return null;
     }
+
+    // Apply texture transform
+    const tf = state.texTf;
+    
+    // FIX: The texture offsets (ox, oy) are defined in the reference coordinate system 
+    // where the hex radius is 88. We must scale them to match the current baseHexSize.
+    const sizeScale = baseHexSize / 88;
+    
+    ctx.rotate(tf.rot * CONFIG.DEG2RAD);
+    ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
+    ctx.translate(tf.ox * sizeScale, tf.oy * sizeScale);
+
+    ctx.drawImage(state.texImg, -iSz / 2, -iSz / 2, iSz, iSz);
+    ctx.restore();
+
+    // Generate Data URL with optional WebP fallback
+    let dataUrl;
+    if (preferWebP) {
+        let url = c.toDataURL('image/webp', 0.8);
+        if (url.startsWith('data:image/webp') && url.length < 1500000) {
+            dataUrl = url;
+        } else {
+            dataUrl = c.toDataURL('image/png');
+        }
+    } else {
+        dataUrl = c.toDataURL('image/png');
+    }
+
+    return { dataUrl, width: W, height: H };
 }
 
-function canvasToBlob(canvas, type) {
-    return new Promise(resolve => canvas.toBlob(resolve, type));
+function rasterizeRawTexture(eSz) {
+	return rasterizeTexture(eSz, { 
+		clipToHex: false, 
+		maxDim: 4096, 
+		preferWebP: false 
+	});
+}
+
+function getTextureDataUrl(rasterSize) {
+	try {
+		const { dataUrl } = rasterizeTexture(rasterSize, { 
+			clipToHex: true, 
+			maxDim: Infinity, 
+			preferWebP: true 
+		});
+		return dataUrl;
+	} catch (e) {
+		return null;
+	}
 }
