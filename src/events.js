@@ -877,7 +877,9 @@ function setupCanvasMouseEvents() {
             if (state.isMouseDrawMode) {
                 state.isMouseDrawMode = false;
             } else if (!state.dragMoved) {
-                handleClick(e);
+                if (!state.isEmbedMode) {
+                    handleClick(e);
+                }
             } else {
                 checkIfSolved();
             }
