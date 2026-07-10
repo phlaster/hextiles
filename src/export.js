@@ -707,11 +707,47 @@ function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, no
     return svg;
 }
 
-function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
-    const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH : 
-                (eSz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH : 
-                (eSz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
+function rasterizeRawTexture(eSz) {
+    let targetW = Math.ceil(2 * eSz);
+    let targetH = Math.ceil(CONFIG.SQRT3 * eSz);
+    
+    // Cap maximum dimension to prevent memory issues on huge exports
+    const MAX_DIM = 4096;
+    let drawScale = 1;
+    if (targetW > MAX_DIM || targetH > MAX_DIM) {
+        drawScale = Math.min(MAX_DIM / targetW, MAX_DIM / targetH);
+    }
+    
+    const W = Math.ceil(targetW * drawScale);
+    const H = Math.ceil(targetH * drawScale);
+    
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+        
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(drawScale, drawScale);
+    
+    const tf = state.texTf;
+    ctx.rotate(tf.rot * CONFIG.DEG2RAD);
+    ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
+    ctx.translate(tf.ox, tf.oy);
+    
+    const iSz = eSz * 2.6;
+    ctx.drawImage(state.texImg, -iSz / 2, -iSz / 2, iSz, iSz);
+    
+    ctx.restore();
+    
+    return { dataUrl: c.toDataURL('image/png'), width: W, height: H };
+}
 
+function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
+    const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH :
+        (eSz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH :
+        (eSz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
+    
     const pathsByColor = {};
     const gridPaths = [];
     const curveColorCache = new Map();
@@ -763,7 +799,8 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
         return `M ${tx1.toFixed(2)} ${ty1.toFixed(2)} A ${r.toFixed(2)} ${r.toFixed(2)} 0 ${largeArc} ${sweep} ${tx2.toFixed(2)} ${ty2.toFixed(2)}`;
     }
 
-    if (eCurveAlpha > 0) {
+    // 1. Generate Curves (Skip entirely if texture is present)
+    if (!state.texImg && eCurveAlpha > 0) {
         for (const h of exportHexes) {
             const rot = tileRot(h.q, h.r),
                 k = (rot / 60) % 6,
@@ -771,7 +808,7 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
             const rad = rot * Math.PI / 180.0,
                 cos = Math.cos(rad),
                 sin = Math.sin(rad);
-            if (state.texImg) continue;
+            
             const a = eSz * SQRT3 / 2;
             if (alter) {
                 let c = getSvgEdgeColor(h.q, h.r, (0 + k) % 6);
@@ -806,31 +843,71 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
                     pathsByColor[c].push(arcToPath(h.x, h.y, rot, 1.5 * eSz, a, 1.5 * eSz, Math.PI - ext, FOUR_PI_DIV_3 + ext, false));
                 }
             }
-            if (state.showGrid) {
-                let hexPath = "M ";
-                for (let i = 0; i < 6; i++) {
-                    const ang = PI_DIV_3 * i,
-                        vx = eSz * Math.cos(ang),
-                        vy = eSz * Math.sin(ang),
-                        tx_v = h.x + vx * cos - vy * sin,
-                        ty_v = h.y + vx * sin + vy * cos;
-                    hexPath += `${tx_v.toFixed(2)} ${ty_v.toFixed(2)} `;
-                    if (i < 5) hexPath += "L ";
-                }
-                hexPath += "Z ";
-                gridPaths.push(hexPath);
-            }
         }
     }
-    
+
+    // 2. Generate Grid Paths (UNROTATED, matching Canvas2D behavior)
+    if (state.showGrid) {
+        for (const h of exportHexes) {
+            let hexPath = "M ";
+            for (let i = 0; i < 6; i++) {
+                const ang = PI_DIV_3 * i;
+                const vx = eSz * Math.cos(ang);
+                const vy = eSz * Math.sin(ang);
+                const tx_v = h.x + vx;
+                const ty_v = h.y + vy;
+                hexPath += `${tx_v.toFixed(2)} ${ty_v.toFixed(2)} `;
+                if (i < 5) hexPath += "L ";
+            }
+            hexPath += "Z ";
+            gridPaths.push(hexPath);
+        }
+    }
+
     let svg = '';
+
+    // 3. Add Texture (Rasterized raw, clipped via SVG clipPath)
+    if (state.texImg) {
+        const { dataUrl, width, height } = rasterizeRawTexture(eSz);
+        
+        // Define the raw texture image and the unrotated hex clip path
+        svg += `<defs>`;
+        svg += `<image id="hexTexRaw" href="${dataUrl}" width="${width}" height="${height}" x="${-width/2}" y="${-height/2}"/>`;
+        
+        let hexClipPath = "M ";
+        for (let i = 0; i < 6; i++) {
+            const a = PI_DIV_3 * i;
+            const vx = eSz * Math.cos(a);
+            const vy = eSz * Math.sin(a);
+            hexClipPath += `${vx.toFixed(2)} ${vy.toFixed(2)} `;
+            if (i < 5) hexClipPath += "L ";
+        }
+        hexClipPath += "Z";
+        svg += `<clipPath id="hexClip"><path d="${hexClipPath}"/></clipPath>`;
+        svg += `</defs>`;
+        
+        // Draw each hex: translate to center, apply unrotated clip, then rotate the raw texture inside
+        for (const h of exportHexes) {
+            const rot = tileRot(h.q, h.r);
+            svg += `<g transform="translate(${h.x.toFixed(2)}, ${h.y.toFixed(2)})" clip-path="url(#hexClip)">`;
+            svg += `<use href="#hexTexRaw" transform="rotate(${rot})"/>`;
+            svg += `</g>`;
+        }
+    }
+
+    // 4. Add Curves
     const lw = (eSz / 3 * state.curveLineWidth).toFixed(2);
     const curveOpacityAttr = eCurveAlpha < 0.999 ? ` stroke-opacity="${eCurveAlpha.toFixed(3)}"` : '';
-    for (const color in pathsByColor) svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"${curveOpacityAttr}/>`;
-    
+    for (const color in pathsByColor) {
+        svg += `<path d="${pathsByColor[color].join(' ')}" stroke="${color}" stroke-width="${lw}" fill="none" stroke-linecap="butt"${curveOpacityAttr}/>`;
+    }
+
+    // 5. Add Grid
     const gridOpacityAttr = eGridAlpha < 0.999 ? ` stroke-opacity="${eGridAlpha.toFixed(3)}"` : '';
-    if (state.showGrid && eGridAlpha > 0 && gridPaths.length > 0) svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-linecap="butt"${gridOpacityAttr}/>`;
-    
+    if (state.showGrid && eGridAlpha > 0 && gridPaths.length > 0) {
+        svg += `<path d="${gridPaths.join(' ')}" stroke="${COLORS.gridLine}" stroke-width="1" fill="none" stroke-linecap="butt"${gridOpacityAttr}/>`;
+    }
+
     return svg;
 }
 
@@ -1001,9 +1078,26 @@ function getTextureDataUrl() {
     if (!state.texImg) return null;
     try {
         const c = document.createElement('canvas');
-        c.width = state.texImg.naturalWidth || state.texImg.width;
-        c.height = state.texImg.naturalHeight || state.texImg.height;
-        c.getContext('2d').drawImage(state.texImg, 0, 0);
+        let w = state.texImg.naturalWidth || state.texImg.width;
+        let h = state.texImg.naturalHeight || state.texImg.height;
+        
+        const MAX_DIM = 1024;
+        if (w > MAX_DIM || h > MAX_DIM) {
+            const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+        }
+        
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(state.texImg, 0, 0, w, h);
+        
+        let url = c.toDataURL('image/webp', 0.8);
+        
+        if (url.startsWith('data:image/webp') && url.length < 1500000) {
+            return url;
+        }
         return c.toDataURL('image/png');
     } catch (e) {
         return null;

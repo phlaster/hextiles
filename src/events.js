@@ -395,8 +395,26 @@ function setupCanvasTouchEvents() {
         }
         if (e.touches.length === 1) {
             const r = dom.cvs.getBoundingClientRect(),
-                tx = e.touches[0].clientX - r.left,
-                ty = e.touches[0].clientY - r.top;
+            tx = e.touches[0].clientX - r.left,
+            ty = e.touches[0].clientY - r.top;
+
+            if (state.isEmbedMode) {
+                state.touchState.mode = 'draw';
+                state.touchState.startX = tx;
+                state.touchState.startY = ty;
+                state.isDrag = true;
+                state.dragMoved = false;
+                state.embedDragLastTile = null;
+                
+                const h = pixToHex(tx, ty, state.zoom, state.panX, state.panY);
+                const hk = hexKey(h.q, h.r);
+                state.embedDragLastTile = hk;
+                rotateTile(h.q, h.r);
+                requestRender();
+                e.preventDefault();
+                return;
+            }
+
             if (!state.isEmbedMode && state.markersVisible) {
                 let clickedMarkerIdx = -1;
                 for (let i = 0; i < state.gradientMarkers.length; i++) {
@@ -676,6 +694,12 @@ function setupCanvasMouseEvents() {
             state.dragSX = mx;
             state.dragSY = my;
             state.embedDragLastTile = null;
+
+            const h = pixToHex(mx, my, state.zoom, state.panX, state.panY);
+            const hk = hexKey(h.q, h.r);
+            state.embedDragLastTile = hk;
+            rotateTile(h.q, h.r);
+            requestRender();
             return;
         }
 
@@ -773,14 +797,18 @@ function setupCanvasMouseEvents() {
 
         if (state.isDrag) {
             const dx = mx - state.dragSX,
-                dy = my - state.dragSY;
-
-            if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
-                if (!state.dragMoved) {
-                    state.dragMoved = true;
-                    if (!state.isMouseDrawMode && state.mouseDrawTimer) {
-                        clearTimeout(state.mouseDrawTimer);
-                        state.mouseDrawTimer = null;
+            dy = my - state.dragSY;
+            
+            if (state.isEmbedMode) {
+                state.dragMoved = true;
+            } else {
+                if (Math.abs(dx) + Math.abs(dy) > CLICK_THRESH) {
+                    if (!state.dragMoved) {
+                        state.dragMoved = true;
+                        if (!state.isMouseDrawMode && state.mouseDrawTimer) {
+                            clearTimeout(state.mouseDrawTimer);
+                            state.mouseDrawTimer = null;
+                        }
                     }
                 }
             }
@@ -798,6 +826,7 @@ function setupCanvasMouseEvents() {
 
             if (state.dragMoved) {
                 if (state.isEmbedMode) {
+                    const h = pixToHex(mx, my, state.zoom, state.panX, state.panY);
                     const hk = hexKey(h.q, h.r);
                     if (hk !== state.embedDragLastTile) {
                         state.embedDragLastTile = hk;
@@ -805,7 +834,7 @@ function setupCanvasMouseEvents() {
                     }
                 } else {
                     let targetPanX = state.dragPX + dx,
-                        targetPanY = state.dragPY + dy;
+                    targetPanY = state.dragPY + dy;
                     const dPanX = targetPanX - state.panX,
                         dPanY = targetPanY - state.panY;
                     if (state.inertiaEnabled) {
