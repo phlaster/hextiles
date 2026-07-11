@@ -1040,6 +1040,22 @@ function setupUITogglesAndSliders() {
     };
 }
 
+function updateTextureUI() {
+    const hasTexture = !!state.texImg;
+    
+    // Hide Curve Width slider row
+    const curveWidthRow = dom.sCurveW.closest('.slider-row');
+    if (curveWidthRow) curveWidthRow.style.display = hasTexture ? 'none' : '';
+    
+    // Hide Alternative Tiles slider row
+    const alterTilesRow = dom.sAlterTiles.closest('.slider-row');
+    if (alterTilesRow) alterTilesRow.style.display = hasTexture ? 'none' : '';
+    
+    // Hide Curve Colors section block
+    const curveColorsSection = dom.curveList.closest('.sb-section');
+    if (curveColorsSection) curveColorsSection.style.display = hasTexture ? 'none' : '';
+}
+
 function setupTextureEditor() {
     dom.uploadZone.onclick = () => dom.fileInput.click();
     dom.uploadZone.ondragover = e => {
@@ -1068,13 +1084,13 @@ function setupTextureEditor() {
             ox: 0,
             oy: 0
         };
-
-        // Close the editor panel immediately
         closeEditor();
-
         dom.fileName.textContent = '';
         toast('Texture reset to default');
         dom.resetTexBtn.style.display = 'none';
+        
+        updateTextureUI();
+        
         requestRender();
     };
 
@@ -1526,10 +1542,12 @@ function loadFile(file) {
     reader.onload = ev => {
         const img = new Image();
         img.onload = () => {
-            state.texImg = img; // Apply immediately
-            dom.resetTexBtn.style.display = 'block'; // Show reset button
+            state.texImg = img;
+            dom.resetTexBtn.style.display = 'block';
+            
+            updateTextureUI();
             openEditor();
-            requestRender(); // Update main canvas instantly
+            requestRender();
         };
         img.src = ev.target.result;
     };

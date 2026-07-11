@@ -1190,10 +1190,9 @@ function renderMarkers(now) {
 
 function updateStatsIfNeeded(hexes, W, H, visZoom, curveAlpha, now) {
     if (now - state.lastStatsUpdate <= CONFIG.STATS_UPDATE_INTERVAL) return;
-
     state.lastStatsUpdate = now;
 
-    if (visZoom <= CONFIG.ZOOM_FADE_MID || state.curveColors.length <= 1) {
+    if (visZoom <= CONFIG.ZOOM_FADE_MID || state.curveColors.length <= 1 || state.texImg) {
         dom.statCurvesWrap.style.display = 'none';
         dom.statColorsWrap.style.display = 'none';
     } else {
