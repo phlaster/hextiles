@@ -185,7 +185,7 @@ export function setupEvents() {
 
 function setupFullscreenAndIdle() {
     let wasSidebarOpenBeforeFullscreen = false;
-    
+
     dom.fullscreenBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen mode not allowed'));
         else if (document.exitFullscreen) document.exitFullscreen();
@@ -222,7 +222,9 @@ function setupFullscreenAndIdle() {
     ['mousemove', 'mousedown', 'wheel', 'keydown', 'touchstart'].forEach(evt => {
         window.addEventListener(evt, () => {
             if (document.fullscreenElement) resetIdleTimer();
-        }, { passive: true });
+        }, {
+            passive: true
+        });
     });
 }
 
@@ -246,7 +248,7 @@ function setupSidebarGestures() {
     let sbTouchStartX = null,
         sbTouchStartY = null,
         sbDragging = false;
-        
+
     dom.sidebar.addEventListener('touchstart', e => {
         if (dom.sidebar.classList.contains('collapsed')) return;
         const targetTag = e.target.tagName;
@@ -258,8 +260,10 @@ function setupSidebarGestures() {
         sbTouchStartY = e.touches[0].clientY;
         sbDragging = false;
         dom.sidebar.style.transition = 'none';
-    }, { passive: true });
-    
+    }, {
+        passive: true
+    });
+
     dom.sidebar.addEventListener('touchmove', e => {
         if (sbTouchStartX === null) return;
         const dx = e.touches[0].clientX - sbTouchStartX,
@@ -275,8 +279,10 @@ function setupSidebarGestures() {
             e.preventDefault();
             dom.sidebar.style.transform = dx > 0 ? `translateX(${dx}px)` : `translateX(0px)`;
         }
-    }, { passive: false });
-    
+    }, {
+        passive: false
+    });
+
     dom.sidebar.addEventListener('touchend', e => {
         if (sbTouchStartX === null) return;
         const dx = e.changedTouches[0].clientX - sbTouchStartX;
@@ -286,7 +292,9 @@ function setupSidebarGestures() {
             document.body.classList.add('sidebar-collapsed');
             dom.sidebarToggle.classList.add('collapsed');
             dom.sidebar.style.transform = 'translateX(calc(100% + 10px))';
-            setTimeout(() => { dom.sidebar.style.transform = ''; }, 300);
+            setTimeout(() => {
+                dom.sidebar.style.transform = '';
+            }, 300);
         } else dom.sidebar.style.transform = '';
         sbTouchStartX = null;
         sbDragging = false;
@@ -295,7 +303,7 @@ function setupSidebarGestures() {
     let sbToggleDragging = false,
         sbToggleStartX = 0,
         sbToggleCurrentX = 0;
-        
+
     dom.sidebarToggle.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
         sbToggleDragging = true;
@@ -304,8 +312,10 @@ function setupSidebarGestures() {
         dom.sidebar.style.transition = 'none';
         dom.sidebarToggle.style.transition = 'none';
         e.preventDefault();
-    }, { passive: false });
-    
+    }, {
+        passive: false
+    });
+
     dom.sidebarToggle.addEventListener('touchmove', e => {
         if (!sbToggleDragging) return;
         sbToggleCurrentX = e.touches[0].clientX;
@@ -325,8 +335,10 @@ function setupSidebarGestures() {
             }
         }
         e.preventDefault();
-    }, { passive: false });
-    
+    }, {
+        passive: false
+    });
+
     dom.sidebarToggle.addEventListener('touchend', e => {
         if (!sbToggleDragging) return;
         sbToggleDragging = false;
@@ -395,8 +407,8 @@ function setupCanvasTouchEvents() {
         }
         if (e.touches.length === 1) {
             const r = dom.cvs.getBoundingClientRect(),
-            tx = e.touches[0].clientX - r.left,
-            ty = e.touches[0].clientY - r.top;
+                tx = e.touches[0].clientX - r.left,
+                ty = e.touches[0].clientY - r.top;
 
             if (state.isEmbedMode) {
                 state.touchState.mode = 'draw';
@@ -405,7 +417,7 @@ function setupCanvasTouchEvents() {
                 state.isDrag = true;
                 state.dragMoved = false;
                 state.embedDragLastTile = null;
-                
+
                 const h = pixToHex(tx, ty, state.zoom, state.panX, state.panY);
                 const hk = hexKey(h.q, h.r);
                 state.embedDragLastTile = hk;
@@ -499,7 +511,9 @@ function setupCanvasTouchEvents() {
             state.zoomOutBlockedUntil = 0;
         }
         e.preventDefault();
-    }, { passive: false });
+    }, {
+        passive: false
+    });
 
     window.addEventListener('touchmove', e => {
         if (state.touchState.mode === 'none') return;
@@ -585,7 +599,9 @@ function setupCanvasTouchEvents() {
             requestRender();
         }
         e.preventDefault();
-    }, { passive: false });
+    }, {
+        passive: false
+    });
 
     window.addEventListener('touchend', e => {
         if (state.touchState.mode === 'none') return;
@@ -631,7 +647,9 @@ function setupCanvasTouchEvents() {
         }
         requestRender();
         e.preventDefault();
-    }, { passive: false });
+    }, {
+        passive: false
+    });
 }
 
 function setupCanvasMouseEvents() {
@@ -660,7 +678,9 @@ function setupCanvasMouseEvents() {
         checkIfSolved();
         scheduleMagnetZoom();
         requestRender();
-    }, { passive: false });
+    }, {
+        passive: false
+    });
 
     dom.cvs.addEventListener('mouseleave', () => {
         state.hoveredQ = null;
@@ -745,7 +765,7 @@ function setupCanvasMouseEvents() {
         const r = dom.cvs.getBoundingClientRect(),
             mx = e.clientX - r.left,
             my = e.clientY - r.top;
-            
+
         if (!state.isTouchDevice && dom.cursor) {
             if (state.isDragMarker || e.target !== dom.cvs) {
                 dom.cursor.style.opacity = '0';
@@ -769,7 +789,7 @@ function setupCanvasMouseEvents() {
         }
         state.mouseScreenX = mx;
         state.mouseScreenY = my;
-        
+
         if (state.isTouchDevice || e.target !== dom.cvs) {
             state.hoveredQ = null;
             state.hoveredR = null;
@@ -778,7 +798,7 @@ function setupCanvasMouseEvents() {
             const sidebarHidden = isCollapsed || state.isEmbedMode;
             const effectiveW = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
             const h = pixToHex(state.mouseScreenX, state.mouseScreenY, state.zoom, state.panX, state.panY);
-            
+
             if (!sidebarHidden && mx > effectiveW) {
                 state.hoveredQ = null;
                 state.hoveredR = null;
@@ -790,8 +810,8 @@ function setupCanvasMouseEvents() {
 
         if (state.isDrag) {
             const dx = mx - state.dragSX,
-            dy = my - state.dragSY;
-            
+                dy = my - state.dragSY;
+
             if (state.isEmbedMode) {
                 state.dragMoved = true;
             } else {
@@ -827,7 +847,7 @@ function setupCanvasMouseEvents() {
                     }
                 } else {
                     let targetPanX = state.dragPX + dx,
-                    targetPanY = state.dragPY + dy;
+                        targetPanY = state.dragPY + dy;
                     const dPanX = targetPanX - state.panX,
                         dPanY = targetPanY - state.panY;
                     if (state.inertiaEnabled) {
@@ -844,7 +864,7 @@ function setupCanvasMouseEvents() {
         }
         requestRender();
     });
-    
+
     window.addEventListener('mouseup', e => {
         if (state.isDragMarker) {
             state.isDragMarker = false;
@@ -966,7 +986,7 @@ function setupUITogglesAndSliders() {
         }
         requestRender();
     });
-    
+
     dom.sCurveW.addEventListener('input', function() {
         state.curveLineWidth = +dom.sCurveW.value;
         dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
@@ -1037,32 +1057,41 @@ function setupTextureEditor() {
     dom.fileInput.onchange = () => {
         if (dom.fileInput.files[0]) loadFile(dom.fileInput.files[0]);
     };
-    
+
     dom.resetTexBtn.onclick = () => {
         state.texImg = null;
         state.texTf = {
-            rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0
+            rot: 0,
+            scale: 1,
+            sx: 1,
+            sy: 1,
+            ox: 0,
+            oy: 0
         };
-        
+
         // Close the editor panel immediately
-        closeEditor(); 
-        
+        closeEditor();
+
         dom.fileName.textContent = '';
         toast('Texture reset to default');
         dom.resetTexBtn.style.display = 'none';
         requestRender();
     };
-    
+
     [dom.sRot, dom.sScale, dom.sSX, dom.sSY, dom.sOX, dom.sOY].forEach(el => el.addEventListener('input', () => {
         state.texTf = readSliders();
         syncSliderLabels();
         drawPreview();
-        requestRender(); 
+        requestRender();
     }));
 
     // --- PREVIEW IMAGE DRAGGING LOGIC ---
-    const maxDrag = 105; 
-    let pDrag = false, pStartX = 0, pStartY = 0, pStartOX = 0, pStartOY = 0;
+    const maxDrag = 105;
+    let pDrag = false,
+        pStartX = 0,
+        pStartY = 0,
+        pStartOX = 0,
+        pStartOY = 0;
 
     const startDrag = (clientX, clientY) => {
         pDrag = true;
@@ -1077,21 +1106,21 @@ function setupTextureEditor() {
         if (!pDrag) return;
         const dx = clientX - pStartX;
         const dy = clientY - pStartY;
-        
+
         const tf = state.texTf; // Read current state directly
         const R = tf.rot * DEG2RAD;
         const cosR = Math.cos(R);
         const sinR = Math.sin(R);
-        
+
         const Sx = Math.max(0.01, tf.sx * tf.scale);
         const Sy = Math.max(0.01, tf.sy * tf.scale);
-        
+
         const dOx = (dx * cosR + dy * sinR) / Sx;
         const dOy = (-dx * sinR + dy * cosR) / Sy;
-        
+
         let newOX = Math.max(-maxDrag, Math.min(maxDrag, pStartOX + dOx));
         let newOY = Math.max(-maxDrag, Math.min(maxDrag, pStartOY + dOy));
-        
+
         state.texTf.ox = newOX;
         state.texTf.oy = newOY;
         dom.sOX.value = newOX;
@@ -1127,13 +1156,17 @@ function setupTextureEditor() {
             e.preventDefault();
             startDrag(e.touches[0].clientX, e.touches[0].clientY);
         }
-    }, { passive: false });
+    }, {
+        passive: false
+    });
     window.addEventListener('touchmove', e => {
         if (pDrag && e.touches.length === 1) {
             e.preventDefault();
             moveDrag(e.touches[0].clientX, e.touches[0].clientY);
         }
-    }, { passive: false });
+    }, {
+        passive: false
+    });
     window.addEventListener('touchend', endDrag);
 }
 
@@ -1142,25 +1175,25 @@ function drawPreview() {
         pctx = pc.getContext('2d'),
         cX = 90,
         cY = 80,
-        rSz = 88; 
-        
+        rSz = 88;
+
     pctx.clearRect(0, 0, 180, 160);
     pctx.fillStyle = COLORS.bg;
     pctx.fillRect(0, 0, 180, 160);
-    
+
     pctx.save();
     traceHexPath(pctx, cX, cY, rSz);
     pctx.clip();
     pctx.translate(cX, cY);
-    
+
     const img = state.texImg; // Directly use the applied texture
     if (img) {
         const tf = state.texTf; // Read current state directly
         pctx.rotate(tf.rot * DEG2RAD);
         pctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
         pctx.translate(tf.ox, tf.oy);
-        
-        const iSz = rSz * 2.6; 
+
+        const iSz = rSz * 2.6;
         pctx.imageSmoothingEnabled = true;
         pctx.imageSmoothingQuality = 'high';
         pctx.drawImage(img, -iSz / 2, -iSz / 2, iSz, iSz);
@@ -1169,12 +1202,12 @@ function drawPreview() {
         pctx.fillRect(-rSz, -rSz, rSz * 2, rSz * 2);
     }
     pctx.restore();
-    
+
     traceHexPath(pctx, cX, cY, rSz);
     pctx.strokeStyle = COLORS.previewStroke;
     pctx.lineWidth = 2;
     pctx.stroke();
-    
+
     for (let i = 0; i < 6; i++) {
         const a = PI_DIV_3 * i;
         pctx.beginPath();
@@ -1360,7 +1393,8 @@ function predictTwistImpact(q, r) {
 
     // 1. Check for MERGES (Different colors connecting)
     for (const pair of newPairs) {
-        const e1 = pair[0], e2 = pair[1];
+        const e1 = pair[0],
+            e2 = pair[1];
         const id1 = edgeID(q, r, e1);
         const id2 = edgeID(q, r, e2);
         const c1 = state.curveMap.has(id1) ? state.curveMap.get(id1) : -1;
@@ -1374,7 +1408,8 @@ function predictTwistImpact(q, r) {
 
     // 2. Check for SPLITS (Same colors being severed)
     for (const pair of oldPairs) {
-        const e1 = pair[0], e2 = pair[1];
+        const e1 = pair[0],
+            e2 = pair[1];
         const id1 = edgeID(q, r, e1);
         const id2 = edgeID(q, r, e2);
         const c1 = state.curveMap.has(id1) ? state.curveMap.get(id1) : -1;

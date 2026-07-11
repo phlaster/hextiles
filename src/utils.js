@@ -1,4 +1,6 @@
-import { COLOR_THEMES } from './config.js';
+import {
+    COLOR_THEMES
+} from './config.js';
 
 
 export function hexToRgb(hex) {
@@ -33,18 +35,18 @@ export function shuffleArray(arr) {
 export function generateDistinctThemePool() {
     const theme = COLOR_THEMES[Math.floor(Math.random() * COLOR_THEMES.length)];
     let pool = theme.colors.map(hexToRgb);
-    
+
     let ordered = [];
     // 1. Start with a random color from the pool
     let startIdx = Math.floor(Math.random() * pool.length);
     ordered.push(pool[startIdx]);
     pool.splice(startIdx, 1);
-    
+
     // 2. Iteratively add the color that maximizes the minimum distance to the ordered set
     while (pool.length > 0) {
         let bestCandidateIdx = -1;
         let bestMinDist = -1;
-        
+
         for (let i = 0; i < pool.length; i++) {
             let minDist = Infinity;
             for (let j = 0; j < ordered.length; j++) {
@@ -56,10 +58,13 @@ export function generateDistinctThemePool() {
                 bestCandidateIdx = i;
             }
         }
-        
+
         ordered.push(pool[bestCandidateIdx]);
         pool.splice(bestCandidateIdx, 1);
     }
-    
-    return { name: theme.name, pool: ordered.map(rgbToHex) };
+
+    return {
+        name: theme.name,
+        pool: ordered.map(rgbToHex)
+    };
 }

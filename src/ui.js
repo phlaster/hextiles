@@ -1,7 +1,13 @@
 // ui.js
-import { dom } from './dom.js';
-import { state } from './state.js';
-import { hexToRgb } from './utils.js';
+import {
+    dom
+} from './dom.js';
+import {
+    state
+} from './state.js';
+import {
+    hexToRgb
+} from './utils.js';
 
 let toastTimer = null;
 
@@ -70,21 +76,25 @@ export function renderGradientList() {
             removeBtn.title = 'Remove marker';
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                
+
                 const removedMarker = state.gradientMarkers[i];
                 const cached = state.gradientMarkersRGB[i];
                 if (cached) {
                     state.fadingMarkersRGB.push({
                         x: removedMarker.x,
                         y: removedMarker.y,
-                        r: cached.r, g: cached.g, b: cached.b,
-                        origR: cached.r, origG: cached.g, origB: cached.b,
+                        r: cached.r,
+                        g: cached.g,
+                        b: cached.b,
+                        origR: cached.r,
+                        origG: cached.g,
+                        origB: cached.b,
                         weight: cached.weight || 1
                     });
                 }
-                
+
                 state.gradientMarkers.splice(i, 1);
-                state.gradientMarkersRGB.splice(i, 1); 
+                state.gradientMarkersRGB.splice(i, 1);
                 renderGradientList();
                 state.updateGradientMarkersCache();
             });
@@ -122,9 +132,9 @@ export function renderCurveList() {
                 e.target.value = originalColor;
                 hexInput.value = originalColor.toUpperCase();
                 toast('Color already exists in curve palette');
-                state.updateCurveColorsCache(); 
+                state.updateCurveColorsCache();
             } else {
-                state.curveColors[i] = newColor; 
+                state.curveColors[i] = newColor;
                 originalColor = newColor;
                 state.updateCurveColorsCache();
             }

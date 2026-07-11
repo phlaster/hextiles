@@ -31,31 +31,54 @@ body.fullscreen-idle .fullscreen-btn {
 
 #lum-cursor {
     position: fixed;
-    top: 0; left: 0;
-    width: 24px; height: 24px;
-    margin: -12px 0 0 -12px; 
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
     border-radius: 50%;
     background: white;
     mix-blend-mode: difference;
     opacity: 0;
     pointer-events: none;
-    transform: translate(-100px, -100px); 
+    transform: translate(-100px, -100px);
     z-index: 999;
     transition: opacity 0.2s;
 }
 
-.sidebar, .sidebar-toggle, .zoom-bar, .fullscreen-btn, 
-#lod-tuner, .export-overlay, .export-menu, .toast, 
-.btn, .icon-btn, .export-btn, button, a, input, label {
+.sidebar,
+.sidebar-toggle,
+.zoom-bar,
+.fullscreen-btn,
+#lod-tuner,
+.export-overlay,
+.export-menu,
+.toast,
+.btn,
+.icon-btn,
+.export-btn,
+button,
+a,
+input,
+label {
     cursor: default;
 }
 
-.btn, .icon-btn, .export-btn, .zoom-bar button, 
-.sidebar-toggle, .fullscreen-btn, a, .switch, input[type=checkbox] {
+.btn,
+.icon-btn,
+.export-btn,
+.zoom-bar button,
+.sidebar-toggle,
+.fullscreen-btn,
+a,
+.switch,
+input[type=checkbox] {
     cursor: pointer;
 }
 
-input[type=text], input[type=number], textarea {
+input[type=text],
+input[type=number],
+textarea {
     cursor: text;
 }
 

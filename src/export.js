@@ -215,9 +215,15 @@ function setupExportFrameDragging() {
         e.preventDefault();
     }
 
-    dom.exportOverlay.addEventListener('touchstart', simulateMouseEvent, { passive: false });
-    dom.exportOverlay.addEventListener('touchmove', simulateMouseEvent, { passive: false });
-    dom.exportOverlay.addEventListener('touchend', simulateMouseEvent, { passive: false });
+    dom.exportOverlay.addEventListener('touchstart', simulateMouseEvent, {
+        passive: false
+    });
+    dom.exportOverlay.addEventListener('touchmove', simulateMouseEvent, {
+        passive: false
+    });
+    dom.exportOverlay.addEventListener('touchend', simulateMouseEvent, {
+        passive: false
+    });
 
     dom.exportFrame.addEventListener('mousedown', e => {
         const h = e.target.dataset.h;
@@ -252,7 +258,8 @@ function setupExportFrameDragging() {
             my: e.clientY,
             startX: e.clientX,
             startY: e.clientY,
-            prevRect: { ...state.efRect
+            prevRect: {
+                ...state.efRect
             },
             exportW: parseInt(dom.exportW.value),
             exportH: parseInt(dom.exportH.value)
@@ -378,11 +385,11 @@ function getExportParams() {
     const cr = dom.cvs.getBoundingClientRect(),
         fx = state.efRect.x - cr.left,
         fy = state.efRect.y - cr.top;
-        
+
     const targetLong = parseInt(dom.exportSide.value) || 1920,
         currentLong = Math.max(state.efRect.w, state.efRect.h),
         scale = targetLong / currentLong;
-        
+
     const eW = Math.round(state.efRect.w * scale),
         eH = Math.round(state.efRect.h * scale),
         eZoom = state.zoom * scale,
@@ -390,12 +397,25 @@ function getExportParams() {
         ePanY = (state.panY - fy) * scale;
 
     const expStarPans = {
-        x5: (state.starPanX5 - fx) * scale, y5: (state.starPanY5 - fy) * scale,
-        x2: (state.starPanX2 - fx) * scale, y2: (state.starPanY2 - fy) * scale,
-        x3: (state.starPanX3 - fx) * scale, y3: (state.starPanY3 - fy) * scale
+        x5: (state.starPanX5 - fx) * scale,
+        y5: (state.starPanY5 - fy) * scale,
+        x2: (state.starPanX2 - fx) * scale,
+        y2: (state.starPanY2 - fy) * scale,
+        x3: (state.starPanX3 - fx) * scale,
+        y3: (state.starPanY3 - fy) * scale
     };
 
-    return { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans };
+    return {
+        fx,
+        fy,
+        scale,
+        eW,
+        eH,
+        eZoom,
+        ePanX,
+        ePanY,
+        expStarPans
+    };
 }
 
 async function exportToPDF() {
@@ -404,9 +424,21 @@ async function exportToPDF() {
     const parser = new DOMParser(),
         svgDoc = parser.parseFromString(svgString, "image/svg+xml"),
         svgElement = svgDoc.documentElement;
-    const { jsPDF } = window.jspdf, orientation = params.eW > params.eH ? 'landscape' : 'portrait';
-    const pdf = new jsPDF({ orientation, unit: 'px', format: [params.eW, params.eH], compress: true });
-    await pdf.svg(svgElement, { x: 0, y: 0, width: params.eW, height: params.eH });
+    const {
+        jsPDF
+    } = window.jspdf, orientation = params.eW > params.eH ? 'landscape' : 'portrait';
+    const pdf = new jsPDF({
+        orientation,
+        unit: 'px',
+        format: [params.eW, params.eH],
+        compress: true
+    });
+    await pdf.svg(svgElement, {
+        x: 0,
+        y: 0,
+        width: params.eW,
+        height: params.eH
+    });
     pdf.save('hex-tiles-export.pdf');
     toast('PDF exported (Vector)');
 }
@@ -414,7 +446,9 @@ async function exportToPDF() {
 function exportToSVG() {
     const params = getExportParams();
     const svg = buildExportSVG(params);
-    const blob = new Blob([svg], { type: 'image/svg+xml' }),
+    const blob = new Blob([svg], {
+            type: 'image/svg+xml'
+        }),
         url = URL.createObjectURL(blob),
         a = document.createElement('a');
     a.href = url;
@@ -439,8 +473,18 @@ async function exportToPNG() {
 }
 
 async function generateEmbedCode() {
-    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = getExportParams();
-    const mainCenter = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, state.zoom, state.panX, state.panY);    
+    const {
+        fx,
+        fy,
+        scale,
+        eW,
+        eH,
+        eZoom,
+        ePanX,
+        ePanY,
+        expStarPans
+    } = getExportParams();
+    const mainCenter = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, state.zoom, state.panX, state.panY);
     const targetHexSize = Math.round(HEX_R * eZoom);
     const maxAllowed = parseInt(dom.exportSide.value) || 1920;
     const rasterSize = Math.max(64, Math.min(targetHexSize, maxAllowed));
@@ -450,46 +494,70 @@ async function generateEmbedCode() {
         color: m.color
     }));
 
-  let serializedCurves = [];
-  if (!state.texImg) {
-    const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
-    const visibleCurveIDs = new Set();
-    for (const h of exportHexes) {
-      for (let e = 0; e < 6; e++) {
-        const id = edgeID(h.q, h.r, e);
-        if (state.curveMap.has(id)) {
-          visibleCurveIDs.add(state.curveMap.get(id));
+    let serializedCurves = [];
+    if (!state.texImg) {
+        const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+        const visibleCurveIDs = new Set();
+        for (const h of exportHexes) {
+            for (let e = 0; e < 6; e++) {
+                const id = edgeID(h.q, h.r, e);
+                if (state.curveMap.has(id)) {
+                    visibleCurveIDs.add(state.curveMap.get(id));
+                }
+            }
         }
-      }
-    }
 
-    for (const cid of visibleCurveIDs) {
-      const curve = state.curves.get(cid);
-      if (curve && curve.edges.size > 0) {
-        serializedCurves.push({
-          c: curve.color,
-          e: Array.from(curve.edges)
-        });
-      }
+        for (const cid of visibleCurveIDs) {
+            const curve = state.curves.get(cid);
+            if (curve && curve.edges.size > 0) {
+                serializedCurves.push({
+                    c: curve.color,
+                    e: Array.from(curve.edges)
+                });
+            }
+        }
     }
-  }
 
     const data = {
-        w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
-        origZoom: state.zoom, showGrid: state.showGrid,
-        centerQ: mainCenter.q, centerR: mainCenter.r,
-        starPanX5: expStarPans.x5, starPanY5: expStarPans.y5,
-        starPanX2: expStarPans.x2, starPanY2: expStarPans.y2,
-        starPanX3: expStarPans.x3, starPanY3: expStarPans.y3,
-        markersVisible: false, showBgStars: state.showBgStars,
-        flowEnabled: state.flowEnabled, inertiaEnabled: state.inertiaEnabled,
-        rotMode: state.rotMode, randomSeed: state.randomSeed, rotSeed: state.rotSeed,
-        curveLineWidth: state.curveLineWidth, alterTilesRatio: state.alterTilesRatio,
-        texTf: { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 },
+        w: eW,
+        h: eH,
+        zoom: eZoom,
+        panX: ePanX,
+        panY: ePanY,
+        origZoom: state.zoom,
+        showGrid: state.showGrid,
+        centerQ: mainCenter.q,
+        centerR: mainCenter.r,
+        starPanX5: expStarPans.x5,
+        starPanY5: expStarPans.y5,
+        starPanX2: expStarPans.x2,
+        starPanY2: expStarPans.y2,
+        starPanX3: expStarPans.x3,
+        starPanY3: expStarPans.y3,
+        markersVisible: false,
+        showBgStars: state.showBgStars,
+        flowEnabled: state.flowEnabled,
+        inertiaEnabled: state.inertiaEnabled,
+        rotMode: state.rotMode,
+        randomSeed: state.randomSeed,
+        rotSeed: state.rotSeed,
+        curveLineWidth: state.curveLineWidth,
+        alterTilesRatio: state.alterTilesRatio,
+        texTf: {
+            rot: 0,
+            scale: 1,
+            sx: 1,
+            sy: 1,
+            ox: 0,
+            oy: 0
+        },
         texBaseSize: rasterSize,
         curveColors: [...state.curveColors],
-        markers: eMarkers, rotOverrides: serializeRotOverrides(), curves: serializedCurves,
-        texture: getTextureDataUrl(rasterSize), liveTwistsEnabled: state.liveTwistsEnabled
+        markers: eMarkers,
+        rotOverrides: serializeRotOverrides(),
+        curves: serializedCurves,
+        texture: getTextureDataUrl(rasterSize),
+        liveTwistsEnabled: state.liveTwistsEnabled
     };
 
     let encoded;
@@ -512,9 +580,9 @@ async function generateEmbedCode() {
             let binary = '';
             for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
             encoded = btoa(binary)
-                .replace(/\+/g, '-')  // Make URL safe
-                .replace(/\//g, '_')  // Make URL safe
-                .replace(/=+$/, '');  // Strip padding
+                .replace(/\+/g, '-') // Make URL safe
+                .replace(/\//g, '_') // Make URL safe
+                .replace(/=+$/, ''); // Strip padding
         } else {
             // Fallback for very old browsers without CompressionStream
             encoded = btoa(unescape(encodeURIComponent(jsonStr)));
@@ -599,8 +667,11 @@ function updateExportFrameDOM() {
         return;
     }
     dom.exportMenu.style.display = 'block';
-    const menuW = 280, menuH = 320;
-    let mx = 0, my = 0, placed = false;
+    const menuW = 280,
+        menuH = 320;
+    let mx = 0,
+        my = 0,
+        placed = false;
 
     if (state.efRect.x + state.efRect.w + 16 + menuW <= window.innerWidth - 16) {
         mx = state.efRect.x + state.efRect.w + 16;
@@ -651,12 +722,22 @@ function clampFrameToCanvas() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function buildExportSVG(params) {
-    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = params;
+    const {
+        fx,
+        fy,
+        scale,
+        eW,
+        eH,
+        eZoom,
+        ePanX,
+        ePanY,
+        expStarPans
+    } = params;
     const now = state.exportFreezeTime || Date.now();
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const exportBounds = getHexBounds(exportHexes);
     const eSz = HEX_R * eZoom;
-    
+
     const eCurveAlpha = state.elementsFade;
     const eGridAlpha = eCurveAlpha;
 
@@ -673,7 +754,7 @@ function buildExportSVG(params) {
     }
 
     svg += buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha);
-    
+
     svg += `</svg>`;
     return svg;
 }
@@ -687,14 +768,21 @@ function buildSvgGradient(eW, eH, scale, fx, fy) {
 
 function buildSvgStars(eW, eH, scale, fx, fy, eZoom, now, expStarPans) {
     let svg = '';
-    const { x5: expStarPanX5, y5: expStarPanY5, x2: expStarPanX2, y2: expStarPanY2, x3: expStarPanX3, y3: expStarPanY3 } = expStarPans;
+    const {
+        x5: expStarPanX5,
+        y5: expStarPanY5,
+        x2: expStarPanX2,
+        y2: expStarPanY2,
+        x3: expStarPanX3,
+        y3: expStarPanY3
+    } = expStarPans;
     const spacing5 = CONFIG.STAR_SPACING_LARGE * state.starZoom5 * scale;
     const spacing2 = CONFIG.STAR_SPACING_MED * state.starZoom2 * scale;
     const spacing3 = CONFIG.STAR_SPACING_SMALL * state.starZoom3 * scale;
 
     svg += addSvgStarLayer(spacing5, CONFIG.STAR_SIZE_LARGE, 1, expStarPanX5, expStarPanY5, eW, eH, scale, now, false, 1, 0, fx, fy);
     svg += addSvgStarLayer(spacing2, CONFIG.STAR_SIZE_MED, 2, expStarPanX2, expStarPanY2, eW, eH, scale, now, false, 1, 0, fx, fy);
-    
+
     let l3Alpha = Math.max(0, Math.min(1, (CONFIG.ZOOM_BLAZE_FADE_START - (eZoom / scale)) / CONFIG.ZOOM_BLAZE_FADE_RANGE));
     if (l3Alpha > 0) {
         let canBlaze = state.zoomOutStartTime > 0 && (now - state.zoomOutStartTime) > CONFIG.STAR_BLAZE_DELAY;
@@ -712,10 +800,12 @@ function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, no
         jMax = Math.ceil((eH - panY) / spacing) + 2;
     for (let k = kMin; k <= kMax; k++) {
         for (let j = jMin; j <= jMax; j++) {
-            const gx = panX + k * spacing, gy = panY + j * spacing;
+            const gx = panX + k * spacing,
+                gy = panY + j * spacing;
             const rx = (hash2D(k * seed + 123, j * seed + 456) - 0.5) * spacing;
             const ry = (hash2D(k * seed + 789, j * seed + 101) - 0.5) * spacing;
-            const x = gx + rx, y = gy + ry;
+            const x = gx + rx,
+                y = gy + ry;
             if (x < -spacing || x > eW + spacing || y < -spacing || y > eH + spacing) continue;
             const bg = getBackgroundColorAt(x, y, coordScale, offsetX, offsetY);
             if (!bg) continue;
@@ -732,7 +822,11 @@ function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, no
                     phase = (now + offset) % cycleDuration;
                 const blazeDuration = 1200 + hash2D(k * seed + 333, j * seed + 444) * 1800;
                 if (phase < blazeDuration) {
-                    let blazeT = phase / blazeDuration, blazeGlow = 0, origSR = sR, origSA = sA, origR = r;
+                    let blazeT = phase / blazeDuration,
+                        blazeGlow = 0,
+                        origSR = sR,
+                        origSA = sA,
+                        origR = r;
                     if (blazeT < 0.25) {
                         let t2 = blazeT / 0.25;
                         r = origR * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
@@ -759,12 +853,16 @@ function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, no
                         const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
                         const steps = 90;
                         for (let s = steps; s > 0; s--) {
-                            const stepT = s / steps, stepR = glowRadius * stepT, stepA = (0.05 * blazeGlow) * Math.pow(1 - stepT, 1.5);
+                            const stepT = s / steps,
+                                stepR = glowRadius * stepT,
+                                stepA = (0.05 * blazeGlow) * Math.pow(1 - stepT, 1.5);
                             svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(150, 200, 255)" fill-opacity="${stepA.toFixed(3)}"/>`;
                         }
                         const steps2 = 45;
                         for (let s = steps2; s > 0; s--) {
-                            const stepT = s / steps2, stepR = glowRadius * 0.5 * stepT, stepA = (0.1 * blazeGlow) * Math.pow(1 - stepT, 1.5);
+                            const stepT = s / steps2,
+                                stepR = glowRadius * 0.5 * stepT,
+                                stepA = (0.1 * blazeGlow) * Math.pow(1 - stepT, 1.5);
                             svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(255, 255, 240)" fill-opacity="${stepA.toFixed(3)}"/>`;
                         }
                     }
@@ -781,8 +879,8 @@ function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, no
 function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
     const ext = eSz > CONFIG.LOD_HIGH_SZ ? CONFIG.LOD_EXT_HIGH :
         (eSz > CONFIG.LOD_MED_HIGH_SZ ? CONFIG.LOD_EXT_MED_HIGH :
-        (eSz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
-    
+            (eSz > CONFIG.LOD_MED_LOW_SZ ? CONFIG.LOD_EXT_MED_LOW : CONFIG.LOD_EXT_LOW));
+
     const pathsByColor = {};
     const gridPaths = [];
     const curveColorCache = new Map();
@@ -796,13 +894,13 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
     function getCachedCurveColorStr(curveID) {
         let cached = curveColorCache.get(curveID);
         if (cached !== undefined) return cached;
-        
+
         const rgb = getCurveRgb(curveID);
         if (!rgb) {
             curveColorCache.set(curveID, null);
             return null;
         }
-        
+
         const colorStr = `rgb(${Math.round(rgb.r)},${Math.round(rgb.g)},${Math.round(rgb.b)})`;
         curveColorCache.set(curveID, colorStr);
         return colorStr;
@@ -846,7 +944,7 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
             const rad = rot * Math.PI / 180.0,
                 cos = Math.cos(rad),
                 sin = Math.sin(rad);
-            
+
             const a = eSz * SQRT3 / 2;
             if (alter) {
                 pushPath(getSvgEdgeColor(h.q, h.r, (0 + k) % 6), arcToPath(h.x, h.y, rot, eSz / 2, a, eSz / 2, Math.PI - ext, 5 * PI_DIV_3 + ext, false));
@@ -882,11 +980,15 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
 
     // 3. Add Texture (Rasterized raw, clipped via SVG clipPath)
     if (state.texImg && eCurveAlpha > 0) {
-        const { dataUrl, width, height } = rasterizeRawTexture(eSz);
-        
+        const {
+            dataUrl,
+            width,
+            height
+        } = rasterizeRawTexture(eSz);
+
         svg += `<defs>`;
         svg += `<image id="hexTexRaw" href="${dataUrl}" width="${width}" height="${height}" x="${-width/2}" y="${-height/2}"/>`;
-        
+
         let hexClipPath = "M ";
         for (let i = 0; i < 6; i++) {
             const a = PI_DIV_3 * i;
@@ -898,10 +1000,10 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
         hexClipPath += "Z";
         svg += `<clipPath id="hexClip"><path d="${hexClipPath}"/></clipPath>`;
         svg += `</defs>`;
-        
+
         const texOpacityAttr = eCurveAlpha < 0.999 ? ` opacity="${eCurveAlpha.toFixed(3)}"` : '';
         svg += `<g${texOpacityAttr}>`;
-        
+
         // Draw each hex: translate to center, apply unrotated clip, then rotate the raw texture inside
         for (const h of exportHexes) {
             const rot = tileRot(h.q, h.r);
@@ -933,13 +1035,23 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function renderToOffscreen(offCanvas, params) {
-    const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = params;
+    const {
+        fx,
+        fy,
+        scale,
+        eW,
+        eH,
+        eZoom,
+        ePanX,
+        ePanY,
+        expStarPans
+    } = params;
     const offCtx = offCanvas.getContext('2d');
     const eSz = HEX_R * eZoom;
 
     offCanvas.width = eW;
     offCanvas.height = eH;
-    
+
     const eCurveAlpha = state.elementsFade;
     const eGridAlpha = eCurveAlpha;
 
@@ -955,10 +1067,10 @@ function renderToOffscreen(offCanvas, params) {
     const oldCtx = state.ctx;
     state.ctx = offCtx;
     const now = state.exportFreezeTime || Date.now();
-    
+
     drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom, expStarPans);
     drawOffscreenHexTiles(offCtx, hexes, eSz, now, eCurveAlpha, eGridAlpha);
-    
+
     state.ctx = oldCtx;
     return offCanvas;
 }
@@ -967,10 +1079,17 @@ function drawOffscreenBackground(offCtx, eW, eH, scale, fx, fy, now, eZoom, expS
     offCtx.fillStyle = COLORS.bg;
     offCtx.fillRect(0, 0, eW, eH);
     drawIDWGradient(eW, eH, scale, fx, fy);
-    
+
     const oldCtx = state.ctx;
     state.ctx = offCtx;
-    const { x5, y5, x2, y2, x3, y3 } = expStarPans;
+    const {
+        x5,
+        y5,
+        x2,
+        y2,
+        x3,
+        y3
+    } = expStarPans;
     drawBackgroundStars(eW, eH, scale, x5, y5, x2, y2, x3, y3, now, eZoom / scale, state.zoomOutStartTime, fx, fy);
     state.ctx = oldCtx;
 }
@@ -999,8 +1118,10 @@ function drawOffscreenHexTiles(offCtx, hexes, eSz, now, eCurveAlpha, eGridAlpha)
 
 function getHexBounds(hexes) {
     let bounds = {
-        minQ: Infinity, maxQ: -Infinity,
-        minR: Infinity, maxR: -Infinity
+        minQ: Infinity,
+        maxQ: -Infinity,
+        minR: Infinity,
+        maxR: -Infinity
     };
     for (const h of hexes) {
         if (h.q < bounds.minQ) bounds.minQ = h.q;
@@ -1023,7 +1144,8 @@ function processExportCurves(exportBounds, exportHexes) {
 
 function processEdgeRgbMap() {
     for (const [id, edgeData] of state.edgeRgbMap.entries()) {
-        let targetCurveID = -1, targetRgb = null;
+        let targetCurveID = -1,
+            targetRgb = null;
         if (state.curveColors.length === 1) {
             targetCurveID = -2;
             targetRgb = getCurveRgb(-2);
@@ -1034,8 +1156,13 @@ function processEdgeRgbMap() {
         if (targetRgb) {
             if (!edgeData) state.edgeRgbMap.set(id, {
                 rgb: [targetRgb.r, targetRgb.g, targetRgb.b],
-                alpha: 1, targetCurveID, rippleTime: 0, rippleQ: 0, rippleR: 0,
-                rippleActive: false, colorStr: ''
+                alpha: 1,
+                targetCurveID,
+                rippleTime: 0,
+                rippleQ: 0,
+                rippleR: 0,
+                rippleActive: false,
+                colorStr: ''
             });
             else {
                 edgeData.rgb[0] = targetRgb.r;
@@ -1057,13 +1184,19 @@ function decodeHexKey(k) {
     const r = (ru & 0x8000) ? (ru | 0xFFFF0000) | 0 : ru;
     const qVal = (ru & 0x8000) ? ((qu ^ 0xFFFF) & 0xFFFF) : qu;
     const q = (qVal & 0x8000) ? (qVal | 0xFFFF0000) | 0 : qVal;
-    return { q, r };
+    return {
+        q,
+        r
+    };
 }
 
 function serializeRotOverrides() {
     const out = [];
     for (const [k, rot] of state.rotOverrides.entries()) {
-        const { q, r } = decodeHexKey(k);
+        const {
+            q,
+            r
+        } = decodeHexKey(k);
         out.push([q, r, rot]);
     }
     return out;
@@ -1074,17 +1207,23 @@ function canvasToBlob(canvas, type) {
 }
 
 function rasterizeTexture(baseHexSize, options = {}) {
-    const { clipToHex = false, maxDim = 4096, preferWebP = false } = options;
-    if (!state.texImg) return { dataUrl: null, width: 0, height: 0 };
+    const {
+        clipToHex = false, maxDim = 4096, preferWebP = false
+    } = options;
+    if (!state.texImg) return {
+        dataUrl: null,
+        width: 0,
+        height: 0
+    };
 
     const iSz = baseHexSize * 2.6;
     let targetSize = Math.ceil(iSz);
-    
+
     let drawScale = 1;
     if (targetSize > maxDim) {
         drawScale = maxDim / targetSize;
     }
-    
+
     const W = Math.ceil(targetSize * drawScale);
     const H = W; // Force square canvas
 
@@ -1092,7 +1231,7 @@ function rasterizeTexture(baseHexSize, options = {}) {
     c.width = W;
     c.height = H;
     const ctx = c.getContext('2d');
-    
+
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.scale(drawScale, drawScale);
@@ -1113,11 +1252,11 @@ function rasterizeTexture(baseHexSize, options = {}) {
 
     // Apply texture transform
     const tf = state.texTf;
-    
+
     // FIX: The texture offsets (ox, oy) are defined in the reference coordinate system 
     // where the hex radius is 88. We must scale them to match the current baseHexSize.
     const sizeScale = baseHexSize / 88;
-    
+
     ctx.rotate(tf.rot * CONFIG.DEG2RAD);
     ctx.scale(tf.sx * tf.scale, tf.sy * tf.scale);
     ctx.translate(tf.ox * sizeScale, tf.oy * sizeScale);
@@ -1138,26 +1277,32 @@ function rasterizeTexture(baseHexSize, options = {}) {
         dataUrl = c.toDataURL('image/png');
     }
 
-    return { dataUrl, width: W, height: H };
+    return {
+        dataUrl,
+        width: W,
+        height: H
+    };
 }
 
 function rasterizeRawTexture(eSz) {
-	return rasterizeTexture(eSz, { 
-		clipToHex: false, 
-		maxDim: 4096, 
-		preferWebP: false 
-	});
+    return rasterizeTexture(eSz, {
+        clipToHex: false,
+        maxDim: 4096,
+        preferWebP: false
+    });
 }
 
 function getTextureDataUrl(rasterSize) {
-	try {
-		const { dataUrl } = rasterizeTexture(rasterSize, { 
-			clipToHex: true, 
-			maxDim: Infinity, 
-			preferWebP: true 
-		});
-		return dataUrl;
-	} catch (e) {
-		return null;
-	}
+    try {
+        const {
+            dataUrl
+        } = rasterizeTexture(rasterSize, {
+            clipToHex: true,
+            maxDim: Infinity,
+            preferWebP: true
+        });
+        return dataUrl;
+    } catch (e) {
+        return null;
+    }
 }

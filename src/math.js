@@ -1,6 +1,10 @@
 // math.js
-import { CONFIG } from './config.js';
-import { state } from './state.js';
+import {
+    CONFIG
+} from './config.js';
+import {
+    state
+} from './state.js';
 
 const HEX_R = CONFIG.HEX_R;
 const SQRT3 = CONFIG.SQRT3;
@@ -9,7 +13,9 @@ export function hexDistance(q1, r1, q2, r2) {
     return (Math.abs(q1 - q2) + Math.abs(q1 + r1 - q2 - r2) + Math.abs(r1 - r2)) / 2;
 }
 
-export function hexKey(q, r) { return (q << 16) ^ r; }
+export function hexKey(q, r) {
+    return (q << 16) ^ r;
+}
 
 export function hashQR(q, r) {
     let h = (q * 374761393 + r * 668265263 + state.randomSeed * 1013904223 + 2654435761) | 0;
@@ -81,7 +87,10 @@ export function hexRound(fq, fr) {
         ds = Math.abs(rs - fs);
     if (dq > dr && dq > ds) rq = -rr - rs;
     else if (dr > ds) rr = -rq - rs;
-    return { q: rq, r: rr };
+    return {
+        q: rq,
+        r: rr
+    };
 }
 
 export function traceHexPath(c, cx, cy, sz) {
@@ -135,14 +144,19 @@ export function visibleHexes(z, px, py, W, H) {
     const maxQ = Math.max(tl.q, tr.q, bl.q, br.q);
     const minR = Math.min(tl.r, tr.r, bl.r, br.r);
     const maxR = Math.max(tl.r, tr.r, bl.r, br.r);
-    
+
     let count = 0;
     for (let q = minQ; q <= maxQ; q++) {
         for (let r = minR; r <= maxR; r++) {
             const p = hexToPix(q, r, z, px, py);
             if (p.x > -margin && p.x < W + margin && p.y > -margin && p.y < H + margin) {
                 if (count >= state.visibleHexesArray.length) {
-                    state.visibleHexesArray.push({ q: 0, r: 0, x: 0, y: 0 });
+                    state.visibleHexesArray.push({
+                        q: 0,
+                        r: 0,
+                        x: 0,
+                        y: 0
+                    });
                 }
                 const h = state.visibleHexesArray[count];
                 h.q = q;
@@ -153,7 +167,7 @@ export function visibleHexes(z, px, py, W, H) {
             }
         }
     }
-    state.visibleHexesArray.length = count; 
+    state.visibleHexesArray.length = count;
     return state.visibleHexesArray;
 }
 

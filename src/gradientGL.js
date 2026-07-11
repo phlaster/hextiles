@@ -1,5 +1,9 @@
-import { COLORS } from './config.js';
-import { state } from './state.js';
+import {
+    COLORS
+} from './config.js';
+import {
+    state
+} from './state.js';
 
 let gl, program, canvas, vao;
 let u_resolution, u_markers, u_colors, u_weights, u_count, u_bgColor;
@@ -7,7 +11,10 @@ const MAX_MARKERS = 10;
 
 export function initGradientGL() {
     canvas = document.createElement('canvas');
-    gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false });
+    gl = canvas.getContext('webgl2', {
+        antialias: false,
+        premultipliedAlpha: false
+    });
     if (!gl) return false;
 
     const vsSource = `#version 300 es
@@ -97,7 +104,7 @@ export function renderGradientGL(targetCtx, W, H, coordScale, offsetX, offsetY) 
     gl.bindVertexArray(vao);
 
     gl.uniform2f(u_resolution, lowW, lowH);
-    
+
     const bgR = parseInt(COLORS.bg.slice(1, 3), 16) / 255;
     const bgG = parseInt(COLORS.bg.slice(3, 5), 16) / 255;
     const bgB = parseInt(COLORS.bg.slice(5, 7), 16) / 255;
@@ -110,11 +117,25 @@ export function renderGradientGL(targetCtx, W, H, coordScale, offsetX, offsetY) 
     const allMarkers = [];
     for (let i = 0; i < state.gradientMarkersRGB.length; i++) {
         const m = state.gradientMarkersRGB[i];
-        allMarkers.push({ x: m.x, y: m.y, r: m.r/255, g: m.g/255, b: m.b/255, weight: m.weight || 0 });
+        allMarkers.push({
+            x: m.x,
+            y: m.y,
+            r: m.r / 255,
+            g: m.g / 255,
+            b: m.b / 255,
+            weight: m.weight || 0
+        });
     }
     for (let i = 0; i < state.fadingMarkersRGB.length; i++) {
         const m = state.fadingMarkersRGB[i];
-        allMarkers.push({ x: m.x, y: m.y, r: m.r/255, g: m.g/255, b: m.b/255, weight: m.weight || 0 });
+        allMarkers.push({
+            x: m.x,
+            y: m.y,
+            r: m.r / 255,
+            g: m.g / 255,
+            b: m.b / 255,
+            weight: m.weight || 0
+        });
     }
 
     let count = 0;
@@ -122,7 +143,7 @@ export function renderGradientGL(targetCtx, W, H, coordScale, offsetX, offsetY) 
         if (count >= MAX_MARKERS) break;
         markersData[count * 2] = ((m.x - offsetX) * coordScale) * 0.5; // 0.5 for lowW scaling
         // WebGL Y is bottom-up, so we must invert the Y coordinate here
-        markersData[count * 2 + 1] = lowH - (((m.y - offsetY) * coordScale) * 0.5); 
+        markersData[count * 2 + 1] = lowH - (((m.y - offsetY) * coordScale) * 0.5);
         colorsData[count * 3] = m.r;
         colorsData[count * 3 + 1] = m.g;
         colorsData[count * 3 + 2] = m.b;

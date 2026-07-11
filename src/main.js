@@ -1,13 +1,39 @@
-import { CONFIG, COLORS } from './config.js';
-import { generateDistinctThemePool, hexToRgb } from './utils.js';
-import { state } from './state.js';
-import { dom } from './dom.js';
-import { renderGradientList, renderCurveList } from './ui.js';
-import { hexKey } from './math.js';
-import { initializeCentralTile } from './curves.js';
-import { setupEvents, scheduleLiveTwist } from './events.js';
-import { requestRender, resize, render } from './render.js';
-import { setupExport } from './export.js';
+import {
+    CONFIG,
+    COLORS
+} from './config.js';
+import {
+    generateDistinctThemePool,
+    hexToRgb
+} from './utils.js';
+import {
+    state
+} from './state.js';
+import {
+    dom
+} from './dom.js';
+import {
+    renderGradientList,
+    renderCurveList
+} from './ui.js';
+import {
+    hexKey
+} from './math.js';
+import {
+    initializeCentralTile
+} from './curves.js';
+import {
+    setupEvents,
+    scheduleLiveTwist
+} from './events.js';
+import {
+    requestRender,
+    resize,
+    render
+} from './render.js';
+import {
+    setupExport
+} from './export.js';
 
 async function initializeApp() {
     injectCssVariables();
@@ -96,14 +122,14 @@ function setupLodTuner() {
 async function parseEmbedData() {
     const embedMatch = location.hash.match(/^#embed=(.+)$/);
     state.isEmbedMode = !!embedMatch;
-    
+
     if (state.isEmbedMode) {
         try {
             const raw = embedMatch[1];
             let jsonStr = '';
 
             let decompressed = false;
-            
+
             // 1. Restore standard Base64 from URL-safe Base64
             let base64 = raw.replace(/-/g, '+').replace(/_/g, '/');
             while (base64.length % 4) base64 += '='; // Restore padding
@@ -112,36 +138,42 @@ async function parseEmbedData() {
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
             if (typeof DecompressionStream !== 'undefined') {
-            // Try GZIP first (Stronger compression for new embeds)
-            try {
-                const inputStream = new ReadableStream({
-                start(controller) { controller.enqueue(bytes); controller.close(); }
-                });
-                const stream = inputStream.pipeThrough(new DecompressionStream('gzip'));
-                jsonStr = await new Response(stream).text();
-                decompressed = true;
-            } catch (e) {
-                // Try DEFLATE fallback (For older embeds generated before the upgrade)
+                // Try GZIP first (Stronger compression for new embeds)
                 try {
-                const inputStream = new ReadableStream({
-                    start(controller) { controller.enqueue(bytes); controller.close(); }
-                });
-                const stream = inputStream.pipeThrough(new DecompressionStream('deflate'));
-                jsonStr = await new Response(stream).text();
-                decompressed = true;
-                } catch (e2) {
-                // Failed both compressed formats
+                    const inputStream = new ReadableStream({
+                        start(controller) {
+                            controller.enqueue(bytes);
+                            controller.close();
+                        }
+                    });
+                    const stream = inputStream.pipeThrough(new DecompressionStream('gzip'));
+                    jsonStr = await new Response(stream).text();
+                    decompressed = true;
+                } catch (e) {
+                    // Try DEFLATE fallback (For older embeds generated before the upgrade)
+                    try {
+                        const inputStream = new ReadableStream({
+                            start(controller) {
+                                controller.enqueue(bytes);
+                                controller.close();
+                            }
+                        });
+                        const stream = inputStream.pipeThrough(new DecompressionStream('deflate'));
+                        jsonStr = await new Response(stream).text();
+                        decompressed = true;
+                    } catch (e2) {
+                        // Failed both compressed formats
+                    }
                 }
-            }
             }
 
             // Final Fallback: Legacy uncompressed embeds or very old browsers
             if (!decompressed) {
-            try {
-                jsonStr = decodeURIComponent(escape(atob(raw)));
-            } catch (e) {
-                throw new Error('Failed to parse embed data');
-            }
+                try {
+                    jsonStr = decodeURIComponent(escape(atob(raw)));
+                } catch (e) {
+                    throw new Error('Failed to parse embed data');
+                }
             }
 
             state.embedData = JSON.parse(jsonStr);
@@ -150,7 +182,7 @@ async function parseEmbedData() {
             state.isEmbedMode = false;
         }
     }
-    
+
     if (state.isEmbedMode) document.body.classList.add('embed-mode');
 }
 
@@ -159,8 +191,12 @@ function setupCacheBridges() {
         while (state.curveColorsRGB.length < state.curveColors.length) {
             const rgb = hexToRgb(state.curveColors[state.curveColorsRGB.length]);
             state.curveColorsRGB.push({
-                r: rgb[0], g: rgb[1], b: rgb[2],
-                tr: rgb[0], tg: rgb[1], tb: rgb[2]
+                r: rgb[0],
+                g: rgb[1],
+                b: rgb[2],
+                tr: rgb[0],
+                tg: rgb[1],
+                tb: rgb[2]
             });
         }
         if (state.curveColorsRGB.length > state.curveColors.length) state.curveColorsRGB.length = state.curveColors.length;
@@ -177,9 +213,14 @@ function setupCacheBridges() {
             const m = state.gradientMarkers[state.gradientMarkersRGB.length];
             const rgb = hexToRgb(m.color);
             state.gradientMarkersRGB.push({
-                x: m.x, y: m.y,
-                r: rgb[0], g: rgb[1], b: rgb[2],
-                tr: rgb[0], tg: rgb[1], tb: rgb[2],
+                x: m.x,
+                y: m.y,
+                r: rgb[0],
+                g: rgb[1],
+                b: rgb[2],
+                tr: rgb[0],
+                tg: rgb[1],
+                tb: rgb[2],
                 weight: 0
             });
         }
@@ -261,7 +302,7 @@ function initializeStandardMode() {
     dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
     state.liveTwistsEnabled = dom.liveTwistsToggle.checked;
     if (state.liveTwistsEnabled) scheduleLiveTwist();
-    
+
     state.curveColors.length = 0;
     state.curveColors.push('#444444');
     state.updateCurveColorsCache();
@@ -272,26 +313,26 @@ function initializeStandardMode() {
 }
 
 function initializeEmbedMode() {
-	const d = state.embedData;
-	state.zoom = d.zoom;
-	state.targetZoom = d.zoom;
-	state.panX = d.panX;
-	state.panY = d.panY;
-	
-	const origZoom = d.origZoom || d.zoom;
-	
-	state.starPanX5 = d.starPanX5 !== undefined ? d.starPanX5 : state.panX;
-	state.starPanY5 = d.starPanY5 !== undefined ? d.starPanY5 : state.panY;
-	state.starPanX2 = d.starPanX2 !== undefined ? d.starPanX2 : state.panX;
-	state.starPanY2 = d.starPanY2 !== undefined ? d.starPanY2 : state.panY;
-	state.starPanX3 = d.starPanX3 !== undefined ? d.starPanX3 : state.panX;
-	state.starPanY3 = d.starPanY3 !== undefined ? d.starPanY3 : state.panY;
-	
-	state.starZoom5 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_LARGE);
-	state.starZoom2 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_MED);
-	state.starZoom3 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_SMALL);
+    const d = state.embedData;
+    state.zoom = d.zoom;
+    state.targetZoom = d.zoom;
+    state.panX = d.panX;
+    state.panY = d.panY;
 
-	state.showGrid = d.showGrid;
+    const origZoom = d.origZoom || d.zoom;
+
+    state.starPanX5 = d.starPanX5 !== undefined ? d.starPanX5 : state.panX;
+    state.starPanY5 = d.starPanY5 !== undefined ? d.starPanY5 : state.panY;
+    state.starPanX2 = d.starPanX2 !== undefined ? d.starPanX2 : state.panX;
+    state.starPanY2 = d.starPanY2 !== undefined ? d.starPanY2 : state.panY;
+    state.starPanX3 = d.starPanX3 !== undefined ? d.starPanX3 : state.panX;
+    state.starPanY3 = d.starPanY3 !== undefined ? d.starPanY3 : state.panY;
+
+    state.starZoom5 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_LARGE);
+    state.starZoom2 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_MED);
+    state.starZoom3 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_SMALL);
+
+    state.showGrid = d.showGrid;
     state.markersVisible = d.markersVisible;
     state.showBgStars = d.showBgStars !== undefined ? d.showBgStars : true;
     state.rotMode = d.rotMode || 'hash';
@@ -303,13 +344,22 @@ function initializeEmbedMode() {
     state.liveTwistsEnabled = d.liveTwistsEnabled || false;
     state.inertiaEnabled = d.inertiaEnabled !== undefined ? d.inertiaEnabled : true;
     dom.inertiaToggle.checked = state.inertiaEnabled;
-    state.texTf = d.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+    state.texTf = d.texTf || {
+        rot: 0,
+        scale: 1,
+        sx: 1,
+        sy: 1,
+        ox: 0,
+        oy: 0
+    };
     state.embedTexBaseSize = d.texBaseSize || 88;
-    
+
     state.curveColors.length = 0;
     state.curveColors.push(...(d.curveColors && d.curveColors.length > 0 ? [...d.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']));
     state.gradientMarkers.length = 0;
-    state.gradientMarkers.push(...(d.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({ ...m })));
+    state.gradientMarkers.push(...(d.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({
+        ...m
+    })));
     state.markersVisible = false;
 
     state.updateCurveColorsCache();
@@ -348,7 +398,7 @@ function startEmbedRender() {
     dom.cvs.width = state.embedData.w;
     dom.cvs.height = state.embedData.h;
     state.isInitialized = true;
-    
+
     state.curveMap.clear();
     state.edgeRgbMap.clear();
     state.curves.clear();
@@ -356,18 +406,18 @@ function startEmbedRender() {
 
     if (state.embedData.curves && state.embedData.curves.length > 0) {
         for (const sc of state.embedData.curves) {
-        const newID = state.nextCurveID++;
-        const edgeSet = new Set(sc.e);
-        state.curves.set(newID, {
-            id: newID,
-            color: sc.c,
-            size: edgeSet.size,
-            locked: false,
-            edges: edgeSet
-        });
-        for (const id of edgeSet) {
-            state.curveMap.set(id, newID);
-        }
+            const newID = state.nextCurveID++;
+            const edgeSet = new Set(sc.e);
+            state.curves.set(newID, {
+                id: newID,
+                color: sc.c,
+                size: edgeSet.size,
+                locked: false,
+                edges: edgeSet
+            });
+            for (const id of edgeSet) {
+                state.curveMap.set(id, newID);
+            }
         }
     } else {
         initializeCentralTile(state.embedData.centerQ, state.embedData.centerR);
@@ -394,7 +444,7 @@ function generateFavicon() {
     const SQRT3 = CONFIG.SQRT3,
         a = sz * SQRT3 / 2;
     const randomAngle = Math.floor(Math.random() * 6) * PI_DIV_3;
-    
+
     fctx.save();
     fctx.translate(cx, cy);
     fctx.rotate(randomAngle);
@@ -425,7 +475,7 @@ function generateFavicon() {
     fctx.arc(1.5 * sz, a, 1.5 * sz, Math.PI, FOUR_PI_DIV_3, false);
     fctx.stroke();
     fctx.restore();
-    
+
     const url = favCanvas.toDataURL('image/png');
     let link = document.querySelector("link[rel~='icon']");
     if (!link) {
