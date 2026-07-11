@@ -26,6 +26,8 @@ import {
     processQueue,
     findUncoloredTileInHexes,
     edgeID,
+    decodeEdgeID,
+    getOtherEdge,
     getBackgroundColorAt,
     getCurveRgb
 } from './curves.js';
@@ -506,14 +508,22 @@ async function generateEmbedCode() {
                 }
             }
         }
-
+        
         for (const cid of visibleCurveIDs) {
             const curve = state.curves.get(cid);
             if (curve && curve.edges.size > 0) {
-                serializedCurves.push({
-                    c: curve.color,
-                    e: Array.from(curve.edges)
-                });
+                const compact = encodeCurveCompact(curve);
+                if (compact) {
+                    let colorHex = curve.color;
+                    if (typeof colorHex === 'number') {
+                        colorHex = state.curveColors[colorHex % state.curveColors.length] || '#000000';
+                    }
+                    
+                    serializedCurves.push({
+                        c: colorHex,
+                        s: compact
+                    });
+                }
             }
         }
     }
@@ -1115,6 +1125,36 @@ function drawOffscreenHexTiles(offCtx, hexes, eSz, now, eCurveAlpha, eGridAlpha)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  SHARED EXPORT UTILITIES
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function encodeCurveCompact(curve) {
+    const edges = curve.edges;
+    if (edges.size === 0) return null;
+
+    // Find an endpoint to start tracing. 
+    // An endpoint is an edge where its partner edge in the same hex is NOT in the set.
+    let startID = -1;
+    for (const id of edges) {
+        const [q, r, e] = decodeEdgeID(id);
+        const k = (tileRot(q, r) / 60) % 6;
+        const alter = isTileAlter(q, r);
+        const pe = getOtherEdge(k, e, alter);
+        const pid = edgeID(q, r, pe);
+
+        if (!edges.has(pid)) {
+            startID = id;
+            break;
+        }
+    }
+
+    // If no endpoint is found, it's a closed loop. Just pick the first edge.
+    if (startID === -1) {
+        startID = edges.values().next().value;
+    }
+
+    const [sq, sr, se] = decodeEdgeID(startID);
+    // Return [startQ, startR, startEdge, totalEdges]
+    return [sq, sr, se, edges.size];
+}
 
 function getHexBounds(hexes) {
     let bounds = {

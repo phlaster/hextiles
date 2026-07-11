@@ -17,10 +17,15 @@ import {
     renderCurveList
 } from './ui.js';
 import {
-    hexKey
+    hexKey,
+    tileRot,
+    isTileAlter
 } from './math.js';
 import {
-    initializeCentralTile
+    initializeCentralTile,
+    edgeID,
+    getNeighbor,
+    getOtherEdge
 } from './curves.js';
 import {
     setupEvents,
@@ -407,7 +412,35 @@ function startEmbedRender() {
     if (state.embedData.curves && state.embedData.curves.length > 0) {
         for (const sc of state.embedData.curves) {
             const newID = state.nextCurveID++;
-            const edgeSet = new Set(sc.e);
+            const edgeSet = new Set();
+
+            if (sc.e) {
+                for (const id of sc.e) edgeSet.add(id);
+            } else if (sc.s) {
+                const [sq, sr, se, size] = sc.s;
+                let curr = {
+                    q: sq,
+                    r: sr,
+                    e: se
+                };
+
+                edgeSet.add(edgeID(sq, sr, se));
+
+                for (let i = 1; i < size; i++) {
+                    const k = (tileRot(curr.q, curr.r) / 60) % 6;
+                    const alter = isTileAlter(curr.q, curr.r);
+                    const pe = getOtherEdge(k, curr.e, alter);
+                    const n = getNeighbor(curr.q, curr.r, pe);
+
+                    curr = {
+                        q: n.q,
+                        r: n.r,
+                        e: n.edge
+                    };
+                    edgeSet.add(edgeID(curr.q, curr.r, curr.e));
+                }
+            }
+
             state.curves.set(newID, {
                 id: newID,
                 color: sc.c,
@@ -415,12 +448,11 @@ function startEmbedRender() {
                 locked: false,
                 edges: edgeSet
             });
+
             for (const id of edgeSet) {
                 state.curveMap.set(id, newID);
             }
         }
-    } else {
-        initializeCentralTile(state.embedData.centerQ, state.embedData.centerR);
     }
 
     if (state.embedData.origZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
