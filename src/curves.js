@@ -90,7 +90,8 @@ export function mergeCurves(c1, c2) {
 function determineTargetAndSource(curve1, curve2) {
     if (curve1.size > curve2.size) return { target: curve1, source: curve2 };
     if (curve2.size > curve1.size) return { target: curve2, source: curve1 };
-    if (Math.random() < 0.5) return { target: curve1, source: curve2 };
+    
+    if (curve1.id < curve2.id) return { target: curve1, source: curve2 };
     return { target: curve2, source: curve1 };
 }
 
@@ -187,11 +188,16 @@ export function getVisibleBounds() {
     };
 }
 
-export function initializeCentralTile() {
+export function initializeCentralTile(q, r) {
     if (state.curveColors.length <= 1) return;
     if (state.curveMap.size > 0) return;
-    let center = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, state.zoom, state.panX, state.panY);
-    recalculateTile(center.q, center.r);
+    
+    if (q === undefined || r === undefined) {
+        let center = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, state.zoom, state.panX, state.panY);
+        q = center.q;
+        r = center.r;
+    }
+    recalculateTile(q, r);
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

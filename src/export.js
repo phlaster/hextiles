@@ -440,7 +440,7 @@ async function exportToPNG() {
 
 async function generateEmbedCode() {
     const { fx, fy, scale, eW, eH, eZoom, ePanX, ePanY, expStarPans } = getExportParams();
-    
+    const mainCenter = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, state.zoom, state.panX, state.panY);    
     const targetHexSize = Math.round(HEX_R * eZoom);
     const maxAllowed = parseInt(dom.exportSide.value) || 1920;
     const rasterSize = Math.max(64, Math.min(targetHexSize, maxAllowed));
@@ -450,9 +450,34 @@ async function generateEmbedCode() {
         color: m.color
     }));
 
+  let serializedCurves = [];
+  if (!state.texImg) {
+    const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+    const visibleCurveIDs = new Set();
+    for (const h of exportHexes) {
+      for (let e = 0; e < 6; e++) {
+        const id = edgeID(h.q, h.r, e);
+        if (state.curveMap.has(id)) {
+          visibleCurveIDs.add(state.curveMap.get(id));
+        }
+      }
+    }
+
+    for (const cid of visibleCurveIDs) {
+      const curve = state.curves.get(cid);
+      if (curve && curve.edges.size > 0) {
+        serializedCurves.push({
+          c: curve.color,
+          e: Array.from(curve.edges)
+        });
+      }
+    }
+  }
+
     const data = {
         w: eW, h: eH, zoom: eZoom, panX: ePanX, panY: ePanY,
         origZoom: state.zoom, showGrid: state.showGrid,
+        centerQ: mainCenter.q, centerR: mainCenter.r,
         starPanX5: expStarPans.x5, starPanY5: expStarPans.y5,
         starPanX2: expStarPans.x2, starPanY2: expStarPans.y2,
         starPanX3: expStarPans.x3, starPanY3: expStarPans.y3,
@@ -463,7 +488,7 @@ async function generateEmbedCode() {
         texTf: { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 },
         texBaseSize: rasterSize,
         curveColors: [...state.curveColors],
-        markers: eMarkers, rotOverrides: serializeRotOverrides(),
+        markers: eMarkers, rotOverrides: serializeRotOverrides(), curves: serializedCurves,
         texture: getTextureDataUrl(rasterSize), liveTwistsEnabled: state.liveTwistsEnabled
     };
 
@@ -479,7 +504,7 @@ async function generateEmbedCode() {
                     controller.close();
                 }
             });
-            const compressedStream = inputStream.pipeThrough(new CompressionStream('deflate'));
+            const compressedStream = inputStream.pipeThrough(new CompressionStream('gzip'));
             const compressedBuffer = await new Response(compressedStream).arrayBuffer();
             const bytes = new Uint8Array(compressedBuffer);
 

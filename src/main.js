@@ -102,34 +102,46 @@ async function parseEmbedData() {
             const raw = embedMatch[1];
             let jsonStr = '';
 
-            // Try native decompression first (new compressed format)
+            let decompressed = false;
+            
+            // 1. Restore standard Base64 from URL-safe Base64
+            let base64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '='; // Restore padding
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+            if (typeof DecompressionStream !== 'undefined') {
+            // Try GZIP first (Stronger compression for new embeds)
             try {
-                if (typeof DecompressionStream !== 'undefined') {
-                    // 1. Restore standard Base64 from URL-safe Base64
-                    let base64 = raw.replace(/-/g, '+').replace(/_/g, '/');
-                    while (base64.length % 4) base64 += '='; // Restore padding
-
-                    // 2. Decode to binary Uint8Array
-                    const binary = atob(base64);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-                    // 3. Decompress using native browser API
-                    const inputStream = new ReadableStream({
-                        start(controller) {
-                            controller.enqueue(bytes);
-                            controller.close();
-                        }
-                    });
-                    const decompressedStream = inputStream.pipeThrough(new DecompressionStream('deflate'));
-                    jsonStr = await new Response(decompressedStream).text();
-                } else {
-                    throw new Error('DecompressionStream not supported');
-                }
+                const inputStream = new ReadableStream({
+                start(controller) { controller.enqueue(bytes); controller.close(); }
+                });
+                const stream = inputStream.pipeThrough(new DecompressionStream('gzip'));
+                jsonStr = await new Response(stream).text();
+                decompressed = true;
             } catch (e) {
-                // FALLBACK: If decompression fails, it's either an old browser 
-                // OR an old uncompressed embed link. Try the legacy method.
+                // Try DEFLATE fallback (For older embeds generated before the upgrade)
+                try {
+                const inputStream = new ReadableStream({
+                    start(controller) { controller.enqueue(bytes); controller.close(); }
+                });
+                const stream = inputStream.pipeThrough(new DecompressionStream('deflate'));
+                jsonStr = await new Response(stream).text();
+                decompressed = true;
+                } catch (e2) {
+                // Failed both compressed formats
+                }
+            }
+            }
+
+            // Final Fallback: Legacy uncompressed embeds or very old browsers
+            if (!decompressed) {
+            try {
                 jsonStr = decodeURIComponent(escape(atob(raw)));
+            } catch (e) {
+                throw new Error('Failed to parse embed data');
+            }
             }
 
             state.embedData = JSON.parse(jsonStr);
@@ -336,11 +348,31 @@ function startEmbedRender() {
     dom.cvs.width = state.embedData.w;
     dom.cvs.height = state.embedData.h;
     state.isInitialized = true;
+    
     state.curveMap.clear();
     state.edgeRgbMap.clear();
     state.curves.clear();
     state.queue.length = 0;
-    initializeCentralTile();
+
+    if (state.embedData.curves && state.embedData.curves.length > 0) {
+        for (const sc of state.embedData.curves) {
+        const newID = state.nextCurveID++;
+        const edgeSet = new Set(sc.e);
+        state.curves.set(newID, {
+            id: newID,
+            color: sc.c,
+            size: edgeSet.size,
+            locked: false,
+            edges: edgeSet
+        });
+        for (const id of edgeSet) {
+            state.curveMap.set(id, newID);
+        }
+        }
+    } else {
+        initializeCentralTile(state.embedData.centerQ, state.embedData.centerR);
+    }
+
     if (state.embedData.origZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
         state.zoomOutStartTime = Date.now() - CONFIG.STAR_BLAZE_DELAY - 1000;
     }
