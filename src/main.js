@@ -438,27 +438,40 @@ function initializeEmbedMode() {
 }
 
 function startEmbedRender() {
-    dom.cvs.width = state.embedData.w;
-    dom.cvs.height = state.embedData.h;
+    const d = state.embedData;
+    dom.cvs.width = d.w;
+    dom.cvs.height = d.h;
     state.isInitialized = true;
+
     state.curveMap.clear();
     state.edgeRgbMap.clear();
     state.curves.clear();
     state.queue.length = 0;
 
-    if (state.embedData.curves && state.embedData.curves.length > 0) {
-        for (const sc of state.embedData.curves) {
-            // Restore the exact original ID to preserve structural order
+    if (d.curves && d.curves.length > 0) {
+        const gMinQ = d.rotOverrides[0];
+        const gMinR = d.rotOverrides[1];
+        const gRCount = d.rotOverrides[2];
+        for (const sc of d.curves) {
             const newID = sc.id !== undefined ? sc.id : state.nextCurveID++;
             if (newID >= state.nextCurveID) state.nextCurveID = newID + 1;
 
             const edgeSet = new Set();
             if (sc.e) {
-                // Legacy fallback for old embeds
                 for (const id of sc.e) edgeSet.add(id);
             } else if (sc.s) {
-                // New compact format: [q, r, e, size]
-                const [sq, sr, se, size] = sc.s;
+                let sq, sr, se, size;
+
+                if (sc.s.length === 4) {
+                    [sq, sr, se, size] = sc.s;
+                } else {
+                    const [startIdx, e, sz] = sc.s;
+                    sq = gMinQ + Math.floor(startIdx / gRCount);
+                    sr = gMinR + (startIdx % gRCount);
+                    se = e;
+                    size = sz;
+                }
+
                 let curr = {
                     q: sq,
                     r: sr,
@@ -481,20 +494,17 @@ function startEmbedRender() {
                 }
             }
 
-            // --- FORCE COLOR MATCH ---
-            // Map the serialized HEX string back to the exact palette index.
-            // This prevents the curve engine from assigning random new colors 
-            // when tiles are rotated or curves are split/merged.
             let finalColor = sc.c;
             if (typeof finalColor === 'string') {
                 const idx = state.curveColors.indexOf(finalColor);
-                finalColor = (idx !== -1) ? idx : 0; // Fallback to 0 if not found
+                finalColor = (idx !== -1) ? idx : 0;
+            } else {
+                finalColor = (finalColor >= 0 && finalColor < state.curveColors.length) ? finalColor : 0;
             }
-            // -------------------------
 
             state.curves.set(newID, {
                 id: newID,
-                color: finalColor, // Strictly a palette index now
+                color: finalColor,
                 size: edgeSet.size,
                 locked: false,
                 edges: edgeSet
@@ -505,10 +515,10 @@ function startEmbedRender() {
             }
         }
     } else {
-        initializeCentralTile(state.embedData.centerQ, state.embedData.centerR);
+        initializeCentralTile(d.centerQ, d.centerR);
     }
 
-    if (state.embedData.origZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
+    if (d.origZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
         state.zoomOutStartTime = Date.now() - CONFIG.STAR_BLAZE_DELAY - 1000;
     }
 

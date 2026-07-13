@@ -534,9 +534,12 @@ async function generateEmbedCode() {
     }));
 
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
-    // Create a Set of visible hex keys for O(1) border truncation checks
     const exportHexesSet = new Set(exportHexes.map(h => hexKey(h.q, h.r)));
 
+    // 1. Extract Grid Bounds & Serialize Rotations
+    let gridMinQ = 0,
+        gridMinR = 0,
+        gridRCount = 1;
     let serializedRots = [0, 0, 1, ""]; // Fallback for empty grids
 
     if (exportHexes.length > 0) {
@@ -551,10 +554,11 @@ async function generateEmbedCode() {
             if (h.r > maxR) maxR = h.r;
         }
 
-        const rCount = maxR - minR + 1;
-        let rotsStr = "";
+        gridMinQ = minQ;
+        gridMinR = minR;
+        gridRCount = maxR - minR + 1;
 
-        // Concatenate all 1-digit multiples directly into a single string (no commas)
+        let rotsStr = "";
         for (let q = minQ; q <= maxQ; q++) {
             for (let r = minR; r <= maxR; r++) {
                 const rot = tileRot(q, r);
@@ -562,11 +566,10 @@ async function generateEmbedCode() {
                 rotsStr += mult;
             }
         }
-
-        // Format: [minQ, minR, rCount, "41340..."]
-        serializedRots = [minQ, minR, rCount, rotsStr];
+        serializedRots = [minQ, minR, gridRCount, rotsStr];
     }
 
+    // 2. Serialize Curves
     let serializedCurves = [];
     if (!state.texImg) {
         const visibleCurveIDs = new Set();
@@ -583,13 +586,15 @@ async function generateEmbedCode() {
         for (const cid of visibleCurveIDs) {
             const curve = state.curves.get(cid);
             if (curve && curve.edges.size > 0) {
-                // Resolve color to exact HEX string
-                let colorHex = curve.color;
-                if (typeof colorHex === 'number') {
-                    colorHex = state.curveColors[colorHex % state.curveColors.length] || '#000000';
+                let colorIdx = curve.color;
+                if (typeof colorIdx === 'string') {
+                    colorIdx = state.curveColors.indexOf(colorIdx);
+                    if (colorIdx === -1) colorIdx = 0;
+                } else {
+                    colorIdx = colorIdx;
                 }
 
-                // 1. Filter edges to only those strictly within the export frame
+                // Filter edges to only those strictly within the export frame
                 const filteredEdges = [];
                 for (const id of curve.edges) {
                     const [q, r, e] = decodeEdgeID(id);
@@ -597,10 +602,8 @@ async function generateEmbedCode() {
                         filteredEdges.push(id);
                     }
                 }
-
                 if (filteredEdges.length === 0) continue;
 
-                // 2. Find connected components (splits curves that were cut by the border)
                 const edgeSet = new Set(filteredEdges);
                 const visited = new Set();
 
@@ -615,7 +618,6 @@ async function generateEmbedCode() {
                         comp.push(curr);
                         const [q, r, e] = decodeEdgeID(curr);
 
-                        // Check same hex connection
                         const k = (tileRot(q, r) / 60) % 6;
                         const alter = isTileAlter(q, r);
                         const pe = getOtherEdge(k, e, alter);
@@ -625,7 +627,6 @@ async function generateEmbedCode() {
                             queue.push(pid);
                         }
 
-                        // Check neighbor hex connection
                         const n = getNeighbor(q, r, e);
                         const nk = (tileRot(n.q, n.r) / 60) % 6;
                         const nAlter = isTileAlter(n.q, n.r);
@@ -637,7 +638,7 @@ async function generateEmbedCode() {
                         }
                     }
 
-                    // 3. Encode the truncated component
+                    // Encode the truncated component
                     const compSet = new Set(comp);
                     let startID = -1;
                     for (const eid of compSet) {
@@ -651,17 +652,14 @@ async function generateEmbedCode() {
                             break;
                         }
                     }
-                    if (startID === -1) {
-                        startID = compSet.values().next().value;
-                    }
+                    if (startID === -1) startID = compSet.values().next().value;
                     const [sq, sr, se] = decodeEdgeID(startID);
-                    const compact = [sq, sr, se, compSet.size];
+                    const startIdx = (sq - gridMinQ) * gridRCount + (sr - gridMinR);
 
                     serializedCurves.push({
-                        // Generate unique ID but preserve original curve sorting order
                         id: cid * 100000 + componentIDCounter++,
-                        c: colorHex,
-                        s: compact
+                        c: colorIdx, // Compact: Exact Palette index
+                        s: [startIdx, se, compSet.size] // Compact: [1D_ordinal, edge, size]
                     });
                 }
             }
@@ -688,12 +686,9 @@ async function generateEmbedCode() {
         starPanY3: expStarPans.y3,
         markersVisible: false,
         showBgStars: state.showBgStars,
-
-        // FORCE DISABLE ALL MOVEMENT/INTERACTION ANIMATIONS
         flowEnabled: false,
         inertiaEnabled: false,
         liveTwistsEnabled: false,
-
         curveLineWidth: state.curveLineWidth,
         alterTilesRatio: state.alterTilesRatio,
         texTf: {
@@ -707,12 +702,9 @@ async function generateEmbedCode() {
         texBaseSize: rasterSize,
         curveColors: [...state.curveColors],
         markers: eMarkers,
-
-        rotOverrides: serializedRots, // New dense string format
-        curves: serializedCurves, // New compact format with HEX colors
+        rotOverrides: serializedRots,
+        curves: serializedCurves,
         texture: getTextureDataUrl(rasterSize)
-
-        // REMOVED: rotMode, randomSeed, rotSeed (no longer needed)
     };
 
     let encoded;
@@ -729,13 +721,9 @@ async function generateEmbedCode() {
             const compressedStream = inputStream.pipeThrough(new CompressionStream('gzip'));
             const compressedBuffer = await new Response(compressedStream).arrayBuffer();
             const bytes = new Uint8Array(compressedBuffer);
-
             let binary = '';
             for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-            encoded = btoa(binary)
-                .replace(/\+/g, '-')
-                .replace(/\//g, '_')
-                .replace(/=+$/, '');
+            encoded = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         } else {
             encoded = btoa(unescape(encodeURIComponent(jsonStr)));
         }
