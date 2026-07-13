@@ -176,3 +176,57 @@ export function hash2D(x, y) {
     h = Math.imul(h ^ (h >>> 13), 1274126177);
     return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+
+export function getBlazeState(k, j, seed, now, zoomOutTime, blazeFade, origSR, origSA, origSize) {
+    if (zoomOutTime <= 0) return null;
+
+    const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
+    const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
+    const phase = (now + offset) % cycleDuration;
+
+    const speedMult = 0.2 + hash2D(k * seed + 333, j * seed + 444) * 1.3;
+    const baseBlazeDuration = 1200 + hash2D(k * seed + 888, j * seed + 777) * 1800;
+    const blazeDuration = baseBlazeDuration / speedMult;
+
+    let blazeT = phase / blazeDuration;
+
+    if (blazeFade < 1.0 && blazeT < 0.25) {
+        return null;
+    }
+
+    if (blazeT >= 1.0) return null;
+
+    let sR = origSR, sA = origSA, size = origSize, blazeGlow = 0;
+
+    if (blazeT < 0.25) {
+        let t2 = blazeT / 0.25;
+        size = origSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2);
+        sR = Math.round(origSR + (255 - origSR) * t2);
+        sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2;
+        blazeGlow = t2;
+    } else if (blazeT < 0.55) {
+        let t2 = (blazeT - 0.25) / 0.30;
+        size = origSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * (1 + t2));
+        sR = Math.round(origSR + (255 - origSR));
+        sA = (origSA + (Math.min(1, origSA + 0.5) - origSA)) * (1 - t2);
+        blazeGlow = 1 - t2;
+    } else if (blazeT < 0.65) {
+        sA = 0;
+        blazeGlow = 0;
+    } else {
+        let t2 = (blazeT - 0.65) / 0.35;
+        size = origSize;
+        sR = origSR;
+        sA = origSA * t2;
+        blazeGlow = 0;
+    }
+
+    if (blazeFade < 1.0) {
+        blazeGlow *= blazeFade;
+        sA = origSA + (sA - origSA) * blazeFade;
+        size = origSize + (size - origSize) * blazeFade;
+        sR = Math.round(origSR + (sR - origSR) * blazeFade);
+    }
+
+    return { size, sR, sA, blazeGlow };
+}

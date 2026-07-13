@@ -21,7 +21,8 @@ import {
     hash2D,
     isTileAlter,
     traceHexPath,
-    traceHexGridBatch
+    traceHexGridBatch,
+    getBlazeState
 } from './math.js';
 import {
     processQueue,
@@ -990,52 +991,26 @@ function addSvgStarLayer(spacing, size, seed, panX, panY, eW, eH, coordScale, no
                 sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult,
                 r = Math.max(0.1, (size * coordScale) / 2);
             if (allowBlazing && zoomOutTime > 0) {
-                const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
-                const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration,
-                    phase = (now + offset) % cycleDuration;
-                const blazeDuration = 1200 + hash2D(k * seed + 333, j * seed + 444) * 1800;
-                if (phase < blazeDuration) {
-                    let blazeT = phase / blazeDuration,
-                        blazeGlow = 0,
-                        origSR = sR,
-                        origSA = sA,
-                        origR = r;
-                    if (blazeT < 0.25) {
-                        let t2 = blazeT / 0.25;
-                        r = origR * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
-                        sR = Math.round(origSR + (255 - origSR) * t2 * blazeFade);
-                        sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2 * blazeFade;
-                        blazeGlow = t2 * blazeFade;
-                    } else if (blazeT < 0.55) {
-                        let t2 = (blazeT - 0.25) / 0.30;
-                        r = origR * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeFade);
-                        sR = Math.round(origSR + (255 - origSR) * blazeFade);
-                        sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t2);
-                        blazeGlow = (1 - t2) * blazeFade;
-                    } else if (blazeT < 0.65) {
-                        sA = 0;
-                        blazeGlow = 0;
-                    } else {
-                        let t2 = (blazeT - 0.65) / 0.35;
-                        r = origR;
-                        sR = origSR;
-                        sA = origSA * t2;
-                        blazeGlow = 0;
-                    }
-                    if (blazeGlow > 0) {
+                const blazeState = getBlazeState(k, j, seed, now, zoomOutTime, blazeFade, sR, sA, r);
+                if (blazeState) {
+                    sR = blazeState.sR;
+                    sA = blazeState.sA;
+                    r = blazeState.size;
+
+                    if (blazeState.blazeGlow > 0) {
                         const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * coordScale;
                         const steps = 90;
                         for (let s = steps; s > 0; s--) {
                             const stepT = s / steps,
                                 stepR = glowRadius * stepT,
-                                stepA = (0.05 * blazeGlow) * Math.pow(1 - stepT, 1.5);
+                                stepA = (0.05 * blazeState.blazeGlow) * Math.pow(1 - stepT, 1.5);
                             svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(150, 200, 255)" fill-opacity="${stepA.toFixed(3)}"/>`;
                         }
                         const steps2 = 45;
                         for (let s = steps2; s > 0; s--) {
                             const stepT = s / steps2,
                                 stepR = glowRadius * 0.5 * stepT,
-                                stepA = (0.1 * blazeGlow) * Math.pow(1 - stepT, 1.5);
+                                stepA = (0.1 * blazeState.blazeGlow) * Math.pow(1 - stepT, 1.5);
                             svg += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${stepR.toFixed(2)}" fill="rgb(255, 255, 240)" fill-opacity="${stepA.toFixed(3)}"/>`;
                         }
                     }

@@ -23,7 +23,8 @@ import {
     traceHexGridBatch,
     visibleHexes,
     hash2D,
-    isTileAlter
+    isTileAlter,
+    getBlazeState
 } from './math.js';
 import {
     processQueue,
@@ -240,47 +241,19 @@ export function drawBackgroundStars(W, H, coordScale, dPanX5, dPanY5, dPanX2, dP
                 let sR = Math.round(255 * (1 - t));
                 let sA = (0.6 * (1 - t) + 0.5 * t) * alphaMult;
 
-                // FIX: Use starVisualScale for physical size
                 let drawSize = (size * starVisualScale) / 2;
-
                 if (allowBlazing && zoomOutTime > 0) {
-                    const cycleDuration = CONFIG.STAR_BLAZE_MIN_INTERVAL + hash2D(k * seed + 555, j * seed + 999) * CONFIG.STAR_BLAZE_MAX_INTERVAL_ADD;
-                    const offset = hash2D(k * seed + 111, j * seed + 222) * cycleDuration;
-                    const phase = (now + offset) % cycleDuration;
-                    const blazeDuration = 1200 + hash2D(k * seed + 333, j * seed + 444) * 1800;
-                    if (phase < blazeDuration) {
-                        let blazeT = phase / blazeDuration;
-                        let blazeGlow = 0;
-                        const origSR = sR,
-                            origSA = sA,
-                            origDrawSize = drawSize;
-                        if (blazeT < 0.25) {
-                            let t2 = blazeT / 0.25;
-                            drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * t2 * blazeFade);
-                            sR = Math.round(origSR + (255 - origSR) * t2 * blazeFade);
-                            sA = origSA + (Math.min(1, origSA + 0.5) - origSA) * t2 * blazeFade;
-                            blazeGlow = t2 * blazeFade;
-                        } else if (blazeT < 0.55) {
-                            let t2 = (blazeT - 0.25) / 0.30;
-                            drawSize = origDrawSize * (1 + CONFIG.STAR_BLAZE_SIZE_MULT * blazeFade);
-                            sR = Math.round(origSR + (255 - origSR) * blazeFade);
-                            sA = (origSA + (Math.min(1, origSA + 0.5) - origSA) * blazeFade) * (1 - t2);
-                            blazeGlow = (1 - t2) * blazeFade;
-                        } else if (blazeT < 0.65) {
-                            sA = 0;
-                            blazeGlow = 0;
-                        } else {
-                            let t2 = (blazeT - 0.65) / 0.35;
-                            drawSize = origDrawSize;
-                            sR = origSR;
-                            sA = origSA * t2;
-                            blazeGlow = 0;
-                        }
-                        if (blazeGlow > 0) {
+                    const blazeState = getBlazeState(k, j, seed, now, zoomOutTime, blazeFade, sR, sA, drawSize);
+                    if (blazeState) {
+                        sR = blazeState.sR;
+                        sA = blazeState.sA;
+                        drawSize = blazeState.size;
+
+                        if (blazeState.blazeGlow > 0) {
                             const glowRadius = (180 + hash2D(k * seed + 777, j * seed + 888) * 120) * starVisualScale;
                             const glow = state.ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
-                            glow.addColorStop(0, `rgba(255, 255, 240, ${0.4 * blazeGlow})`);
-                            glow.addColorStop(0.4, `rgba(150, 200, 255, ${0.2 * blazeGlow})`);
+                            glow.addColorStop(0, `rgba(255, 255, 240, ${0.4 * blazeState.blazeGlow})`);
+                            glow.addColorStop(0.4, `rgba(150, 200, 255, ${0.2 * blazeState.blazeGlow})`);
                             glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
                             state.ctx.save();
                             state.ctx.globalCompositeOperation = 'lighter';
