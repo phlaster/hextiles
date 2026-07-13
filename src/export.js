@@ -523,15 +523,22 @@ async function generateEmbedCode() {
         ePanY,
         expStarPans
     } = getExportParams();
+    
+    const r1 = n => Math.round(n * 10) / 10;
+    const r4 = n => Math.round(n * 10000) / 10000;
+    const r2 = n => Math.round(n * 100) / 100;
+
     const mainCenter = pixToHex(dom.cvs.width / 2, dom.cvs.height / 2, state.zoom, state.panX, state.panY);
     const targetHexSize = Math.round(HEX_R * eZoom);
     const maxAllowed = parseInt(dom.exportSide.value) || 1920;
     const rasterSize = Math.max(64, Math.min(targetHexSize, maxAllowed));
-    const eMarkers = state.gradientMarkers.map(m => ({
-        x: (m.x - fx) * scale,
-        y: (m.y - fy) * scale,
-        color: m.color
-    }));
+    
+    // Convert markers to compact tuple arrays [x, y, color]
+    const eMarkers = state.gradientMarkers.map(m => [
+        r1((m.x - fx) * scale),
+        r1((m.y - fy) * scale),
+        m.color
+    ]);
 
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const exportHexesSet = new Set(exportHexes.map(h => hexKey(h.q, h.r)));
@@ -541,216 +548,197 @@ async function generateEmbedCode() {
         processExportCurves(exportBounds, exportHexes);
     }
 
+    const isBlazerZoom = state.zoom <= CONFIG.ZOOM_BLAZE_FADE_START;
+    const serializeFlow = state.flowEnabled && isBlazerZoom && state.showBgStars;
+
     // 1. Extract Grid Bounds & Serialize Rotations
-    let gridMinQ = 0,
-        gridMinR = 0,
-        gridRCount = 1;
-    let serializedRots = [0, 0, 1, ""]; // Fallback for empty grids
-
-    if (exportHexes.length > 0) {
-        let minQ = Infinity,
-            maxQ = -Infinity,
-            minR = Infinity,
-            maxR = -Infinity;
-        for (const h of exportHexes) {
-            if (h.q < minQ) minQ = h.q;
-            if (h.q > maxQ) maxQ = h.q;
-            if (h.r < minR) minR = h.r;
-            if (h.r > maxR) maxR = h.r;
-        }
- 
-        // Expand by 1 hex in each direction to cover curve walk boundary
-        const expMinQ = minQ - 1;
-        const expMaxQ = maxQ + 1;
-        const expMinR = minR - 1;
-        const expMaxR = maxR + 1;
-
-        gridMinQ = expMinQ;
-        gridMinR = expMinR;
-        gridRCount = expMaxR - expMinR + 1;
-
-        let rotsStr = "";
-        for (let q = expMinQ; q <= expMaxQ; q++) {
-            for (let r = expMinR; r <= expMaxR; r++) {
-                const rot = tileRot(q, r);
-                const mult = Math.round(rot / 60) % 6;
-                rotsStr += mult;
-            }
-        }
-        serializedRots = [expMinQ, expMinR, gridRCount, rotsStr];
-    }
-
-    // 2. Serialize Curves
+    let gridMinQ = 0, gridMinR = 0, gridRCount = 1;
+    let serializedRots = [0, 0, 1, ""];
     let serializedCurves = [];
-    if (!state.texImg) {
-        const visibleCurveIDs = new Set();
-        for (const h of exportHexes) {
-            for (let e = 0; e < 6; e++) {
-                const id = edgeID(h.q, h.r, e);
-                if (state.curveMap.has(id)) {
-                    visibleCurveIDs.add(state.curveMap.get(id));
+    let hasCurves = false;
+
+    if (!serializeFlow) {
+        if (exportHexes.length > 0) {
+            let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+            for (const h of exportHexes) {
+                if (h.q < minQ) minQ = h.q;
+                if (h.q > maxQ) maxQ = h.q;
+                if (h.r < minR) minR = h.r;
+                if (h.r > maxR) maxR = h.r;
+            }
+
+            const expMinQ = minQ - 1;
+            const expMaxQ = maxQ + 1;
+            const expMinR = minR - 1;
+            const expMaxR = maxR + 1;
+
+            gridMinQ = expMinQ;
+            gridMinR = expMinR;
+            gridRCount = expMaxR - expMinR + 1;
+
+            let rotsStr = "";
+            for (let q = expMinQ; q <= expMaxQ; q++) {
+                for (let r = expMinR; r <= expMaxR; r++) {
+                    const rot = tileRot(q, r);
+                    const mult = Math.round(rot / 60) % 6;
+                    rotsStr += mult;
                 }
             }
+            serializedRots = [expMinQ, expMinR, gridRCount, rotsStr];
         }
 
-        let componentIDCounter = 0;
-        for (const cid of visibleCurveIDs) {
-            const curve = state.curves.get(cid);
-            if (curve && curve.edges.size > 0) {
-                let colorStr = '';
-                if (typeof curve.color === 'number') {
-                    const idx = curve.color % state.curveColors.length;
-                    colorStr = (state.curveColors[idx] || '#000000').toLowerCase();
-                } else if (typeof curve.color === 'string') {
-                    colorStr = curve.color.toLowerCase();
-                }
-                const filteredEdges = [];
-                for (const id of curve.edges) {
-                    const [q, r, e] = decodeEdgeID(id);
-                    const n = getNeighbor(q, r, e);
-                    if (exportHexesSet.has(hexKey(q, r)) || exportHexesSet.has(hexKey(n.q, n.r))) {
-                        filteredEdges.push(id);
+        // 2. Serialize Curves
+        if (!state.texImg) {
+            const visibleCurveIDs = new Set();
+            for (const h of exportHexes) {
+                for (let e = 0; e < 6; e++) {
+                    const id = edgeID(h.q, h.r, e);
+                    if (state.curveMap.has(id)) {
+                        visibleCurveIDs.add(state.curveMap.get(id));
                     }
-                }
-                if (filteredEdges.length === 0) continue;
-
-                const edgeSet = new Set(filteredEdges);
-                const visited = new Set();
-
-                for (const id of edgeSet) {
-                    if (visited.has(id)) continue;
-                    const comp = [];
-                    const queue = [id];
-                    visited.add(id);
-
-                    while (queue.length > 0) {
-                        const curr = queue.pop();
-                        comp.push(curr);
-                        const [q, r, e] = decodeEdgeID(curr);
-
-                        const k = (tileRot(q, r) / 60) % 6;
-                        const alter = isTileAlter(q, r);
-                        const pe = getOtherEdge(k, e, alter);
-                        const pid = edgeID(q, r, pe);
-                        if (edgeSet.has(pid) && !visited.has(pid)) {
-                            visited.add(pid);
-                            queue.push(pid);
-                        }
-
-                        const n = getNeighbor(q, r, e);
-                        const nk = (tileRot(n.q, n.r) / 60) % 6;
-                        const nAlter = isTileAlter(n.q, n.r);
-                        const npe = getOtherEdge(nk, n.edge, nAlter);
-                        const npid = edgeID(n.q, n.r, npe);
-                        if (edgeSet.has(npid) && !visited.has(npid)) {
-                            visited.add(npid);
-                            queue.push(npid);
-                        }
-                    }
-
-                    // Encode the truncated component
-                    const compSet = new Set(comp);
-                    let startQ = 0, startR = 0, startE = 0;
-                    let found = false;
-                    
-                    for (const eid of compSet) {
-                        const [q1, r1, e1] = decodeEdgeID(eid);
-                        const n1 = getNeighbor(q1, r1, e1);
-
-                        // Check tile 1
-                        const k1 = (tileRot(q1, r1) / 60) % 6;
-                        const alter1 = isTileAlter(q1, r1);
-                        const pe1 = getOtherEdge(k1, e1, alter1);
-                        const pid1 = edgeID(q1, r1, pe1);
-                        const has1 = compSet.has(pid1);
-
-                        // Check tile 2
-                        const k2 = (tileRot(n1.q, n1.r) / 60) % 6;
-                        const alter2 = isTileAlter(n1.q, n1.r);
-                        const pe2 = getOtherEdge(k2, n1.edge, alter2);
-                        const pid2 = edgeID(n1.q, n1.r, pe2);
-                        const has2 = compSet.has(pid2);
-
-                        if (!has1 || !has2) {
-                            // It's an endpoint. Start in the tile that has the continuation.
-                            if (has2) {
-                                startQ = n1.q;
-                                startR = n1.r;
-                                startE = n1.edge;
-                            } else {
-                                startQ = q1;
-                                startR = r1;
-                                startE = e1;
-                            }
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        // Closed loop, no endpoints
-                        const firstEid = compSet.values().next().value;
-                        const [q1, r1, e1] = decodeEdgeID(firstEid);
-                        startQ = q1;
-                        startR = r1;
-                        startE = e1;
-                    }
-
-                    const startIdx = (startQ - gridMinQ) * gridRCount + (startR - gridMinR);
-
-                    serializedCurves.push({
-                        id: cid * 100000 + componentIDCounter++,
-                        c: colorStr,
-                        s: [startIdx, startE, compSet.size]
-                    });
                 }
             }
+
+            let componentIDCounter = 0;
+            for (const cid of visibleCurveIDs) {
+                const curve = state.curves.get(cid);
+                if (curve && curve.edges.size > 0) {
+                    let colorIdx = 0;
+                    if (typeof curve.color === 'number') {
+                        colorIdx = curve.color % state.curveColors.length;
+                    } else if (typeof curve.color === 'string') {
+                        const lowerCol = curve.color.toLowerCase();
+                        colorIdx = state.curveColors.findIndex(c => c.toLowerCase() === lowerCol);
+                        if (colorIdx === -1) colorIdx = 0;
+                    }
+
+                    const filteredEdges = [];
+                    for (const id of curve.edges) {
+                        const [q, r, e] = decodeEdgeID(id);
+                        const n = getNeighbor(q, r, e);
+                        if (exportHexesSet.has(hexKey(q, r)) || exportHexesSet.has(hexKey(n.q, n.r))) {
+                            filteredEdges.push(id);
+                        }
+                    }
+                    if (filteredEdges.length === 0) continue;
+
+                    const edgeSet = new Set(filteredEdges);
+                    const visited = new Set();
+
+                    for (const id of edgeSet) {
+                        if (visited.has(id)) continue;
+                        const comp = [];
+                        const queue = [id];
+                        visited.add(id);
+
+                        while (queue.length > 0) {
+                            const curr = queue.pop();
+                            comp.push(curr);
+                            const [q, r, e] = decodeEdgeID(curr);
+
+                            const k = (tileRot(q, r) / 60) % 6;
+                            const alter = isTileAlter(q, r);
+                            const pe = getOtherEdge(k, e, alter);
+                            const pid = edgeID(q, r, pe);
+                            if (edgeSet.has(pid) && !visited.has(pid)) {
+                                visited.add(pid);
+                                queue.push(pid);
+                            }
+
+                            const n = getNeighbor(q, r, e);
+                            const nk = (tileRot(n.q, n.r) / 60) % 6;
+                            const nAlter = isTileAlter(n.q, n.r);
+                            const npe = getOtherEdge(nk, n.edge, nAlter);
+                            const npid = edgeID(n.q, n.r, npe);
+                            if (edgeSet.has(npid) && !visited.has(npid)) {
+                                visited.add(npid);
+                                queue.push(npid);
+                            }
+                        }
+
+                        const compSet = new Set(comp);
+                        let startQ = 0, startR = 0, startE = 0;
+                        let found = false;
+                        
+                        for (const eid of compSet) {
+                            const [q1, r1, e1] = decodeEdgeID(eid);
+                            const n1 = getNeighbor(q1, r1, e1);
+
+                            const k1 = (tileRot(q1, r1) / 60) % 6;
+                            const alter1 = isTileAlter(q1, r1);
+                            const pe1 = getOtherEdge(k1, e1, alter1);
+                            const pid1 = edgeID(q1, r1, pe1);
+                            const has1 = compSet.has(pid1);
+
+                            const k2 = (tileRot(n1.q, n1.r) / 60) % 6;
+                            const alter2 = isTileAlter(n1.q, n1.r);
+                            const pe2 = getOtherEdge(k2, n1.edge, alter2);
+                            const pid2 = edgeID(n1.q, n1.r, pe2);
+                            const has2 = compSet.has(pid2);
+
+                            if (!has1 || !has2) {
+                                if (has2) {
+                                    startQ = n1.q;
+                                    startR = n1.r;
+                                    startE = n1.edge;
+                                } else {
+                                    startQ = q1;
+                                    startR = r1;
+                                    startE = e1;
+                                }
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found) {
+                            const firstEid = compSet.values().next().value;
+                            const [q1, r1, e1] = decodeEdgeID(firstEid);
+                            startQ = q1;
+                            startR = r1;
+                            startE = e1;
+                        }
+
+                        const startIdx = (startQ - gridMinQ) * gridRCount + (startR - gridMinR);
+                        serializedCurves.push(startIdx, startE, compSet.size, colorIdx);
+                    }
+                }
+            }
+            hasCurves = serializedCurves.length > 0;
         }
     }
-
-    serializedCurves.sort((a, b) => a.id - b.id);
 
     const data = {
         w: eW,
         h: eH,
-        zoom: eZoom,
-        panX: ePanX,
-        panY: ePanY,
-        origZoom: state.zoom,
-        rotMode: state.rotMode,
-        rotSeed: state.rotSeed,
-        randomSeed: state.randomSeed,
-        showGrid: state.showGrid,
-        centerQ: mainCenter.q,
-        centerR: mainCenter.r,
-        starPanX5: expStarPans.x5,
-        starPanY5: expStarPans.y5,
-        starPanX2: expStarPans.x2,
-        starPanY2: expStarPans.y2,
-        starPanX3: expStarPans.x3,
-        starPanY3: expStarPans.y3,
-        markersVisible: false,
+        zoom: r4(eZoom),
+        panX: r1(ePanX),
+        panY: r1(ePanY),
+        origZoom: r4(state.zoom),
+        flowEnabled: serializeFlow ? true : undefined,
+        showGrid: !serializeFlow ? state.showGrid : undefined,
+        markersVisible: state.markersVisible,
         showBgStars: state.showBgStars,
-        flowEnabled: false,
-        inertiaEnabled: false,
-        liveTwistsEnabled: false,
-        curveLineWidth: state.curveLineWidth,
-        alterTilesRatio: state.alterTilesRatio,
-        texTf: {
-            rot: 0,
-            scale: 1,
-            sx: 1,
-            sy: 1,
-            ox: 0,
-            oy: 0
-        },
-        texBaseSize: rasterSize,
-        curveColors: [...state.curveColors],
+        starPanX5: r1(expStarPans.x5),
+        starPanY5: r1(expStarPans.y5),
+        starPanX2: r1(expStarPans.x2),
+        starPanY2: r1(expStarPans.y2),
+        starPanX3: r1(expStarPans.x3),
+        starPanY3: r1(expStarPans.y3),
         markers: eMarkers,
-        rotOverrides: serializedRots,
-        curves: serializedCurves,
-        texture: getTextureDataUrl(rasterSize)
+        curveColors: !serializeFlow ? [...state.curveColors] : undefined,
+        rotOverrides: !serializeFlow ? serializedRots : undefined,
+        curves: (!serializeFlow && !state.texImg) ? serializedCurves : undefined,
+        centerQ: (!serializeFlow && !hasCurves) ? mainCenter.q : undefined,
+        centerR: (!serializeFlow && !hasCurves) ? mainCenter.r : undefined,
+        curveLineWidth: !serializeFlow ? r2(state.curveLineWidth) : undefined,
+        alterTilesRatio: !serializeFlow ? r2(state.alterTilesRatio) : undefined,
+        texTf: (!serializeFlow && state.texImg) ? state.texTf : undefined,
+        texBaseSize: (!serializeFlow && state.texImg) ? rasterSize : undefined,
+        texture: (!serializeFlow && state.texImg) ? getTextureDataUrl(rasterSize) : undefined
     };
+
+    Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
 
     let encoded;
     try {

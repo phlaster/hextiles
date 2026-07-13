@@ -337,11 +337,11 @@ function initializeEmbedMode() {
     state.starZoom3 = Math.pow(origZoom, CONFIG.STAR_ZOOM_EXP_SMALL);
 
     state.showGrid = d.showGrid;
-    state.markersVisible = d.markersVisible;
+    state.markersVisible = d.markersVisible !== undefined ? d.markersVisible : false;
     state.showBgStars = d.showBgStars !== undefined ? d.showBgStars : true;
 
-    // FORCE DISABLE MOVEMENT & INTERACTION ANIMATIONS
-    state.flowEnabled = false;
+    // FORCE DISABLE MOVEMENT & INTERACTION ANIMATIONS (except flow if explicitly enabled)
+    state.flowEnabled = d.flowEnabled || false;
     state.liveTwistsEnabled = false;
     state.inertiaEnabled = false;
 
@@ -351,23 +351,18 @@ function initializeEmbedMode() {
     state.rotSeed = d.rotSeed || 0;
     state.randomSeed = d.randomSeed || 0;
 
-    state.texTf = d.texTf || {
-        rot: 0,
-        scale: 1,
-        sx: 1,
-        sy: 1,
-        ox: 0,
-        oy: 0
-    };
+    state.texTf = d.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
     state.embedTexBaseSize = d.texBaseSize || 88;
 
     state.curveColors.length = 0;
     state.curveColors.push(...(d.curveColors && d.curveColors.length > 0 ? [...d.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']));
 
     state.gradientMarkers.length = 0;
-    state.gradientMarkers.push(...(d.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({
-        ...m
-    })));
+    // Handle both new array format [x, y, color] and old object format {x, y, color}
+    state.gradientMarkers.push(...(d.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => {
+        if (Array.isArray(m)) return { x: m[0], y: m[1], color: m[2] };
+        return { ...m };
+    }));
     state.markersVisible = false;
 
     state.updateCurveColorsCache();
@@ -456,61 +451,63 @@ function startEmbedRender() {
         const gMinR = d.rotOverrides[1];
         const gRCount = d.rotOverrides[2];
 
-        for (const sc of d.curves) {
-            if (typeof sc.c === 'string') {
-                const lowerC = sc.c.toLowerCase();
-                const exists = state.curveColors.some(c => c.toLowerCase() === lowerC);
-                if (!exists && state.curveColors.length < CONFIG.MAX_CURVE_COLORS) {
-                    state.curveColors.push(lowerC);
+        // Check if it's the new flat array format (starts with a number) 
+        // or legacy array-of-arrays/object format
+        const isFlatFormat = typeof d.curves[0] === 'number';
+
+        const loopCount = isFlatFormat ? d.curves.length / 4 : d.curves.length;
+
+        for (let i = 0; i < loopCount; i++) {
+            const newID = state.nextCurveID++;
+            const edgeSet = new Set();
+            
+            let sq, sr, se, size, finalColor;
+
+            if (isFlatFormat) {
+                // NEW Flat format: [startIdx, se, size, colorIdx, ...]
+                const startIdx = d.curves[i * 4];
+                se = d.curves[i * 4 + 1];
+                size = d.curves[i * 4 + 2];
+                finalColor = d.curves[i * 4 + 3];
+
+                sq = gMinQ + Math.floor(startIdx / gRCount);
+                sr = gMinR + (startIdx % gRCount);
+            } else {
+                // Legacy format fallback (array of objects or arrays)
+                const sc = d.curves[i];
+                finalColor = sc.c;
+                if (sc.e) {
+                    for (const id of sc.e) edgeSet.add(id);
+                    sq = null; // Skip walking
+                } else if (sc.s) {
+                    if (sc.s.length === 4) {
+                        [sq, sr, se, size] = sc.s;
+                    } else {
+                        const startIdx = sc.s[0];
+                        se = sc.s[1];
+                        size = sc.s[2];
+                        sq = gMinQ + Math.floor(startIdx / gRCount);
+                        sr = gMinR + (startIdx % gRCount);
+                    }
                 }
             }
-        }
-        state.updateCurveColorsCache();
 
-        for (const sc of d.curves) {
-            const newID = sc.id !== undefined ? sc.id : state.nextCurveID++;
-            if (newID >= state.nextCurveID) state.nextCurveID = newID + 1;
-
-            const edgeSet = new Set();
-            if (sc.e) {
-                for (const id of sc.e) edgeSet.add(id);
-            } else if (sc.s) {
-                let sq, sr, se, size;
-
-                if (sc.s.length === 4) {
-                    [sq, sr, se, size] = sc.s;
-                } else {
-                    const [startIdx, e, sz] = sc.s;
-                    sq = gMinQ + Math.floor(startIdx / gRCount);
-                    sr = gMinR + (startIdx % gRCount);
-                    se = e;
-                    size = sz;
-                }
-
-                let curr = {
-                    q: sq,
-                    r: sr,
-                    e: se
-                };
+            if (sq !== null && sq !== undefined) {
+                let curr = { q: sq, r: sr, e: se };
                 edgeSet.add(edgeID(sq, sr, se));
 
-                // Walk the deterministic path
-                for (let i = 1; i < size; i++) {
+                for (let j = 1; j < size; j++) {
                     const k = (tileRot(curr.q, curr.r) / 60) % 6;
                     const alter = isTileAlter(curr.q, curr.r);
                     const pe = getOtherEdge(k, curr.e, alter);
                     const n = getNeighbor(curr.q, curr.r, pe);
-                    curr = {
-                        q: n.q,
-                        r: n.r,
-                        e: n.edge
-                    };
+                    curr = { q: n.q, r: n.r, e: n.edge };
                     edgeSet.add(edgeID(curr.q, curr.r, curr.e));
                 }
             }
 
-            let finalColor = sc.c;
             if (typeof finalColor === 'string') {
+                // Legacy hex string color fallback
                 const lowerC = finalColor.toLowerCase();
                 const idx = state.curveColors.findIndex(c => c.toLowerCase() === lowerC);
                 finalColor = (idx !== -1) ? idx : 0;

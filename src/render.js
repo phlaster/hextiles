@@ -757,7 +757,7 @@ function updateGradientAnimations(now) {
 }
 
 function updateFlowAnimation(now, visZoom, isPanning) {
-    if (state.isEmbedMode) {
+    if (state.isEmbedMode && !state.flowEnabled) {
         state.currentFlowVX = 0;
         state.currentFlowVY = 0;
         return { driftX: 0, driftY: 0, flowAnimating: false };
@@ -900,7 +900,8 @@ function updateZoomAnimation() {
 }
 
 function updateZoomOutTime(visZoom, now) {
-    if (visZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
+    const effectiveZoom = state.isEmbedMode && state.embedData ? (state.embedData.origZoom || visZoom) : visZoom;
+    if (effectiveZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
         if (state.zoomOutStartTime === 0) state.zoomOutStartTime = now;
     } else {
         state.zoomOutStartTime = 0;
