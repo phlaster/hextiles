@@ -445,7 +445,7 @@ async function exportToPDF() {
         height: params.eH
     });
     pdf.save('hex-tiles-export.pdf');
-    toast('PDF exported (Vector)');
+    toast('Scene exported as PDF');
 }
 
 function exportToSVG() {
@@ -460,7 +460,7 @@ function exportToSVG() {
     a.download = 'hex-tiles-export.svg';
     a.click();
     URL.revokeObjectURL(url);
-    toast('SVG exported');
+    toast('Scene exported as SVG');
 }
 
 async function exportToPNG() {
@@ -474,20 +474,13 @@ async function exportToPNG() {
     a.download = 'hex-tiles-export.png';
     a.click();
     URL.revokeObjectURL(url);
-    toast('PNG exported');
+    toast('Scene exported as PNG');
 }
 
-// src/export.js
-
-// ... (keep existing imports and code) ...
-
-// Helper function to deterministically encode a curve into 4 integers
 function encodeCurveCompact(curve) {
     const edges = curve.edges;
     if (edges.size === 0) return null;
 
-    // Find an endpoint to start tracing. 
-    // An endpoint is an edge where its partner edge in the same hex is NOT in the set.
     let startID = -1;
     for (const id of edges) {
         const [q, r, e] = decodeEdgeID(id);
@@ -769,7 +762,7 @@ async function generateEmbedCode() {
 
     const baseUrl = location.href.split('#')[0];
     dom.embedCode.value = `<iframe src="${baseUrl}#embed=${encoded}" width="${eW}" height="${eH}" frameborder="0" style="border:none;width:${eW}px;height:${eH}px;"></iframe>`;
-    toast('Embed code generated (Compressed)');
+    toast('Embed code generated');
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

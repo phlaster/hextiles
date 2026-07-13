@@ -60,7 +60,7 @@ export function renderGradientList() {
                 colorInput.value = newColor;
                 e.target.value = newColor.toUpperCase();
             } else {
-                toast('Invalid hex color (e.g. #FF0000)');
+                toast('Invalid hex color');
                 e.target.value = state.gradientMarkers[i].color.toUpperCase();
             }
         });
@@ -95,6 +95,12 @@ export function renderGradientList() {
 
                 state.gradientMarkers.splice(i, 1);
                 state.gradientMarkersRGB.splice(i, 1);
+                
+                if (state.gradientMarkers.length === 1) {
+                    state.markersVisible = false;
+                    dom.markersToggle.checked = false;
+                }
+
                 renderGradientList();
                 state.updateGradientMarkersCache();
             });
@@ -164,7 +170,7 @@ export function renderCurveList() {
                     e.target.value = newColor.toUpperCase();
                 }
             } else {
-                toast('Invalid hex color (e.g. #FF0000)');
+                toast('Invalid hex color');
                 e.target.value = state.curveColors[i].toUpperCase();
             }
         });

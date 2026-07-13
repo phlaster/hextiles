@@ -1019,7 +1019,7 @@ function setupUITogglesAndSliders() {
         for (let i = 0; i < state.curveColors.length; i++) state.curveColors[i] = state.curveColorPool.pool[i] || state.curveColors[i];
         state.updateCurveColorsCache();
         renderCurveList();
-        toast(`Theme "${state.curveColorPool.name}" applied to state.curves`);
+        toast(`Theme "${state.curveColorPool.name}" applied to curves`);
         checkIfSolved();
         requestRender();
     };
@@ -1036,7 +1036,7 @@ function setupUITogglesAndSliders() {
     };
     dom.resetAllRot.onclick = () => {
         bulkAnimate('zero', 0);
-        toast('All tile rotations reset to 0°');
+        toast('All tile rotations reset');
     };
 }
 
@@ -1236,7 +1236,7 @@ function drawPreview() {
 function setupColorAndMarkerButtons() {
     dom.addMarkerBtn.onclick = () => {
         if (state.gradientMarkers.length >= CONFIG.MAX_MARKERS) {
-            toast('Maximum of ' + CONFIG.MAX_MARKERS + ' gradient markers reached');
+            toast('Maximum of ' + CONFIG.MAX_MARKERS + ' gradient colors reached');
             return;
         }
         const color = pickNewMarkerColor();
@@ -1497,6 +1497,12 @@ function removeMarkerAt(mx, my) {
             });
             state.gradientMarkers.splice(clickedMarkerIdx, 1);
             state.gradientMarkersRGB.splice(clickedMarkerIdx, 1);
+            
+            if (state.gradientMarkers.length === 1) {
+                state.markersVisible = false;
+                dom.markersToggle.checked = false;
+            }
+
             state.isDragMarker = false;
             state.draggedMarkerIndex = -1;
             renderGradientList();

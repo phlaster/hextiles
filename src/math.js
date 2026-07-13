@@ -188,13 +188,14 @@ export function getBlazeState(k, j, seed, now, zoomOutTime, blazeFade, origSR, o
     const baseBlazeDuration = 1200 + hash2D(k * seed + 888, j * seed + 777) * 1800;
     const blazeDuration = baseBlazeDuration / speedMult;
 
-    let blazeT = phase / blazeDuration;
+    if (phase >= blazeDuration) return null;
 
-    if (blazeFade < 1.0 && blazeT < 0.25) {
+    let blazeT = phase / blazeDuration;
+    const isGradualAppearance = blazeFade < 1.0;
+
+    if (isGradualAppearance && blazeT < 0.25) {
         return null;
     }
-
-    if (blazeT >= 1.0) return null;
 
     let sR = origSR, sA = origSA, size = origSize, blazeGlow = 0;
 
@@ -221,7 +222,7 @@ export function getBlazeState(k, j, seed, now, zoomOutTime, blazeFade, origSR, o
         blazeGlow = 0;
     }
 
-    if (blazeFade < 1.0) {
+    if (isGradualAppearance) {
         blazeGlow *= blazeFade;
         sA = origSA + (sA - origSA) * blazeFade;
         size = origSize + (size - origSize) * blazeFade;

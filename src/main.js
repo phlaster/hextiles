@@ -296,20 +296,28 @@ function setupFaviconAndGhLink() {
 }
 
 function initializeStandardMode() {
-    state.showGrid = dom.gridToggle.checked;
-    state.showBgStars = dom.bgStarsToggle.checked;
-    state.markersVisible = dom.markersToggle.checked;
-    state.flowEnabled = dom.flowToggle.checked;
-    state.inertiaEnabled = dom.inertiaToggle.checked;
-    state.curveLineWidth = +dom.sCurveW.value || 1;
-    dom.vCurveW.textContent = state.curveLineWidth.toFixed(2) + 'x';
-    state.alterTilesRatio = +dom.sAlterTiles.value || 0;
-    dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
-    state.liveTwistsEnabled = dom.liveTwistsToggle.checked;
-    if (state.liveTwistsEnabled) scheduleLiveTwist();
+    dom.gridToggle.checked = true;
+    dom.bgStarsToggle.checked = true;
+    dom.markersToggle.checked = false;
+    dom.flowToggle.checked = false;
+    dom.liveTwistsToggle.checked = false;
+    dom.inertiaToggle.checked = true;
+    dom.sCurveW.value = 1.0;
+    dom.vCurveW.textContent = '1.00x';
+    dom.sAlterTiles.value = 0;
+    dom.vAlterTiles.textContent = '0.00';
+    state.showGrid = true;
+    state.showBgStars = true;
+    state.markersVisible = false;
+    state.flowEnabled = false;
+    state.inertiaEnabled = true;
+    state.curveLineWidth = 1.0;
+    state.alterTilesRatio = 0;
+    state.liveTwistsEnabled = false;
 
     state.curveColors.length = 0;
     state.curveColors.push('#444444');
+    state.gradientMarkers.length = 0;
     state.updateCurveColorsCache();
     state.updateGradientMarkersCache();
 

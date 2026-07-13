@@ -92,7 +92,7 @@ export const CONFIG = {
     MARKER_HIT_RADIUS: 30,
 
     // UI & Limits
-    TOAST_DUR: 2200,
+    TOAST_DUR: 1500,
     SIDEBAR_WIDTH: 310,
     MAX_MARKERS: 10,
     MAX_CURVE_COLORS: 10,
