@@ -72,10 +72,11 @@ export function resize() {
     state.isGradientDirty = true;
 
     if (state.isEmbedMode) {
-        if (state.embedData) {
-            dom.cvs.width = state.embedData.w;
-            dom.cvs.height = state.embedData.h;
-        }
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        dom.cvs.width = w;
+        dom.cvs.height = h;
+
         if (!state.isInitialized) {
             state.isInitialized = true;
             if (state.gradientMarkers.length === 0) {
@@ -91,6 +92,7 @@ export function resize() {
             }
             initializeCentralTile();
         }
+        requestRender();
         return;
     }
 

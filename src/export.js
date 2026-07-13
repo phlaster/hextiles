@@ -761,7 +761,7 @@ async function generateEmbedCode() {
     }
 
     const baseUrl = location.href.split('#')[0];
-    dom.embedCode.value = `<iframe src="${baseUrl}#embed=${encoded}" width="${eW}" height="${eH}" frameborder="0" style="border:none;width:${eW}px;height:${eH}px;"></iframe>`;
+    dom.embedCode.value = `<iframe src="${baseUrl}#embed=${encoded}" frameborder="0" style="border:none;width:100%;height:100%;"></iframe>`;
     toast('Embed code generated');
 }
 
