@@ -536,6 +536,11 @@ async function generateEmbedCode() {
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const exportHexesSet = new Set(exportHexes.map(h => hexKey(h.q, h.r)));
 
+    if (state.curveColors.length > 1 && !state.texImg) {
+        let exportBounds = getHexBounds(exportHexes);
+        processExportCurves(exportBounds, exportHexes);
+    }
+
     // 1. Extract Grid Bounds & Serialize Rotations
     let gridMinQ = 0,
         gridMinR = 0,
@@ -594,11 +599,11 @@ async function generateEmbedCode() {
                     colorIdx = colorIdx;
                 }
 
-                // Filter edges to only those strictly within the export frame
                 const filteredEdges = [];
                 for (const id of curve.edges) {
                     const [q, r, e] = decodeEdgeID(id);
-                    if (exportHexesSet.has(hexKey(q, r))) {
+                    const n = getNeighbor(q, r, e);
+                    if (exportHexesSet.has(hexKey(q, r)) || exportHexesSet.has(hexKey(n.q, n.r))) {
                         filteredEdges.push(id);
                     }
                 }
