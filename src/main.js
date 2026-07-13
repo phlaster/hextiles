@@ -347,6 +347,9 @@ function initializeEmbedMode() {
 
     state.curveLineWidth = d.curveLineWidth || 1;
     state.alterTilesRatio = d.alterTilesRatio || 0;
+    state.rotMode = d.rotMode || 'hash';
+    state.rotSeed = d.rotSeed || 0;
+    state.randomSeed = d.randomSeed || 0;
 
     state.texTf = d.texTf || {
         rot: 0,
@@ -452,6 +455,18 @@ function startEmbedRender() {
         const gMinQ = d.rotOverrides[0];
         const gMinR = d.rotOverrides[1];
         const gRCount = d.rotOverrides[2];
+
+        for (const sc of d.curves) {
+            if (typeof sc.c === 'string') {
+                const lowerC = sc.c.toLowerCase();
+                const exists = state.curveColors.some(c => c.toLowerCase() === lowerC);
+                if (!exists && state.curveColors.length < CONFIG.MAX_CURVE_COLORS) {
+                    state.curveColors.push(lowerC);
+                }
+            }
+        }
+        state.updateCurveColorsCache();
+
         for (const sc of d.curves) {
             const newID = sc.id !== undefined ? sc.id : state.nextCurveID++;
             if (newID >= state.nextCurveID) state.nextCurveID = newID + 1;
@@ -496,7 +511,8 @@ function startEmbedRender() {
 
             let finalColor = sc.c;
             if (typeof finalColor === 'string') {
-                const idx = state.curveColors.indexOf(finalColor);
+                const lowerC = finalColor.toLowerCase();
+                const idx = state.curveColors.findIndex(c => c.toLowerCase() === lowerC);
                 finalColor = (idx !== -1) ? idx : 0;
             } else {
                 finalColor = (finalColor >= 0 && finalColor < state.curveColors.length) ? finalColor : 0;

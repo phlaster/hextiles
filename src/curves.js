@@ -294,7 +294,15 @@ function checkAdjacentEdge(q, r, e, excludeCurveID, adjColors) {
         const cid = state.curveMap.get(adjID);
         if (cid !== excludeCurveID) {
             const c = state.curves.get(cid);
-            if (c) adjColors.add(c.color);
+            if (c) {
+                let col = c.color;
+                if (typeof col === 'string') {
+                    const lowerCol = col.toLowerCase();
+                    col = state.curveColors.findIndex(c => c.toLowerCase() === lowerCol);
+                    if (col === -1) col = -2; 
+                }
+                adjColors.add(col);
+            }
         }
     }
 }

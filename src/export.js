@@ -558,20 +558,26 @@ async function generateEmbedCode() {
             if (h.r < minR) minR = h.r;
             if (h.r > maxR) maxR = h.r;
         }
+ 
+        // Expand by 1 hex in each direction to cover curve walk boundary
+        const expMinQ = minQ - 1;
+        const expMaxQ = maxQ + 1;
+        const expMinR = minR - 1;
+        const expMaxR = maxR + 1;
 
-        gridMinQ = minQ;
-        gridMinR = minR;
-        gridRCount = maxR - minR + 1;
+        gridMinQ = expMinQ;
+        gridMinR = expMinR;
+        gridRCount = expMaxR - expMinR + 1;
 
         let rotsStr = "";
-        for (let q = minQ; q <= maxQ; q++) {
-            for (let r = minR; r <= maxR; r++) {
+        for (let q = expMinQ; q <= expMaxQ; q++) {
+            for (let r = expMinR; r <= expMaxR; r++) {
                 const rot = tileRot(q, r);
                 const mult = Math.round(rot / 60) % 6;
                 rotsStr += mult;
             }
         }
-        serializedRots = [minQ, minR, gridRCount, rotsStr];
+        serializedRots = [expMinQ, expMinR, gridRCount, rotsStr];
     }
 
     // 2. Serialize Curves
@@ -591,14 +597,13 @@ async function generateEmbedCode() {
         for (const cid of visibleCurveIDs) {
             const curve = state.curves.get(cid);
             if (curve && curve.edges.size > 0) {
-                let colorIdx = curve.color;
-                if (typeof colorIdx === 'string') {
-                    colorIdx = state.curveColors.indexOf(colorIdx);
-                    if (colorIdx === -1) colorIdx = 0;
-                } else {
-                    colorIdx = colorIdx;
+                let colorStr = '';
+                if (typeof curve.color === 'number') {
+                    const idx = curve.color % state.curveColors.length;
+                    colorStr = (state.curveColors[idx] || '#000000').toLowerCase();
+                } else if (typeof curve.color === 'string') {
+                    colorStr = curve.color.toLowerCase();
                 }
-
                 const filteredEdges = [];
                 for (const id of curve.edges) {
                     const [q, r, e] = decodeEdgeID(id);
@@ -645,26 +650,58 @@ async function generateEmbedCode() {
 
                     // Encode the truncated component
                     const compSet = new Set(comp);
-                    let startID = -1;
+                    let startQ = 0, startR = 0, startE = 0;
+                    let found = false;
+                    
                     for (const eid of compSet) {
-                        const [q, r, e] = decodeEdgeID(eid);
-                        const k = (tileRot(q, r) / 60) % 6;
-                        const alter = isTileAlter(q, r);
-                        const pe = getOtherEdge(k, e, alter);
-                        const pid = edgeID(q, r, pe);
-                        if (!compSet.has(pid)) {
-                            startID = eid;
+                        const [q1, r1, e1] = decodeEdgeID(eid);
+                        const n1 = getNeighbor(q1, r1, e1);
+
+                        // Check tile 1
+                        const k1 = (tileRot(q1, r1) / 60) % 6;
+                        const alter1 = isTileAlter(q1, r1);
+                        const pe1 = getOtherEdge(k1, e1, alter1);
+                        const pid1 = edgeID(q1, r1, pe1);
+                        const has1 = compSet.has(pid1);
+
+                        // Check tile 2
+                        const k2 = (tileRot(n1.q, n1.r) / 60) % 6;
+                        const alter2 = isTileAlter(n1.q, n1.r);
+                        const pe2 = getOtherEdge(k2, n1.edge, alter2);
+                        const pid2 = edgeID(n1.q, n1.r, pe2);
+                        const has2 = compSet.has(pid2);
+
+                        if (!has1 || !has2) {
+                            // It's an endpoint. Start in the tile that has the continuation.
+                            if (has2) {
+                                startQ = n1.q;
+                                startR = n1.r;
+                                startE = n1.edge;
+                            } else {
+                                startQ = q1;
+                                startR = r1;
+                                startE = e1;
+                            }
+                            found = true;
                             break;
                         }
                     }
-                    if (startID === -1) startID = compSet.values().next().value;
-                    const [sq, sr, se] = decodeEdgeID(startID);
-                    const startIdx = (sq - gridMinQ) * gridRCount + (sr - gridMinR);
+
+                    if (!found) {
+                        // Closed loop, no endpoints
+                        const firstEid = compSet.values().next().value;
+                        const [q1, r1, e1] = decodeEdgeID(firstEid);
+                        startQ = q1;
+                        startR = r1;
+                        startE = e1;
+                    }
+
+                    const startIdx = (startQ - gridMinQ) * gridRCount + (startR - gridMinR);
 
                     serializedCurves.push({
                         id: cid * 100000 + componentIDCounter++,
-                        c: colorIdx, // Compact: Exact Palette index
-                        s: [startIdx, se, compSet.size] // Compact: [1D_ordinal, edge, size]
+                        c: colorStr,
+                        s: [startIdx, startE, compSet.size]
                     });
                 }
             }
@@ -680,6 +717,9 @@ async function generateEmbedCode() {
         panX: ePanX,
         panY: ePanY,
         origZoom: state.zoom,
+        rotMode: state.rotMode,
+        rotSeed: state.rotSeed,
+        randomSeed: state.randomSeed,
         showGrid: state.showGrid,
         centerQ: mainCenter.q,
         centerR: mainCenter.r,
