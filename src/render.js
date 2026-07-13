@@ -757,6 +757,11 @@ function updateGradientAnimations(now) {
 }
 
 function updateFlowAnimation(now, visZoom, isPanning) {
+    if (state.isEmbedMode) {
+        state.currentFlowVX = 0;
+        state.currentFlowVY = 0;
+        return { driftX: 0, driftY: 0, flowAnimating: false };
+    }
     function getHippopedeAngle() {
         // Samples an angle from the normalized Hippopede distribution: r^2 = 2.8(1 - 0.7*sin^2(theta))
         // Uses Newton-Raphson to invert the exact CDF: F(theta) = (0.65*theta + 0.175*sin(2*theta)) / (1.3*PI)

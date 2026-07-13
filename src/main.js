@@ -325,7 +325,6 @@ function initializeEmbedMode() {
     state.panY = d.panY;
 
     const origZoom = d.origZoom || d.zoom;
-
     state.starPanX5 = d.starPanX5 !== undefined ? d.starPanX5 : state.panX;
     state.starPanY5 = d.starPanY5 !== undefined ? d.starPanY5 : state.panY;
     state.starPanX2 = d.starPanX2 !== undefined ? d.starPanX2 : state.panX;
@@ -340,15 +339,15 @@ function initializeEmbedMode() {
     state.showGrid = d.showGrid;
     state.markersVisible = d.markersVisible;
     state.showBgStars = d.showBgStars !== undefined ? d.showBgStars : true;
-    state.rotMode = d.rotMode || 'hash';
-    state.randomSeed = d.randomSeed || 0;
-    state.rotSeed = d.rotSeed || 0;
+
+    // FORCE DISABLE MOVEMENT & INTERACTION ANIMATIONS
+    state.flowEnabled = false;
+    state.liveTwistsEnabled = false;
+    state.inertiaEnabled = false;
+
     state.curveLineWidth = d.curveLineWidth || 1;
     state.alterTilesRatio = d.alterTilesRatio || 0;
-    state.flowEnabled = d.flowEnabled || false;
-    state.liveTwistsEnabled = d.liveTwistsEnabled || false;
-    state.inertiaEnabled = d.inertiaEnabled !== undefined ? d.inertiaEnabled : true;
-    dom.inertiaToggle.checked = state.inertiaEnabled;
+
     state.texTf = d.texTf || {
         rot: 0,
         scale: 1,
@@ -361,6 +360,7 @@ function initializeEmbedMode() {
 
     state.curveColors.length = 0;
     state.curveColors.push(...(d.curveColors && d.curveColors.length > 0 ? [...d.curveColors].slice(0, CONFIG.MAX_CURVE_COLORS) : ['#444444']));
+
     state.gradientMarkers.length = 0;
     state.gradientMarkers.push(...(d.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => ({
         ...m
@@ -379,10 +379,48 @@ function initializeEmbedMode() {
     dom.sAlterTiles.value = state.alterTilesRatio;
     dom.vAlterTiles.textContent = state.alterTilesRatio.toFixed(2);
     dom.liveTwistsToggle.checked = state.liveTwistsEnabled;
-    if (state.liveTwistsEnabled) scheduleLiveTwist();
 
-    if (d.rotOverrides) {
-        for (const [q, r, rot] of d.rotOverrides) state.rotOverrides.set(hexKey(q, r), rot);
+    // --- ROTATION DESERIALIZATION WITH FORMATTING FALLBACKS ---
+    if (d.rotOverrides && d.rotOverrides.length > 0) {
+        if (Array.isArray(d.rotOverrides[0])) {
+            // Legacy fallback 1: [[q, r, rot], ...]
+            for (const [q, r, rot] of d.rotOverrides) {
+                state.rotOverrides.set(hexKey(q, r), rot);
+            }
+        } else if (typeof d.rotOverrides[3] === 'string') {
+            // NEW Optimized string format: [minQ, minR, rCount, "41340..."]
+            const [minQ, minR, rCount, rotsStr] = d.rotOverrides;
+            if (rotsStr.length > 0 && rCount > 0) {
+                const qCount = rotsStr.length / rCount;
+                let idx = 0;
+
+                for (let i = 0; i < qCount; i++) {
+                    const q = minQ + i;
+                    for (let j = 0; j < rCount; j++) {
+                        const r = minR + j;
+                        const mult = +rotsStr[idx];
+                        state.rotOverrides.set(hexKey(q, r), mult * 60);
+                        idx++;
+                    }
+                }
+            }
+        } else {
+            // Legacy fallback 2: [minQ, minR, rCount, 4, 1, 3, 4] (Previous flat array)
+            const [minQ, minR, rCount, ...rots] = d.rotOverrides;
+            if (rots.length > 0 && rCount > 0) {
+                const qCount = rots.length / rCount;
+                let idx = 0;
+
+                for (let i = 0; i < qCount; i++) {
+                    const q = minQ + i;
+                    for (let j = 0; j < rCount; j++) {
+                        const r = minR + j;
+                        state.rotOverrides.set(hexKey(q, r), rots[idx] * 60);
+                        idx++;
+                    }
+                }
+            }
+        }
     }
 
     if (d.texture) {
@@ -403,7 +441,6 @@ function startEmbedRender() {
     dom.cvs.width = state.embedData.w;
     dom.cvs.height = state.embedData.h;
     state.isInitialized = true;
-
     state.curveMap.clear();
     state.edgeRgbMap.clear();
     state.curves.clear();
@@ -411,27 +448,30 @@ function startEmbedRender() {
 
     if (state.embedData.curves && state.embedData.curves.length > 0) {
         for (const sc of state.embedData.curves) {
-            const newID = state.nextCurveID++;
-            const edgeSet = new Set();
+            // Restore the exact original ID to preserve structural order
+            const newID = sc.id !== undefined ? sc.id : state.nextCurveID++;
+            if (newID >= state.nextCurveID) state.nextCurveID = newID + 1;
 
+            const edgeSet = new Set();
             if (sc.e) {
+                // Legacy fallback for old embeds
                 for (const id of sc.e) edgeSet.add(id);
             } else if (sc.s) {
+                // New compact format: [q, r, e, size]
                 const [sq, sr, se, size] = sc.s;
                 let curr = {
                     q: sq,
                     r: sr,
                     e: se
                 };
-
                 edgeSet.add(edgeID(sq, sr, se));
 
+                // Walk the deterministic path
                 for (let i = 1; i < size; i++) {
                     const k = (tileRot(curr.q, curr.r) / 60) % 6;
                     const alter = isTileAlter(curr.q, curr.r);
                     const pe = getOtherEdge(k, curr.e, alter);
                     const n = getNeighbor(curr.q, curr.r, pe);
-
                     curr = {
                         q: n.q,
                         r: n.r,
@@ -441,9 +481,20 @@ function startEmbedRender() {
                 }
             }
 
+            // --- FORCE COLOR MATCH ---
+            // Map the serialized HEX string back to the exact palette index.
+            // This prevents the curve engine from assigning random new colors 
+            // when tiles are rotated or curves are split/merged.
+            let finalColor = sc.c;
+            if (typeof finalColor === 'string') {
+                const idx = state.curveColors.indexOf(finalColor);
+                finalColor = (idx !== -1) ? idx : 0; // Fallback to 0 if not found
+            }
+            // -------------------------
+
             state.curves.set(newID, {
                 id: newID,
-                color: sc.c,
+                color: finalColor, // Strictly a palette index now
                 size: edgeSet.size,
                 locked: false,
                 edges: edgeSet
@@ -453,11 +504,14 @@ function startEmbedRender() {
                 state.curveMap.set(id, newID);
             }
         }
+    } else {
+        initializeCentralTile(state.embedData.centerQ, state.embedData.centerR);
     }
 
     if (state.embedData.origZoom <= CONFIG.ZOOM_FADE_LOW + 0.001) {
         state.zoomOutStartTime = Date.now() - CONFIG.STAR_BLAZE_DELAY - 1000;
     }
+
     render();
 }
 

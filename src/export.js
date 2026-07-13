@@ -17,6 +17,7 @@ import {
     hexDistance,
     tileRot,
     visibleHexes,
+    hexKey,
     hash2D,
     isTileAlter,
     traceHexPath,
@@ -26,6 +27,7 @@ import {
     processQueue,
     findUncoloredTileInHexes,
     edgeID,
+    getNeighbor,
     decodeEdgeID,
     getOtherEdge,
     getBackgroundColorAt,
@@ -474,6 +476,41 @@ async function exportToPNG() {
     toast('PNG exported');
 }
 
+// src/export.js
+
+// ... (keep existing imports and code) ...
+
+// Helper function to deterministically encode a curve into 4 integers
+function encodeCurveCompact(curve) {
+    const edges = curve.edges;
+    if (edges.size === 0) return null;
+
+    // Find an endpoint to start tracing. 
+    // An endpoint is an edge where its partner edge in the same hex is NOT in the set.
+    let startID = -1;
+    for (const id of edges) {
+        const [q, r, e] = decodeEdgeID(id);
+        const k = (tileRot(q, r) / 60) % 6;
+        const alter = isTileAlter(q, r);
+        const pe = getOtherEdge(k, e, alter);
+        const pid = edgeID(q, r, pe);
+
+        if (!edges.has(pid)) {
+            startID = id;
+            break;
+        }
+    }
+
+    // If no endpoint is found, it's a closed loop. Just pick the first edge.
+    if (startID === -1) {
+        startID = edges.values().next().value;
+    }
+
+    const [sq, sr, se] = decodeEdgeID(startID);
+    // Return [startQ, startR, startEdge, totalEdges]
+    return [sq, sr, se, edges.size];
+}
+
 async function generateEmbedCode() {
     const {
         fx,
@@ -496,9 +533,42 @@ async function generateEmbedCode() {
         color: m.color
     }));
 
+    const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+    // Create a Set of visible hex keys for O(1) border truncation checks
+    const exportHexesSet = new Set(exportHexes.map(h => hexKey(h.q, h.r)));
+
+    let serializedRots = [0, 0, 1, ""]; // Fallback for empty grids
+
+    if (exportHexes.length > 0) {
+        let minQ = Infinity,
+            maxQ = -Infinity,
+            minR = Infinity,
+            maxR = -Infinity;
+        for (const h of exportHexes) {
+            if (h.q < minQ) minQ = h.q;
+            if (h.q > maxQ) maxQ = h.q;
+            if (h.r < minR) minR = h.r;
+            if (h.r > maxR) maxR = h.r;
+        }
+
+        const rCount = maxR - minR + 1;
+        let rotsStr = "";
+
+        // Concatenate all 1-digit multiples directly into a single string (no commas)
+        for (let q = minQ; q <= maxQ; q++) {
+            for (let r = minR; r <= maxR; r++) {
+                const rot = tileRot(q, r);
+                const mult = Math.round(rot / 60) % 6;
+                rotsStr += mult;
+            }
+        }
+
+        // Format: [minQ, minR, rCount, "41340..."]
+        serializedRots = [minQ, minR, rCount, rotsStr];
+    }
+
     let serializedCurves = [];
     if (!state.texImg) {
-        const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
         const visibleCurveIDs = new Set();
         for (const h of exportHexes) {
             for (let e = 0; e < 6; e++) {
@@ -508,18 +578,88 @@ async function generateEmbedCode() {
                 }
             }
         }
-        
+
+        let componentIDCounter = 0;
         for (const cid of visibleCurveIDs) {
             const curve = state.curves.get(cid);
             if (curve && curve.edges.size > 0) {
-                const compact = encodeCurveCompact(curve);
-                if (compact) {
-                    let colorHex = curve.color;
-                    if (typeof colorHex === 'number') {
-                        colorHex = state.curveColors[colorHex % state.curveColors.length] || '#000000';
+                // Resolve color to exact HEX string
+                let colorHex = curve.color;
+                if (typeof colorHex === 'number') {
+                    colorHex = state.curveColors[colorHex % state.curveColors.length] || '#000000';
+                }
+
+                // 1. Filter edges to only those strictly within the export frame
+                const filteredEdges = [];
+                for (const id of curve.edges) {
+                    const [q, r, e] = decodeEdgeID(id);
+                    if (exportHexesSet.has(hexKey(q, r))) {
+                        filteredEdges.push(id);
                     }
-                    
+                }
+
+                if (filteredEdges.length === 0) continue;
+
+                // 2. Find connected components (splits curves that were cut by the border)
+                const edgeSet = new Set(filteredEdges);
+                const visited = new Set();
+
+                for (const id of edgeSet) {
+                    if (visited.has(id)) continue;
+                    const comp = [];
+                    const queue = [id];
+                    visited.add(id);
+
+                    while (queue.length > 0) {
+                        const curr = queue.pop();
+                        comp.push(curr);
+                        const [q, r, e] = decodeEdgeID(curr);
+
+                        // Check same hex connection
+                        const k = (tileRot(q, r) / 60) % 6;
+                        const alter = isTileAlter(q, r);
+                        const pe = getOtherEdge(k, e, alter);
+                        const pid = edgeID(q, r, pe);
+                        if (edgeSet.has(pid) && !visited.has(pid)) {
+                            visited.add(pid);
+                            queue.push(pid);
+                        }
+
+                        // Check neighbor hex connection
+                        const n = getNeighbor(q, r, e);
+                        const nk = (tileRot(n.q, n.r) / 60) % 6;
+                        const nAlter = isTileAlter(n.q, n.r);
+                        const npe = getOtherEdge(nk, n.edge, nAlter);
+                        const npid = edgeID(n.q, n.r, npe);
+                        if (edgeSet.has(npid) && !visited.has(npid)) {
+                            visited.add(npid);
+                            queue.push(npid);
+                        }
+                    }
+
+                    // 3. Encode the truncated component
+                    const compSet = new Set(comp);
+                    let startID = -1;
+                    for (const eid of compSet) {
+                        const [q, r, e] = decodeEdgeID(eid);
+                        const k = (tileRot(q, r) / 60) % 6;
+                        const alter = isTileAlter(q, r);
+                        const pe = getOtherEdge(k, e, alter);
+                        const pid = edgeID(q, r, pe);
+                        if (!compSet.has(pid)) {
+                            startID = eid;
+                            break;
+                        }
+                    }
+                    if (startID === -1) {
+                        startID = compSet.values().next().value;
+                    }
+                    const [sq, sr, se] = decodeEdgeID(startID);
+                    const compact = [sq, sr, se, compSet.size];
+
                     serializedCurves.push({
+                        // Generate unique ID but preserve original curve sorting order
+                        id: cid * 100000 + componentIDCounter++,
                         c: colorHex,
                         s: compact
                     });
@@ -527,6 +667,8 @@ async function generateEmbedCode() {
             }
         }
     }
+
+    serializedCurves.sort((a, b) => a.id - b.id);
 
     const data = {
         w: eW,
@@ -546,11 +688,12 @@ async function generateEmbedCode() {
         starPanY3: expStarPans.y3,
         markersVisible: false,
         showBgStars: state.showBgStars,
-        flowEnabled: state.flowEnabled,
-        inertiaEnabled: state.inertiaEnabled,
-        rotMode: state.rotMode,
-        randomSeed: state.randomSeed,
-        rotSeed: state.rotSeed,
+
+        // FORCE DISABLE ALL MOVEMENT/INTERACTION ANIMATIONS
+        flowEnabled: false,
+        inertiaEnabled: false,
+        liveTwistsEnabled: false,
+
         curveLineWidth: state.curveLineWidth,
         alterTilesRatio: state.alterTilesRatio,
         texTf: {
@@ -564,18 +707,19 @@ async function generateEmbedCode() {
         texBaseSize: rasterSize,
         curveColors: [...state.curveColors],
         markers: eMarkers,
-        rotOverrides: serializeRotOverrides(),
-        curves: serializedCurves,
-        texture: getTextureDataUrl(rasterSize),
-        liveTwistsEnabled: state.liveTwistsEnabled
+
+        rotOverrides: serializedRots, // New dense string format
+        curves: serializedCurves, // New compact format with HEX colors
+        texture: getTextureDataUrl(rasterSize)
+
+        // REMOVED: rotMode, randomSeed, rotSeed (no longer needed)
     };
 
     let encoded;
     try {
         const jsonStr = JSON.stringify(data);
-
+        console.log(jsonStr)
         if (typeof CompressionStream !== 'undefined') {
-            // 1. Compress using native browser API (deflate)
             const inputStream = new ReadableStream({
                 start(controller) {
                     controller.enqueue(new TextEncoder().encode(jsonStr));
@@ -586,15 +730,13 @@ async function generateEmbedCode() {
             const compressedBuffer = await new Response(compressedStream).arrayBuffer();
             const bytes = new Uint8Array(compressedBuffer);
 
-            // 2. Convert binary to URL-safe Base64
             let binary = '';
             for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
             encoded = btoa(binary)
-                .replace(/\+/g, '-') // Make URL safe
-                .replace(/\//g, '_') // Make URL safe
-                .replace(/=+$/, ''); // Strip padding
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
         } else {
-            // Fallback for very old browsers without CompressionStream
             encoded = btoa(unescape(encodeURIComponent(jsonStr)));
         }
     } catch (e) {
@@ -1126,36 +1268,6 @@ function drawOffscreenHexTiles(offCtx, hexes, eSz, now, eCurveAlpha, eGridAlpha)
 //  SHARED EXPORT UTILITIES
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-function encodeCurveCompact(curve) {
-    const edges = curve.edges;
-    if (edges.size === 0) return null;
-
-    // Find an endpoint to start tracing. 
-    // An endpoint is an edge where its partner edge in the same hex is NOT in the set.
-    let startID = -1;
-    for (const id of edges) {
-        const [q, r, e] = decodeEdgeID(id);
-        const k = (tileRot(q, r) / 60) % 6;
-        const alter = isTileAlter(q, r);
-        const pe = getOtherEdge(k, e, alter);
-        const pid = edgeID(q, r, pe);
-
-        if (!edges.has(pid)) {
-            startID = id;
-            break;
-        }
-    }
-
-    // If no endpoint is found, it's a closed loop. Just pick the first edge.
-    if (startID === -1) {
-        startID = edges.values().next().value;
-    }
-
-    const [sq, sr, se] = decodeEdgeID(startID);
-    // Return [startQ, startR, startEdge, totalEdges]
-    return [sq, sr, se, edges.size];
-}
-
 function getHexBounds(hexes) {
     let bounds = {
         minQ: Infinity,
@@ -1215,31 +1327,6 @@ function processEdgeRgbMap() {
             }
         } else state.edgeRgbMap.delete(id);
     }
-}
-
-function decodeHexKey(k) {
-    const ku = k >>> 0,
-        qu = ku >>> 16,
-        ru = ku & 0xFFFF;
-    const r = (ru & 0x8000) ? (ru | 0xFFFF0000) | 0 : ru;
-    const qVal = (ru & 0x8000) ? ((qu ^ 0xFFFF) & 0xFFFF) : qu;
-    const q = (qVal & 0x8000) ? (qVal | 0xFFFF0000) | 0 : qVal;
-    return {
-        q,
-        r
-    };
-}
-
-function serializeRotOverrides() {
-    const out = [];
-    for (const [k, rot] of state.rotOverrides.entries()) {
-        const {
-            q,
-            r
-        } = decodeHexKey(k);
-        out.push([q, r, rot]);
-    }
-    return out;
 }
 
 function canvasToBlob(canvas, type) {
