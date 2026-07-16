@@ -1322,7 +1322,7 @@ function setupKeyboardShortcuts() {
 export function scheduleLiveTwist() {
     clearTimeout(state.liveTwistsTimer);
     if (!state.liveTwistsEnabled) return;
-    const delay = 5000 + Math.random() * 5000; // 5-10 seconds
+    const delay = 4000 + Math.random() * 3000; // 4-7 seconds
     state.liveTwistsTimer = setTimeout(() => {
         if (state.liveTwistsEnabled) {
             performLiveTwist();
@@ -1407,7 +1407,21 @@ function predictTwistImpact(q, r) {
 
     let impact = 0;
 
-    // 1. Check for MERGES (Different colors connecting)
+    // 1. PRIORITIZE SPLITS: Breaking a same-color connection causes a global split, spawning a new color!
+    for (const pair of oldPairs) {
+        const e1 = pair[0],
+            e2 = pair[1];
+        const id1 = edgeID(q, r, e1);
+        const id2 = edgeID(q, r, e2);
+        const c1 = state.curveMap.has(id1) ? state.curveMap.get(id1) : -1;
+        const c2 = state.curveMap.has(id2) ? state.curveMap.get(id2) : -1;
+
+        if (c1 !== -1 && c1 === c2) {
+            impact += 2.0; // Increased from 0.5 to 2.0 to prioritize new colors
+        }
+    }
+
+    // 2. DEPRIORITIZE MERGES: Connecting different colors just reduces the total color count
     for (const pair of newPairs) {
         const e1 = pair[0],
             e2 = pair[1];
@@ -1417,24 +1431,8 @@ function predictTwistImpact(q, r) {
         const c2 = state.curveMap.has(id2) ? state.curveMap.get(id2) : -1;
 
         if (c1 !== c2) {
-            if (c1 !== -1 && c2 !== -1) impact += 2; // Two colors merging
-            else if (c1 !== -1 || c2 !== -1) impact += 1; // One color expanding into blank
-        }
-    }
-
-    // 2. Check for SPLITS (Same colors being severed)
-    for (const pair of oldPairs) {
-        const e1 = pair[0],
-            e2 = pair[1];
-        const id1 = edgeID(q, r, e1);
-        const id2 = edgeID(q, r, e2);
-        const c1 = state.curveMap.has(id1) ? state.curveMap.get(id1) : -1;
-        const c2 = state.curveMap.has(id2) ? state.curveMap.get(id2) : -1;
-
-        // If they were the same color (and not blank), twisting breaks their connection.
-        // This has a high chance of causing a global split, which yields a new color!
-        if (c1 !== -1 && c1 === c2) {
-            impact += 0.5; // Small bonus for split potential
+            if (c1 !== -1 && c2 !== -1) impact += 0.5; // Decreased from 2.0 to 0.5
+            else if (c1 !== -1 || c2 !== -1) impact += 1.0; // Expanding into blank space is still good
         }
     }
 
