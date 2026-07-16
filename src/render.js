@@ -74,6 +74,22 @@ export function resize() {
     if (state.isEmbedMode) {
         const w = window.innerWidth;
         const h = window.innerHeight;
+
+        if (state.isInitialized && state.embedPrevW > 0 && state.embedPrevH > 0) {
+            const dx = (w - state.embedPrevW) / 2;
+            const dy = (h - state.embedPrevH) / 2;
+            if (dx !== 0 || dy !== 0) {
+                applyPanDelta(dx, dy, false);
+                for (let i = 0; i < state.gradientMarkers.length; i++) {
+                    state.gradientMarkers[i].x += dx;
+                    state.gradientMarkers[i].y += dy;
+                }
+                state.updateGradientMarkersCache();
+            }
+        }
+        state.embedPrevW = w;
+        state.embedPrevH = h;
+
         dom.cvs.width = w;
         dom.cvs.height = h;
 
@@ -1180,7 +1196,7 @@ function updateStatsIfNeeded(hexes, W, H, visZoom, curveAlpha, now) {
         dom.statCurvesWrap.style.display = '';
         dom.statColorsWrap.style.display = '';
         const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-        const effectiveW = isCollapsed ? W : Math.max(0, W - CONFIG.SIDEBAR_WIDTH);
+        const effectiveW = (isCollapsed || state.isEmbedMode) ? W : Math.max(0, W - CONFIG.SIDEBAR_WIDTH);
         let visCurveIDs = new Set();
         for (const h of hexes) {
             if (h.x >= 0 && h.x <= effectiveW && h.y >= 0 && h.y <= H) {

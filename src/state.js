@@ -161,6 +161,8 @@ export const state = {
 
     // Misc
     isInitialized: false,
+    embedPrevW: 0,
+    embedPrevH: 0,
     gradientCanvas: null,
     curveCanvas: document.createElement('canvas'),
     curveCtx: null,

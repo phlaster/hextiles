@@ -447,6 +447,8 @@ function startEmbedRender() {
     const d = state.embedData;
     dom.cvs.width = d.w;
     dom.cvs.height = d.h;
+    state.embedPrevW = d.w;
+    state.embedPrevH = d.h;
     state.isInitialized = true;
 
     state.curveMap.clear();

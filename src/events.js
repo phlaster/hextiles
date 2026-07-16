@@ -235,13 +235,13 @@ function setupSidebarGestures() {
         document.body.classList.toggle('sidebar-collapsed');
     });
 
-    if (typeof ResizeObserver !== 'undefined' && !state.isEmbedMode) {
+    if (typeof ResizeObserver !== 'undefined') {
         const ro = new ResizeObserver(() => {
             resize();
             requestRender();
         });
         ro.observe(dom.wrap);
-    } else if (!state.isEmbedMode) {
+    } else {
         window.addEventListener('resize', resize);
     }
 
@@ -1331,15 +1331,25 @@ export function scheduleLiveTwist() {
     }, delay);
 }
 
-export function applyPanDelta(dx, dy) {
+export function applyPanDelta(dx, dy, useParallax = true) {
     state.panX += dx;
     state.panY += dy;
-    state.starPanX5 += dx * CONFIG.STAR_PARALLAX_LARGE;
-    state.starPanY5 += dy * CONFIG.STAR_PARALLAX_LARGE;
-    state.starPanX2 += dx * CONFIG.STAR_PARALLAX_MED;
-    state.starPanY2 += dy * CONFIG.STAR_PARALLAX_MED;
-    state.starPanX3 += dx * CONFIG.STAR_PARALLAX_SMALL;
-    state.starPanY3 += dy * CONFIG.STAR_PARALLAX_SMALL;
+    
+    if (useParallax) {
+        state.starPanX5 += dx * CONFIG.STAR_PARALLAX_LARGE;
+        state.starPanY5 += dy * CONFIG.STAR_PARALLAX_LARGE;
+        state.starPanX2 += dx * CONFIG.STAR_PARALLAX_MED;
+        state.starPanY2 += dy * CONFIG.STAR_PARALLAX_MED;
+        state.starPanX3 += dx * CONFIG.STAR_PARALLAX_SMALL;
+        state.starPanY3 += dy * CONFIG.STAR_PARALLAX_SMALL;
+    } else {
+        state.starPanX5 += dx;
+        state.starPanY5 += dy;
+        state.starPanX2 += dx;
+        state.starPanY2 += dy;
+        state.starPanX3 += dx;
+        state.starPanY3 += dy;
+    }
 }
 
 function performLiveTwist() {
