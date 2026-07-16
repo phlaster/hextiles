@@ -179,9 +179,10 @@ export function checkIfSolved() {
         const hexes = visibleHexes(state.zoom, state.panX, state.panY, dom.cvs.width, H);
         if (hexes.length === 0) return;
 
+        const apothem = (HEX_R * state.zoom * SQRT3) / 2;
         const visibleEdges = new Set();
         for (const h of hexes) {
-            if (h.x >= 0 && h.x <= effectiveW && h.y >= 0 && h.y <= H) {
+            if (h.x >= apothem && h.x <= effectiveW - apothem && h.y >= apothem && h.y <= H - apothem) {
                 for (let e = 0; e < 6; e++) visibleEdges.add(edgeID(h.q, h.r, e));
             }
         }
@@ -1197,9 +1198,10 @@ function updateStatsIfNeeded(hexes, W, H, visZoom, curveAlpha, now) {
         dom.statColorsWrap.style.display = '';
         const isCollapsed = document.body.classList.contains('sidebar-collapsed');
         const effectiveW = (isCollapsed || state.isEmbedMode) ? W : Math.max(0, W - CONFIG.SIDEBAR_WIDTH);
+        const apothem = (HEX_R * visZoom * SQRT3) / 2;
         let visCurveIDs = new Set();
         for (const h of hexes) {
-            if (h.x >= 0 && h.x <= effectiveW && h.y >= 0 && h.y <= H) {
+            if (h.x >= apothem && h.x <= effectiveW - apothem && h.y >= apothem && h.y <= H - apothem) {
                 for (let e = 0; e < 6; e++) {
                     const id = edgeID(h.q, h.r, e);
                     if (state.curveMap.has(id)) visCurveIDs.add(state.curveMap.get(id));
