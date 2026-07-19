@@ -7,6 +7,10 @@
     box-sizing: border-box;
 }
 
+html, body {
+    touch-action: none;
+}
+
 body {
     font-family: 'Space Grotesk', sans-serif;
     background: var(--col-bg);
