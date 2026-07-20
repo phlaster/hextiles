@@ -537,13 +537,13 @@ async function generateEmbedCode() {
         m.color
     ]);
 
-    const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
+    const EMBED_BAKE_MARGIN = 0.5;
+    const padW = eW * (1 + 2 * EMBED_BAKE_MARGIN);
+    const padH = eH * (1 + 2 * EMBED_BAKE_MARGIN);
+    const padPanX = ePanX + (padW - eW) / 2;
+    const padPanY = ePanY + (padH - eH) / 2;
+    const exportHexes = visibleHexes(eZoom, padPanX, padPanY, padW, padH);
     const exportHexesSet = new Set(exportHexes.map(h => hexKey(h.q, h.r)));
-
-    if (state.curveColors.length > 1 && !state.texImg) {
-        let exportBounds = getHexBounds(exportHexes);
-        processExportCurves(exportBounds, exportHexes);
-    }
 
     const isBlazerZoom = state.zoom <= CONFIG.ZOOM_BLAZE_FADE_START;
     const serializeFlow = state.flowEnabled && isBlazerZoom && state.showBgStars;
@@ -584,7 +584,12 @@ async function generateEmbedCode() {
             serializedRots = [expMinQ, expMinR, gridRCount, rotsStr];
         }
 
-        // 2. Serialize Curves
+        // 2. Baking
+        if (!state.texImg && state.curveColors.length > 1 && exportHexes.length > 0) {
+            processExportCurves(getHexBounds(exportHexes), exportHexes);
+        }
+
+        // 3. Serialize Curves
         if (!state.texImg) {
             const visibleCurveIDs = new Set();
             for (const h of exportHexes) {
@@ -725,6 +730,9 @@ async function generateEmbedCode() {
         markers: eMarkers,
         curveColors: !serializeFlow ? [...state.curveColors] : undefined,
         rotOverrides: !serializeFlow ? serializedRots : undefined,
+        rotMode: !serializeFlow ? state.rotMode : undefined,
+        rotSeed: !serializeFlow ? state.rotSeed : undefined,
+        randomSeed: !serializeFlow ? state.randomSeed : undefined,
         curves: (!serializeFlow && !state.texImg) ? serializedCurves : undefined,
         centerQ: (!serializeFlow && !hasCurves) ? mainCenter.q : undefined,
         centerR: (!serializeFlow && !hasCurves) ? mainCenter.r : undefined,
@@ -906,6 +914,7 @@ function buildExportSVG(params) {
     const now = state.exportFreezeTime || Date.now();
     const exportHexes = visibleHexes(eZoom, ePanX, ePanY, eW, eH);
     const exportBounds = getHexBounds(exportHexes);
+    processExportCurves(exportBounds, exportHexes);
     const eSz = HEX_R * eZoom;
 
     const eCurveAlpha = state.elementsFade;

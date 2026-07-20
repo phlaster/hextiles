@@ -124,6 +124,7 @@ export function mergeCurves(c1, c2) {
     }
     target.size = target.edges.size;
     if (source.locked) target.locked = true;
+    if (source.baked) target.baked = true;
 
     source.edges.clear();
     source.edges = null;
@@ -132,23 +133,14 @@ export function mergeCurves(c1, c2) {
 }
 
 function determineTargetAndSource(curve1, curve2) {
-    if (curve1.size > curve2.size) return {
-        target: curve1,
-        source: curve2
-    };
-    if (curve2.size > curve1.size) return {
-        target: curve2,
-        source: curve1
-    };
-
-    if (curve1.id < curve2.id) return {
-        target: curve1,
-        source: curve2
-    };
-    return {
-        target: curve2,
-        source: curve1
-    };
+    const b1 = !!curve1.baked;
+    const b2 = !!curve2.baked;
+    if (b1 && !b2) return { target: curve1, source: curve2 };
+    if (b2 && !b1) return { target: curve2, source: curve1 };
+    if (curve1.size > curve2.size) return { target: curve1, source: curve2 };
+    if (curve2.size > curve1.size) return { target: curve2, source: curve1 };
+    if (curve1.id < curve2.id) return { target: curve1, source: curve2 };
+    return { target: curve2, source: curve1 };
 }
 
 export function processQueue(customBounds, noCull = false) {

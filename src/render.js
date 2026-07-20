@@ -948,7 +948,7 @@ function processVisibleHexes(z, px, py, W, H, img, curveAlpha) {
         while (didWork && performance.now() - startTime < 16) {
             if (state.queue.length > 0) {
                 processQueue();
-            } else if (findUncoloredTileInHexes(hexes)) {
+            } else if (!state.embedBakedOnly && findUncoloredTileInHexes(hexes)) {
                 processQueue();
             } else {
                 didWork = false;

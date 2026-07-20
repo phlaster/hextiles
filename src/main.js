@@ -373,9 +373,9 @@ function initializeEmbedMode() {
 
     state.curveLineWidth = d.curveLineWidth || 1;
     state.alterTilesRatio = d.alterTilesRatio || 0;
-    state.rotMode = d.rotMode || 'hash';
-    state.rotSeed = d.rotSeed || 0;
-    state.randomSeed = d.randomSeed || 0;
+    state.rotMode = d.rotMode ?? 'hash';
+    state.rotSeed = d.rotSeed ?? 0;
+    state.randomSeed = d.randomSeed ?? 0;
 
     state.texTf = d.texTf || {
         rot: 0,
@@ -406,6 +406,8 @@ function initializeEmbedMode() {
 
     state.updateCurveColorsCache();
     state.updateGradientMarkersCache();
+
+    for (const m of state.gradientMarkersRGB) m.weight = 1;
 
     dom.gridToggle.checked = state.showGrid;
     dom.bgStarsToggle.checked = state.showBgStars;
@@ -570,6 +572,7 @@ function startEmbedRender() {
                 color: finalColor,
                 size: edgeSet.size,
                 locked: false,
+                baked: true,
                 edges: edgeSet
             });
 
@@ -577,7 +580,9 @@ function startEmbedRender() {
                 state.curveMap.set(id, newID);
             }
         }
+        state.embedBakedOnly = true;
     } else {
+        state.embedBakedOnly = false;
         initializeCentralTile(d.centerQ, d.centerR);
     }
 

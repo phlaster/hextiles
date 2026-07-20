@@ -12,6 +12,7 @@ export const state = {
     // App context
     isEmbedMode: false,
     embedData: null,
+    embedBakedOnly: false,
     ctx: null,
 
     // View & Pan
