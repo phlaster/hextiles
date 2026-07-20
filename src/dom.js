@@ -57,7 +57,6 @@ export const dom = {
 
     closeExportBtn: document.getElementById('closeExportBtn'),
     exportImageBtn: document.getElementById('exportImageBtn'),
-    exportEmbedBtn: document.getElementById('exportEmbedBtn'),
     imageExportWrap: document.getElementById('imageExportWrap'),
     fmtPngBtn: document.getElementById('fmtPngBtn'),
     fmtPdfBtn: document.getElementById('fmtPdfBtn'),
@@ -78,12 +77,9 @@ export const dom = {
     vAlterTiles: document.getElementById('vAlterTiles'),
 
     bgStarsToggle: document.getElementById('bgStarsToggle'),
-    markersToggle: document.getElementById('markersToggle'),
     flowToggle: document.getElementById('flowToggle'),
     liveTwistsToggle: document.getElementById('liveTwistsToggle'),
     inertiaToggle: document.getElementById('inertiaToggle'),
 
     sidebar: document.querySelector('.sidebar'),
-    sidebarToggle: document.getElementById('sidebarToggle'),
-    fullscreenBtn: document.getElementById('fullscreenBtn'),
 };
