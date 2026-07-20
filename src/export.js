@@ -44,10 +44,6 @@ import {
 import {
     toast
 } from './ui.js';
-import {
-    jsPDF
-} from 'jspdf';
-import 'svg2pdf.js';
 
 const HEX_R = CONFIG.HEX_R;
 const SQRT3 = CONFIG.SQRT3;
@@ -428,12 +424,15 @@ function getExportParams() {
 }
 
 async function exportToPDF() {
+    const { jsPDF } = await import('jspdf');
+    await import('svg2pdf.js');
+
     const params = getExportParams();
     const svgString = buildExportSVG(params);
     const parser = new DOMParser(),
         svgDoc = parser.parseFromString(svgString, "image/svg+xml"),
         svgElement = svgDoc.documentElement;
-        
+
     const orientation = params.eW > params.eH ? 'landscape' : 'portrait';
     const pdf = new jsPDF({
         orientation,
