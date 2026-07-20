@@ -37,7 +37,8 @@ import {
     render
 } from './render.js';
 import {
-    setupExport
+    setupExport,
+    getScreenSVG
 } from './export.js';
 
 async function initializeApp() {
@@ -48,6 +49,23 @@ async function initializeApp() {
     setupDeployInfo();
     startMemoryMonitor();
 
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'REQUEST_FRAME') {
+            try {
+                const svgString = getScreenSVG();
+                window.parent.postMessage({
+                    type: 'SEND_FRAME',
+                    svg: svgString
+                }, '*');
+            } catch (e) {
+                console.error("SVG capture failed:", e);
+                window.parent.postMessage({
+                    type: 'SEND_FRAME',
+                    error: e.message
+                }, '*');
+            }
+        }
+    });
     state.curveColorPool = generateDistinctThemePool();
     state.gradientColorPool = generateDistinctThemePool();
 
@@ -359,7 +377,14 @@ function initializeEmbedMode() {
     state.rotSeed = d.rotSeed || 0;
     state.randomSeed = d.randomSeed || 0;
 
-    state.texTf = d.texTf || { rot: 0, scale: 1, sx: 1, sy: 1, ox: 0, oy: 0 };
+    state.texTf = d.texTf || {
+        rot: 0,
+        scale: 1,
+        sx: 1,
+        sy: 1,
+        ox: 0,
+        oy: 0
+    };
     state.embedTexBaseSize = d.texBaseSize || 88;
 
     state.curveColors.length = 0;
@@ -368,8 +393,14 @@ function initializeEmbedMode() {
     state.gradientMarkers.length = 0;
     // Handle both new array format [x, y, color] and old object format {x, y, color}
     state.gradientMarkers.push(...(d.markers || []).slice(0, CONFIG.MAX_MARKERS).map(m => {
-        if (Array.isArray(m)) return { x: m[0], y: m[1], color: m[2] };
-        return { ...m };
+        if (Array.isArray(m)) return {
+            x: m[0],
+            y: m[1],
+            color: m[2]
+        };
+        return {
+            ...m
+        };
     }));
     state.markersVisible = false;
 
@@ -470,7 +501,7 @@ function startEmbedRender() {
         for (let i = 0; i < loopCount; i++) {
             const newID = state.nextCurveID++;
             const edgeSet = new Set();
-            
+
             let sq, sr, se, size, finalColor;
 
             if (isFlatFormat) {
@@ -503,7 +534,11 @@ function startEmbedRender() {
             }
 
             if (sq !== null && sq !== undefined) {
-                let curr = { q: sq, r: sr, e: se };
+                let curr = {
+                    q: sq,
+                    r: sr,
+                    e: se
+                };
                 edgeSet.add(edgeID(sq, sr, se));
 
                 for (let j = 1; j < size; j++) {
@@ -511,7 +546,11 @@ function startEmbedRender() {
                     const alter = isTileAlter(curr.q, curr.r);
                     const pe = getOtherEdge(k, curr.e, alter);
                     const n = getNeighbor(curr.q, curr.r, pe);
-                    curr = { q: n.q, r: n.r, e: n.edge };
+                    curr = {
+                        q: n.q,
+                        r: n.r,
+                        e: n.edge
+                    };
                     edgeSet.add(edgeID(curr.q, curr.r, curr.e));
                 }
             }

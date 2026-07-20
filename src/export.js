@@ -912,7 +912,7 @@ function buildExportSVG(params) {
         processExportCurves(exportBounds, exportHexes);
     }
 
-    let svg = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${eW}" height="${eH}" viewBox="0 0 ${eW} ${eH}"><rect width="${eW}" height="${eH}" fill="${COLORS.bg}"/>`;
+    let svg = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${eW}" height="${eH}" viewBox="0 0 ${eW} ${eH}" preserveAspectRatio="xMidYMid slice"><rect width="${eW}" height="${eH}" fill="${COLORS.bg}"/>`;
 
     svg += buildSvgGradient(eW, eH, scale, fx, fy);
 
@@ -927,10 +927,10 @@ function buildExportSVG(params) {
 }
 
 function buildSvgGradient(eW, eH, scale, fx, fy) {
-    if (state.gradientMarkersRGB.length === 0) return '';
+    if (state.gradientMarkersRGB.length === 0 && state.fadingMarkersRGB.length === 0) return '';
     updateIDWGradientCanvas(eW, eH, scale, fx, fy, 0.5);
     const gradUrl = state.gradientCanvas.toDataURL('image/png');
-    return `<image xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
+    return `<image href="${gradUrl}" xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
 }
 
 function buildSvgStars(eW, eH, scale, fx, fy, eZoom, now, expStarPans) {
@@ -1421,4 +1421,26 @@ function getTextureDataUrl(rasterSize) {
     } catch (e) {
         return null;
     }
+}
+
+export function getScreenSVG() {
+    const eW = dom.cvs.width;
+    const eH = dom.cvs.height;
+    const params = {
+        fx: 0,
+        fy: 0,
+        scale: 1,
+        eW,
+        eH,
+        eZoom: state.zoom,
+        ePanX: state.panX,
+        ePanY: state.panY,
+        expStarPans: {
+            x5: state.starPanX5, y5: state.starPanY5,
+            x2: state.starPanX2, y2: state.starPanY2,
+            x3: state.starPanX3, y3: state.starPanY3
+        }
+    };
+    
+    return buildExportSVG(params);
 }
