@@ -44,6 +44,10 @@ import {
 import {
     toast
 } from './ui.js';
+import {
+    jsPDF
+} from 'jspdf';
+import 'svg2pdf.js';
 
 const HEX_R = CONFIG.HEX_R;
 const SQRT3 = CONFIG.SQRT3;
@@ -208,7 +212,7 @@ function setupExportFrameDragging() {
             touchstart: 'mousedown',
             touchmove: 'mousemove',
             touchend: 'mouseup'
-        } [e.type];
+        }[e.type];
         if (!type) return;
         const evt = new MouseEvent(type, {
             clientX: t.clientX,
@@ -429,9 +433,8 @@ async function exportToPDF() {
     const parser = new DOMParser(),
         svgDoc = parser.parseFromString(svgString, "image/svg+xml"),
         svgElement = svgDoc.documentElement;
-    const {
-        jsPDF
-    } = window.jspdf, orientation = params.eW > params.eH ? 'landscape' : 'portrait';
+        
+    const orientation = params.eW > params.eH ? 'landscape' : 'portrait';
     const pdf = new jsPDF({
         orientation,
         unit: 'px',
@@ -452,8 +455,8 @@ function exportToSVG() {
     const params = getExportParams();
     const svg = buildExportSVG(params);
     const blob = new Blob([svg], {
-            type: 'image/svg+xml'
-        }),
+        type: 'image/svg+xml'
+    }),
         url = URL.createObjectURL(blob),
         a = document.createElement('a');
     a.href = url;
@@ -517,7 +520,7 @@ async function generateEmbedCode() {
         ePanY,
         expStarPans
     } = getExportParams();
-    
+
     const r1 = n => Math.round(n * 10) / 10;
     const r4 = n => Math.round(n * 10000) / 10000;
     const r2 = n => Math.round(n * 100) / 100;
@@ -526,7 +529,7 @@ async function generateEmbedCode() {
     const targetHexSize = Math.round(HEX_R * eZoom);
     const maxAllowed = parseInt(dom.exportSide.value) || 1920;
     const rasterSize = Math.max(64, Math.min(targetHexSize, maxAllowed));
-    
+
     // Convert markers to compact tuple arrays [x, y, color]
     const eMarkers = state.gradientMarkers.map(m => [
         r1((m.x - fx) * scale),
@@ -653,7 +656,7 @@ async function generateEmbedCode() {
                         const compSet = new Set(comp);
                         let startQ = 0, startR = 0, startE = 0;
                         let found = false;
-                        
+
                         for (const eid of compSet) {
                             const [q1, r1, e1] = decodeEdgeID(eid);
                             const n1 = getNeighbor(q1, r1, e1);
@@ -1128,7 +1131,7 @@ function buildSvgCurvesAndGrid(exportHexes, eSz, eCurveAlpha, eGridAlpha) {
         } = rasterizeRawTexture(eSz);
 
         svg += `<defs>`;
-        svg += `<image id="hexTexRaw" href="${dataUrl}" width="${width}" height="${height}" x="${-width/2}" y="${-height/2}"/>`;
+        svg += `<image id="hexTexRaw" href="${dataUrl}" width="${width}" height="${height}" x="${-width / 2}" y="${-height / 2}"/>`;
 
         let hexClipPath = "M ";
         for (let i = 0; i < 6; i++) {
@@ -1441,6 +1444,6 @@ export function getScreenSVG() {
             x3: state.starPanX3, y3: state.starPanY3
         }
     };
-    
+
     return buildExportSVG(params);
 }
