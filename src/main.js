@@ -462,6 +462,7 @@ function initializeEmbedMode() {
 
     if (d.texture) {
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => {
             state.texImg = img;
             dom.resetTexBtn.style.display = 'block';
