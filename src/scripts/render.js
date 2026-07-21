@@ -59,6 +59,7 @@ const TWO_PI_DIV_3 = CONFIG.TWO_PI_DIV_3;
 const FOUR_PI_DIV_3 = CONFIG.FOUR_PI_DIV_3;
 
 export function requestRender() {
+    if (state.isPausedHidden) return;
     if (!state.isRenderScheduled) {
         state.isRenderScheduled = true;
         requestAnimationFrame(() => {
@@ -1234,6 +1235,8 @@ function swapEdgeBuffers() {
 }
 
 export function render() {
+    if (state.isPausedHidden) return; 
+    
     // 1. Initialise frame and time
     const {
         W,

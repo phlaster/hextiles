@@ -181,6 +181,7 @@ export function setupEvents() {
     setupTextureEditor();
     setupColorAndMarkerButtons();
     setupKeyboardShortcuts();
+    setupVisibilityHandler();
 }
 
 const SB_WIDTH = CONFIG.SIDEBAR_WIDTH;
@@ -1359,6 +1360,45 @@ function setupKeyboardShortcuts() {
             } else if (document.body.classList.contains('sidebar-collapsed') && !sidebarAnimating) {
                 animateSidebarToggle(false);
             }
+        }
+    });
+}
+
+function setupVisibilityHandler() {
+    const pause = () => {
+        if (state.isPausedHidden) return;
+        state.isPausedHidden = true;
+        state.pauseStartTime = Date.now();
+        clearTimeout(state.liveTwistsTimer);
+    };
+
+    const resume = () => {
+        if (!state.isPausedHidden) return;
+        state.isPausedHidden = false;
+        
+        const pauseDuration = Date.now() - state.pauseStartTime;
+        
+        if (state.zoomOutStartTime > 0) state.zoomOutStartTime += pauseDuration;
+        if (state.flowLastTime > 0) state.flowLastTime += pauseDuration;
+        if (state.flowTime > 0) state.flowTime += pauseDuration;
+        
+        for (const [k, a] of state.animMap) {
+            a.start += pauseDuration;
+        }
+
+        requestRender();
+        if (state.liveTwistsEnabled) scheduleLiveTwist();
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) pause();
+        else resume();
+    });
+
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'HEX_EMBED_VISIBILITY') {
+            if (!event.data.visible) pause();
+            else resume();
         }
     });
 }

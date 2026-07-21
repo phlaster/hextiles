@@ -164,6 +164,8 @@ export const state = {
     isInitialized: false,
     embedPrevW: 0,
     embedPrevH: 0,
+    isPausedHidden: false,
+    pauseStartTime: 0,
     gradientCanvas: null,
     curveCanvas: document.createElement('canvas'),
     curveCtx: null,
