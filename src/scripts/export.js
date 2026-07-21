@@ -726,6 +726,7 @@ async function generateEmbedCode() {
         panY: r1(ePanY),
         origZoom: r4(state.zoom),
         flowEnabled: serializeFlow ? true : undefined,
+        liveTwistsEnabled: !serializeFlow ? state.liveTwistsEnabled : undefined,
         showGrid: !serializeFlow ? state.showGrid : undefined,
         markersVisible: state.markersVisible,
         showBgStars: state.showBgStars,

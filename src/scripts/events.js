@@ -1366,7 +1366,7 @@ function setupKeyboardShortcuts() {
 export function scheduleLiveTwist() {
     clearTimeout(state.liveTwistsTimer);
     if (!state.liveTwistsEnabled) return;
-    const delay = 4000 + Math.random() * 3000; // 4-7 seconds
+    const delay = CONFIG.LIVE_TWIST_MIN_DELAY + Math.random() * CONFIG.LIVE_TWIST_DELAY_DELTA;
     state.liveTwistsTimer = setTimeout(() => {
         if (state.liveTwistsEnabled) {
             performLiveTwist();

@@ -368,7 +368,7 @@ function initializeEmbedMode() {
 
     // FORCE DISABLE MOVEMENT & INTERACTION ANIMATIONS (except flow if explicitly enabled)
     state.flowEnabled = d.flowEnabled || false;
-    state.liveTwistsEnabled = false;
+    state.liveTwistsEnabled = d.liveTwistsEnabled || false;
     state.inertiaEnabled = false;
 
     state.curveLineWidth = d.curveLineWidth || 1;
@@ -591,6 +591,8 @@ function startEmbedRender() {
     }
 
     render();
+    
+    if (state.liveTwistsEnabled) scheduleLiveTwist();
 }
 
 function generateFavicon() {
