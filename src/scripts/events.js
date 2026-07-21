@@ -56,7 +56,9 @@ const PI_DIV_3 = CONFIG.PI_DIV_3;
 
 export function getRandomMarkerPosition() {
     const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-    const sidebarHidden = isCollapsed || state.isEmbedMode;
+    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+    const sidebarHidden = isCollapsed || state.isEmbedMode || isMobileLayout;
+    
     const W = sidebarHidden ? dom.cvs.width : Math.max(0, dom.cvs.width - CONFIG.SIDEBAR_WIDTH);
     const H = dom.cvs.height;
     const minX = W * 0.1,
