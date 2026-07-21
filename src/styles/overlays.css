@@ -1,0 +1,315 @@
+/* ━━━━━━━━━━━━━━━━━
+ TOAST NOTIFICATION
+━━━━━━━━━━━━━━━━━━━━ */
+.toast {
+    position: fixed;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%) translateY(150px); 
+    background: var(--col-card2);
+    border: 1px solid var(--col-accent);
+    color: var(--col-fg);
+    padding: 10px 22px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-family: 'Space Grotesk', sans-serif;
+    z-index: 1000;
+    transition: transform .35s cubic-bezier(.34, 1.56, .64, 1);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━
+ EXPORT OVERLAY & MENU
+━━━━━━━━━━━━━━━━━━━━━━━ */
+.export-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: none;
+    touch-action: none;
+}
+
+.export-overlay.active {
+    display: block;
+}
+
+.export-backdrop {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+}
+
+.export-frame {
+    position: absolute;
+    border: 2px solid var(--col-accent);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, .35);
+    cursor: move;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+.export-frame .handle {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: var(--col-accent);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 2;
+}
+
+.export-frame .handle.tl {
+    top: -7px;
+    left: -7px;
+    cursor: nwse-resize;
+}
+
+.export-frame .handle.tr {
+    top: -7px;
+    right: -7px;
+    cursor: nesw-resize;
+}
+
+.export-frame .handle.bl {
+    bottom: -7px;
+    left: -7px;
+    cursor: nesw-resize;
+}
+
+.export-frame .handle.br {
+    bottom: -7px;
+    right: -7px;
+    cursor: nwse-resize;
+}
+
+.export-frame .handle.t {
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.export-frame .handle.b {
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.export-frame .handle.l {
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}
+
+.export-frame .handle.r {
+    right: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}
+
+.export-frame.locked-aspect .handle.t,
+.export-frame.locked-aspect .handle.b,
+.export-frame.locked-aspect .handle.l,
+.export-frame.locked-aspect .handle.r {
+    display: none;
+}
+
+.export-menu {
+    position: absolute;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    background-color: rgba(19, 19, 42, 0.69);
+    border: 1px solid var(--col-border);
+    border-radius: 12px;
+    padding: 16px;
+    z-index: 510;
+    min-width: 260px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .5);
+}
+
+.export-menu label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--col-muted);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.export-menu .export-menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.export-menu .export-menu-header label {
+    margin-bottom: 0;
+}
+
+.export-menu .size-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.export-menu .size-input {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.export-menu .size-input span {
+    font-size: 11px;
+    color: var(--col-muted);
+}
+
+.export-menu input[type=number] {
+    background: transparent;
+    border: 1px solid var(--col-border);
+    border-radius: 6px;
+    color: var(--col-fg);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    padding: 6px 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.export-menu input[type=number]:focus {
+    outline: none;
+    border-color: var(--col-accent);
+    background: var(--col-accent-dim);
+}
+
+.export-menu .aspect-lock-btn {
+    align-self: flex-end;
+    margin-bottom: 4px;
+    background: transparent;
+    border: 1px solid var(--col-border);
+    color: var(--col-accent);
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.export-menu .aspect-lock-btn.active {
+    background: var(--col-accent);
+    color: #fff;
+}
+
+@media (hover: hover) {
+    .export-menu .aspect-lock-btn:hover {
+        background: var(--col-accent);
+        color: #fff;
+    }
+}
+
+.export-tab-btn.active {
+    background: var(--col-accent);
+    color: #fff;
+    border-color: var(--col-accent);
+}
+
+@media (hover: hover) {
+    .export-tab-btn:hover:not(.active) {
+        border-color: var(--col-accent);
+        color: var(--col-accent);
+    }
+}
+
+.fmt-btn:hover {
+    border-color: var(--col-accent);
+    color: var(--col-accent);
+}
+
+.image-export-wrap {
+    display: none;
+    margin-top: 12px;
+}
+
+.image-export-wrap.visible {
+    display: block;
+}
+
+.format-row {
+    display: flex;
+    gap: 8px;
+}
+
+.embed-code {
+    display: none;
+    margin-top: 12px;
+}
+
+.embed-code.visible {
+    display: block;
+}
+
+.export-menu textarea {
+    width: 100%;
+    height: 110px;
+    background: var(--col-card2);
+    border: 1px solid var(--col-border);
+    border-radius: 6px;
+    color: var(--col-fg);
+    font-family: monospace;
+    font-size: 10px;
+    padding: 8px;
+    resize: vertical;
+    box-sizing: border-box;
+    word-break: break-all;
+}
+
+.export-close-btn {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    right: 16px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--col-card2);
+    border: 1px solid var(--col-border);
+    color: var(--col-fg);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 520;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@media (hover: hover) {
+    .export-close-btn:hover {
+        background: var(--col-accent);
+        color: #fff;
+        border-color: var(--col-accent);
+        transform: scale(1.05);
+    }
+}
+
+
+body.exporting .sidebar,
+body.exporting .zoom-bar,
+body.exporting .sidebar-toggle {
+    display: none !important;
+}

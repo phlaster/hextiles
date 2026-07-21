@@ -1,0 +1,146 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    touch-action: none;
+}
+
+body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: var(--col-bg);
+    color: var(--col-fg);
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+}
+
+body.fullscreen-idle,
+body.fullscreen-idle * {
+    cursor: none !important;
+}
+
+body.fullscreen-idle .sidebar-toggle,
+body.fullscreen-idle .fullscreen-btn {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(.4, 0, .2, 1);
+}
+
+#lum-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+    border-radius: 50%;
+    background: white;
+    mix-blend-mode: difference;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-100px, -100px);
+    z-index: 999;
+    transition: opacity 0.2s;
+}
+
+.sidebar,
+.sidebar-toggle,
+.zoom-bar,
+.fullscreen-btn,
+#lod-tuner,
+.export-overlay,
+.export-menu,
+.toast,
+.btn,
+.icon-btn,
+.export-btn,
+button,
+a,
+input,
+label {
+    cursor: default;
+}
+
+.btn,
+.icon-btn,
+.export-btn,
+.zoom-bar button,
+.sidebar-toggle,
+.fullscreen-btn,
+a,
+.switch,
+input[type=checkbox] {
+    cursor: pointer;
+}
+
+input[type=text],
+input[type=number],
+textarea {
+    cursor: text;
+}
+
+input[type=range] {
+    cursor: ew-resize;
+}
+
+body.fullscreen-idle #lum-cursor,
+body.embed-mode #lum-cursor {
+    opacity: 0 !important;
+}
+
+#canvas-wrap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+#hexCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
+#hexCanvas:active {
+    cursor: none;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━
+ EMBED MODE & RESPONSIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━ */
+body.embed-mode .sidebar,
+body.embed-mode .zoom-bar,
+body.embed-mode .sidebar-toggle,
+body.embed-mode .fullscreen-btn {
+    display: none !important;
+}
+
+body.embed-mode #canvas-wrap {
+    flex: 1;
+}
+
+body.embed-mode #hexCanvas {
+    cursor: pointer;
+}
+
+body.embed-mode .stats-bar {
+    opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+    .zoom-bar {
+        display: none !important;
+    }
+}

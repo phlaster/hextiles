@@ -8,7 +8,7 @@
     <link rel="icon" href="data:," />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/styles/style.css" />
 </head>
 
 <body>
@@ -34,7 +34,7 @@
 
         <div id="lod-tuner">
             <h3>LOD Tuner</h3>
-            <div id="lodCurrentStatus" style="font-size: 11px; color: var(--col-fg); text-align: center; margin-bottom: 6px; padding: 5px; background: rgba(0,0,0,0.3); border-radius: 4px; font-weight: 600; letter-spacing: 0.5px; transition: color 0.2s;">
+            <div id="lodCurrentStatus">
                 LOD: - | visSz: -
             </div>
             <div class="lod-row">
@@ -67,89 +67,6 @@
             </div>
             <button class="btn btn-accent" id="lodApplyBtn" style="margin-top: 5px;">Apply LOD</button>
         </div>
-        <style>
-            #lod-tuner {
-                position: absolute;
-                top: 50px;
-                left: 10px;
-                -webkit-backdrop-filter: blur(8px);
-                backdrop-filter: blur(8px);
-                background-color: rgba(19, 19, 42, 0.69);
-                border: 1px solid var(--col-border);
-                border-radius: 10px;
-                padding: 12px;
-                z-index: 100;
-                color: var(--col-fg);
-                font-family: 'Space Grotesk', sans-serif;
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-                width: 180px;
-            }
-
-            #lod-tuner h3 {
-                margin: 0 0 5px 0;
-                font-size: 12px;
-                color: var(--col-accent);
-                text-transform: uppercase;
-                letter-spacing: 1px;
-                text-align: center;
-            }
-
-            #lod-tuner .lod-row {
-                display: flex;
-                flex-direction: column;
-                gap: 3px;
-            }
-
-            #lod-tuner .lod-top {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-
-            #lod-tuner .lod-top span {
-                font-size: 11px;
-                color: var(--col-muted);
-            }
-
-            #lod-tuner .lod-top .s-val {
-                font-size: 11px;
-                color: var(--col-accent);
-                font-weight: 600;
-            }
-
-            #lod-tuner input[type=range] {
-                -webkit-appearance: none;
-                appearance: none;
-                width: 100%;
-                height: 4px;
-                background: var(--col-border);
-                border-radius: 2px;
-                outline: none;
-            }
-
-            #lod-tuner input[type=range]::-webkit-slider-thumb {
-                -webkit-appearance: none;
-                width: 12px;
-                height: 12px;
-                border-radius: 50%;
-                background: var(--col-accent);
-                cursor: pointer;
-            }
-
-            #lod-tuner {
-                transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
-            }
-
-            body.sidebar-collapsed #lod-tuner,
-            body.embed-mode #lod-tuner {
-                transform: translateX(calc(-100vw - 20px));
-                opacity: 0;
-                pointer-events: none;
-            }
-        </style>
-
     </div>
 
     <aside class="sidebar">
@@ -226,12 +143,12 @@
 
             <div class="sb-section">
                 <label>Tile texture</label>
-                
+
                 <div class="btn-row" style="margin-top: 14px; margin-bottom: 16px;">
                     <button class="btn btn-ghost" id="resetAllRot" style="width:100%"><i class="fas fa-sync-alt"></i>Reset angles</button>
                     <button class="btn btn-ghost" id="randAnglesBtn" style="width:100%"><i class="fas fa-compass"></i>Random angles</button>
                 </div>
-                
+
                 <div class="slider-row" style="margin-bottom: 16px;">
                     <div class="s-top"><span>Line Width</span><span class="s-val" id="vCurveW">1.0x</span></div>
                     <input type="range" id="sCurveW" min="0.0" max="2" step="0.05" value="1.0" />
@@ -240,14 +157,14 @@
                     <div class="s-top"><span>Alternative Tiles</span><span class="s-val" id="vAlterTiles">0.00</span></div>
                     <input type="range" id="sAlterTiles" min="0" max="1.0" step="0.01" value="0" />
                 </div>
-                
+
                 <div class="upload-zone" id="uploadZone">
                     <i class="fas fa-cloud-upload-alt"></i>
                     <p>Click or drop an image</p>
                     <div class="filename" id="fileName"></div>
                 </div>
                 <input type="file" id="fileInput" accept="image/*" />
-                
+
                 <button class="btn btn-ghost" id="resetTexBtn" style="width:100%; margin-top:10px; display: none;"><i class="fas fa-image"></i> Reset texture</button>
             </div>
 
@@ -285,7 +202,6 @@
             <div class="sb-footer">
                 <span id="deployInfo">%VITE_DEPLOY_INFO%</span>
             </div>
-
     </aside>
 
     <div class="export-overlay" id="exportOverlay">
@@ -347,7 +263,7 @@
 
     <div class="toast" id="toast"></div>
 
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/scripts/main.js"></script>
 
 </body>
 
