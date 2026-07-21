@@ -208,7 +208,7 @@ function setupExportFrameDragging() {
             touchstart: 'mousedown',
             touchmove: 'mousemove',
             touchend: 'mouseup'
-        }[e.type];
+        } [e.type];
         if (!type) return;
         const evt = new MouseEvent(type, {
             clientX: t.clientX,
@@ -424,7 +424,9 @@ function getExportParams() {
 }
 
 async function exportToPDF() {
-    const { jsPDF } = await import('jspdf');
+    const {
+        jsPDF
+    } = await import('jspdf');
     await import('svg2pdf.js');
 
     const params = getExportParams();
@@ -454,8 +456,8 @@ function exportToSVG() {
     const params = getExportParams();
     const svg = buildExportSVG(params);
     const blob = new Blob([svg], {
-        type: 'image/svg+xml'
-    }),
+            type: 'image/svg+xml'
+        }),
         url = URL.createObjectURL(blob),
         a = document.createElement('a');
     a.href = url;
@@ -548,14 +550,19 @@ async function generateEmbedCode() {
     const serializeFlow = state.flowEnabled && isBlazerZoom && state.showBgStars;
 
     // 1. Extract Grid Bounds & Serialize Rotations
-    let gridMinQ = 0, gridMinR = 0, gridRCount = 1;
+    let gridMinQ = 0,
+        gridMinR = 0,
+        gridRCount = 1;
     let serializedRots = [0, 0, 1, ""];
     let serializedCurves = [];
     let hasCurves = false;
 
     if (!serializeFlow) {
         if (exportHexes.length > 0) {
-            let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+            let minQ = Infinity,
+                maxQ = -Infinity,
+                minR = Infinity,
+                maxR = -Infinity;
             for (const h of exportHexes) {
                 if (h.q < minQ) minQ = h.q;
                 if (h.q > maxQ) maxQ = h.q;
@@ -658,7 +665,9 @@ async function generateEmbedCode() {
                         }
 
                         const compSet = new Set(comp);
-                        let startQ = 0, startR = 0, startE = 0;
+                        let startQ = 0,
+                            startR = 0,
+                            startE = 0;
                         let found = false;
 
                         for (const eid of compSet) {
@@ -798,9 +807,9 @@ function openExportOverlay() {
 
     state.sidebarWasCollapsed = document.body.classList.contains('sidebar-collapsed');
     if (!state.sidebarWasCollapsed) {
+        dom.sidebar.classList.add('collapsed');
         document.body.classList.add('sidebar-collapsed');
-        document.querySelector('.sidebar').classList.add('collapsed');
-        document.getElementById('sidebarToggle').classList.add('collapsed');
+        dom.sidebarToggle.classList.add('collapsed');
     }
     document.body.classList.add('exporting');
     state.isExporting = true;
@@ -824,9 +833,10 @@ export function closeExportOverlay() {
     dom.exportOverlay.classList.remove('active');
     document.body.classList.remove('exporting');
     if (!state.sidebarWasCollapsed) {
+        dom.sidebar.classList.remove('collapsed');
         document.body.classList.remove('sidebar-collapsed');
-        document.querySelector('.sidebar').classList.remove('collapsed');
-        document.getElementById('sidebarToggle').classList.remove('collapsed');
+        dom.sidebarToggle.classList.remove('collapsed');
+        dom.sidebar.style.pointerEvents = 'auto';
     }
     state.isExporting = false;
     dom.embedCodeWrap.classList.remove('visible');
@@ -1447,9 +1457,12 @@ export function getScreenSVG() {
         ePanX: state.panX,
         ePanY: state.panY,
         expStarPans: {
-            x5: state.starPanX5, y5: state.starPanY5,
-            x2: state.starPanX2, y2: state.starPanY2,
-            x3: state.starPanX3, y3: state.starPanY3
+            x5: state.starPanX5,
+            y5: state.starPanY5,
+            x2: state.starPanX2,
+            y2: state.starPanY2,
+            x3: state.starPanX3,
+            y3: state.starPanY3
         }
     };
 

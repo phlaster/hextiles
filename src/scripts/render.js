@@ -72,8 +72,8 @@ export function resize() {
     state.isGradientDirty = true;
 
     if (state.isEmbedMode) {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
+        const w = dom.wrap.clientWidth || window.innerWidth;
+        const h = dom.wrap.clientHeight || window.innerHeight;
 
         if (state.isInitialized && state.embedPrevW > 0 && state.embedPrevH > 0) {
             const dx = (w - state.embedPrevW) / 2;
@@ -89,7 +89,6 @@ export function resize() {
         }
         state.embedPrevW = w;
         state.embedPrevH = h;
-
         dom.cvs.width = w;
         dom.cvs.height = h;
 
@@ -97,11 +96,7 @@ export function resize() {
             state.isInitialized = true;
             if (state.gradientMarkers.length === 0) {
                 const pos = getRandomMarkerPosition();
-                state.gradientMarkers.push({
-                    x: pos.x,
-                    y: pos.y,
-                    color: '#cccccc'
-                });
+                state.gradientMarkers.push({ x: pos.x, y: pos.y, color: '#cccccc' });
                 state.updateGradientMarkersCache();
                 renderGradientList();
                 renderCurveList();
@@ -139,11 +134,7 @@ export function resize() {
 
             if (state.gradientMarkers.length === 0) {
                 const pos = getRandomMarkerPosition();
-                state.gradientMarkers.push({
-                    x: pos.x,
-                    y: pos.y,
-                    color: '#cccccc'
-                });
+                state.gradientMarkers.push({ x: pos.x, y: pos.y, color: '#cccccc' });
                 state.updateGradientMarkersCache();
                 renderGradientList();
                 renderCurveList();

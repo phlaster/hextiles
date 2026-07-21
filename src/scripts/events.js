@@ -183,56 +183,194 @@ export function setupEvents() {
     setupKeyboardShortcuts();
 }
 
-function setupFullscreenAndIdle() {
-    let wasSidebarOpenBeforeFullscreen = false;
+const SB_WIDTH = CONFIG.SIDEBAR_WIDTH;
+const SB_GAP = 10;
+const SB_TOTAL_MOVE = SB_WIDTH + SB_GAP;
+const CHVN_RESTING = 12;
+const CHVN_HALF = 34 / 2;
+const CHVN_TRACK = SB_WIDTH - CHVN_RESTING - CHVN_HALF;
+const toggleIcon = dom.sidebarToggle.querySelector('i');
 
-    dom.fullscreenBtn.addEventListener('click', () => {
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen mode not allowed'));
-        else if (document.exitFullscreen) document.exitFullscreen();
-    });
+let sidebarAnimating = false;
+let sidebarAnimId = null;
 
-    document.addEventListener('fullscreenchange', () => {
-        const icon = dom.fullscreenBtn.querySelector('i');
-        if (document.fullscreenElement) {
-            icon.classList.remove('fa-expand');
-            icon.classList.add('fa-compress');
-            wasSidebarOpenBeforeFullscreen = !dom.sidebar.classList.contains('collapsed');
-            if (wasSidebarOpenBeforeFullscreen) {
-                dom.sidebar.classList.add('collapsed');
-                document.body.classList.add('sidebar-collapsed');
-                dom.sidebarToggle.classList.add('collapsed');
-            }
-            setTimeout(resetIdleTimer, 400);
+function setSidebarState(collapsed) {
+    dom.sidebar.classList.toggle('collapsed', collapsed);
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    dom.sidebarToggle.classList.toggle('collapsed', collapsed);
+    dom.sidebar.style.pointerEvents = collapsed ? 'none' : 'auto';
+}
+
+function animateSidebarToggle(shouldClose) {
+    if (sidebarAnimId) {
+        cancelAnimationFrame(sidebarAnimId);
+        sidebarAnimId = null;
+    }
+
+    sidebarAnimating = true;
+
+    const sbStart = shouldClose ? 0 : SB_TOTAL_MOVE;
+    const sbEnd = shouldClose ? SB_TOTAL_MOVE : 0;
+    const rotStart = shouldClose ? 0 : 180;
+    const rotEnd = shouldClose ? 180 : 0;
+
+    dom.sidebar.style.transition = 'none';
+    dom.sidebarToggle.style.transition = 'none';
+    if (toggleIcon) toggleIcon.style.transition = 'none';
+
+    dom.sidebar.style.transform = `translateX(${sbStart}px)`;
+    dom.sidebarToggle.style.transform = `translateX(${Math.min(0, sbStart - CHVN_TRACK)}px)`;
+    if (toggleIcon) toggleIcon.style.transform = `rotate(${rotStart}deg)`;
+
+    dom.sidebar.classList.remove('collapsed');
+    document.body.classList.remove('sidebar-collapsed');
+    dom.sidebarToggle.classList.remove('collapsed');
+    dom.sidebar.style.pointerEvents = 'auto';
+
+    const duration = 300;
+    const t0 = performance.now();
+
+    function step(now) {
+        const elapsed = now - t0;
+        const t = Math.min(1, elapsed / duration);
+        const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        const sbX = sbStart + (sbEnd - sbStart) * eased;
+        const chvnX = Math.min(0, sbX - CHVN_TRACK);
+        const rot = rotStart + (rotEnd - rotStart) * eased;
+
+        dom.sidebar.style.transform = `translateX(${sbX}px)`;
+        dom.sidebarToggle.style.transform = `translateX(${chvnX}px)`;
+        if (toggleIcon) toggleIcon.style.transform = `rotate(${rot}deg)`;
+
+        if (t < 1) {
+            sidebarAnimId = requestAnimationFrame(step);
         } else {
-            icon.classList.remove('fa-compress');
-            icon.classList.add('fa-expand');
-            if (wasSidebarOpenBeforeFullscreen) {
-                dom.sidebar.classList.remove('collapsed');
-                document.body.classList.remove('sidebar-collapsed');
-                dom.sidebarToggle.classList.remove('collapsed');
-            }
-            clearTimeout(state.idleTimer);
-            exitIdleState();
-            document.body.classList.remove('fullscreen-idle');
+            sidebarAnimId = null;
+            sidebarAnimating = false;
+            dom.sidebar.style.transition = '';
+            dom.sidebarToggle.style.transition = '';
+            if (toggleIcon) toggleIcon.style.transition = '';
+            dom.sidebar.style.transform = '';
+            dom.sidebarToggle.style.transform = '';
+            if (toggleIcon) toggleIcon.style.transform = '';
+            if (shouldClose) setSidebarState(true);
+            else setSidebarState(false);
+            requestRender();
         }
-        resize();
-        requestRender();
-    });
+    }
 
-    ['mousemove', 'mousedown', 'wheel', 'keydown', 'touchstart'].forEach(evt => {
-        window.addEventListener(evt, () => {
-            if (document.fullscreenElement) resetIdleTimer();
-        }, {
-            passive: true
-        });
-    });
+    sidebarAnimId = requestAnimationFrame(step);
 }
 
 function setupSidebarGestures() {
+    let tStartX = 0,
+        tStartY = 0,
+        tMoved = false,
+        tActive = false,
+        suppressClick = false;
+
+    dom.sidebarToggle.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        tStartX = e.touches[0].clientX;
+        tStartY = e.touches[0].clientY;
+        tMoved = false;
+        tActive = true;
+        e.preventDefault();
+    }, {
+        passive: false
+    });
+
+    window.addEventListener('touchmove', (e) => {
+        if (!tActive || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - tStartX;
+        const dy = e.touches[0].clientY - tStartY;
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) tMoved = true;
+        if (tMoved && Math.abs(dx) > Math.abs(dy)) e.preventDefault();
+    }, {
+        passive: false
+    });
+
+    window.addEventListener('touchend', (e) => {
+        if (!tActive) return;
+        tActive = false;
+
+        const dx = e.changedTouches[0].clientX - tStartX;
+        const isCollapsed = dom.sidebar.classList.contains('collapsed');
+        let actionTriggered = false;
+
+        if (sidebarAnimating) {
+            suppressClick = true;
+            return;
+        }
+
+        if (tMoved && Math.abs(dx) > 20) {
+            if (dx < 0 && isCollapsed) {
+                animateSidebarToggle(false);
+                actionTriggered = true;
+            } else if (dx > 0 && !isCollapsed) {
+                animateSidebarToggle(true);
+                actionTriggered = true;
+            }
+        } else if (!tMoved) {
+            animateSidebarToggle(!isCollapsed);
+            actionTriggered = true;
+        }
+
+        if (actionTriggered) suppressClick = true;
+    });
+
     dom.sidebarToggle.addEventListener('click', () => {
-        dom.sidebar.classList.toggle('collapsed');
-        dom.sidebarToggle.classList.toggle('collapsed');
-        document.body.classList.toggle('sidebar-collapsed');
+        if (suppressClick) {
+            suppressClick = false;
+            return;
+        }
+        if (sidebarAnimating) return;
+        const isCollapsed = dom.sidebar.classList.contains('collapsed');
+        animateSidebarToggle(!isCollapsed);
+    });
+
+    let sbStartX = 0,
+        sbStartY = 0,
+        sbDragging = false,
+        sbActive = false;
+    const interactiveSel =
+        'input, textarea, button, select, a, label, canvas, ' +
+        '.upload-zone, .grad-item, .preview-wrap, .editor';
+
+    dom.sidebar.addEventListener('touchstart', (e) => {
+        if (dom.sidebar.classList.contains('collapsed') || sidebarAnimating) return;
+        if (e.target.closest(interactiveSel)) return;
+        sbStartX = e.touches[0].clientX;
+        sbStartY = e.touches[0].clientY;
+        sbDragging = false;
+        sbActive = true;
+    }, {
+        passive: true
+    });
+
+    window.addEventListener('touchmove', (e) => {
+        if (!sbActive || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - sbStartX;
+        const dy = e.touches[0].clientY - sbStartY;
+        if (!sbDragging) {
+            if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+                sbDragging = true;
+            } else if (Math.abs(dy) > 10) {
+                sbActive = false;
+            }
+        }
+        if (sbDragging && dx > 0) e.preventDefault();
+    }, {
+        passive: false
+    });
+
+    window.addEventListener('touchend', (e) => {
+        if (!sbActive) return;
+        sbActive = false;
+        if (!sbDragging) return;
+        const dx = e.changedTouches[0].clientX - sbStartX;
+        if (dx > 40 && !sidebarAnimating) animateSidebarToggle(true);
     });
 
     if (typeof ResizeObserver !== 'undefined') {
@@ -244,152 +382,65 @@ function setupSidebarGestures() {
     } else {
         window.addEventListener('resize', resize);
     }
-
-    let sbTouchStartX = null,
-        sbTouchStartY = null,
-        sbDragging = false;
-
-    dom.sidebar.addEventListener('touchstart', e => {
-        if (dom.sidebar.classList.contains('collapsed')) return;
-        const targetTag = e.target.tagName;
-        if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'BUTTON' || targetTag === 'SELECT') {
-            sbTouchStartX = null;
-            return;
-        }
-        sbTouchStartX = e.touches[0].clientX;
-        sbTouchStartY = e.touches[0].clientY;
-        sbDragging = false;
-        dom.sidebar.style.transition = 'none';
-    }, {
-        passive: true
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            resize();
+            requestRender();
+        }, 300);
     });
+}
 
-    dom.sidebar.addEventListener('touchmove', e => {
-        if (sbTouchStartX === null) return;
-        const dx = e.touches[0].clientX - sbTouchStartX,
-            dy = e.touches[0].clientY - sbTouchStartY;
-        if (!sbDragging) {
-            if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) sbDragging = true;
-            else if (Math.abs(dy) > 10) {
-                sbTouchStartX = null;
-                return;
-            }
-        }
-        if (sbDragging) {
-            e.preventDefault();
-            dom.sidebar.style.transform = dx > 0 ? `translateX(${dx}px)` : `translateX(0px)`;
-        }
-    }, {
-        passive: false
-    });
+function setupFullscreenAndIdle() {
+    let wasSidebarOpenBeforeFullscreen = false;
 
-    dom.sidebar.addEventListener('touchend', e => {
-        if (sbTouchStartX === null) return;
-        const dx = e.changedTouches[0].clientX - sbTouchStartX;
-        dom.sidebar.style.transition = '';
-        if (sbDragging && dx > 80) {
-            dom.sidebar.classList.add('collapsed');
-            document.body.classList.add('sidebar-collapsed');
-            dom.sidebarToggle.classList.add('collapsed');
-            dom.sidebar.style.transform = 'translateX(calc(100% + 10px))';
-            setTimeout(() => {
-                dom.sidebar.style.transform = '';
-            }, 300);
-        } else dom.sidebar.style.transform = '';
-        sbTouchStartX = null;
-        sbDragging = false;
-    });
-
-    let sbToggleDragging = false,
-        sbToggleStartX = 0,
-        sbToggleCurrentX = 0;
-
-    dom.sidebarToggle.addEventListener('touchstart', e => {
-        if (e.touches.length !== 1) return;
-        sbToggleDragging = true;
-        sbToggleStartX = e.touches[0].clientX;
-        sbToggleCurrentX = e.touches[0].clientX;
-        dom.sidebar.style.transition = 'none';
-        dom.sidebarToggle.style.transition = 'none';
-        e.preventDefault();
-    }, {
-        passive: false
-    });
-
-    dom.sidebarToggle.addEventListener('touchmove', e => {
-        if (!sbToggleDragging) return;
-        sbToggleCurrentX = e.touches[0].clientX;
-        let dx = sbToggleCurrentX - sbToggleStartX;
-        let isCollapsed = dom.sidebar.classList.contains('collapsed');
-        if (isCollapsed) {
-            if (dx < 0) {
-                let moveX = Math.max(dx, -CONFIG.SIDEBAR_WIDTH);
-                dom.sidebar.style.transform = `translateX(calc(100% + 10px + ${moveX}px))`;
-                dom.sidebarToggle.style.transform = `translateX(${moveX}px)`;
-            }
+    dom.fullscreenBtn.addEventListener('click', () => {
+        const el = document.documentElement;
+        const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+        if (!isFs) {
+            const req = el.requestFullscreen || el.webkitRequestFullscreen;
+            if (req) req.call(el).catch(() => toast('Fullscreen mode not allowed'));
         } else {
-            if (dx > 0) {
-                let moveX = Math.min(dx, CONFIG.SIDEBAR_WIDTH);
-                dom.sidebar.style.transform = `translateX(${moveX}px)`;
-                dom.sidebarToggle.style.transform = `translateX(calc(50% + ${moveX}px))`;
-            }
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit) exit.call(document);
         }
-        e.preventDefault();
-    }, {
-        passive: false
     });
 
-    dom.sidebarToggle.addEventListener('touchend', e => {
-        if (!sbToggleDragging) return;
-        sbToggleDragging = false;
-        let dx = sbToggleCurrentX - sbToggleStartX;
-        let isCollapsed = dom.sidebar.classList.contains('collapsed');
-        dom.sidebar.style.transition = '';
-        dom.sidebarToggle.style.transition = '';
-        if (Math.abs(dx) < 10) {
-            if (isCollapsed) {
-                dom.sidebar.classList.remove('collapsed');
-                document.body.classList.remove('sidebar-collapsed');
-                dom.sidebarToggle.classList.remove('collapsed');
-            } else {
-                dom.sidebar.classList.add('collapsed');
-                document.body.classList.add('sidebar-collapsed');
-                dom.sidebarToggle.classList.add('collapsed');
-            }
-            dom.sidebar.style.transform = '';
-            dom.sidebarToggle.style.transform = '';
-        } else if (isCollapsed) {
-            if (dx < -80) {
-                dom.sidebar.classList.remove('collapsed');
-                document.body.classList.remove('sidebar-collapsed');
-                dom.sidebarToggle.classList.remove('collapsed');
-                dom.sidebar.style.transform = '';
-                dom.sidebarToggle.style.transform = '';
-            } else {
-                dom.sidebar.style.transform = 'translateX(calc(100% + 10px))';
-                dom.sidebarToggle.style.transform = 'translateX(0)';
-                setTimeout(() => {
-                    dom.sidebar.style.transform = '';
-                    dom.sidebarToggle.style.transform = '';
-                }, 300);
-            }
+    const fsChange = (e) => {
+        const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+        const icon = dom.fullscreenBtn.querySelector('i');
+
+        if (isFs) {
+            icon.classList.remove('fa-expand');
+            icon.classList.add('fa-compress');
+            wasSidebarOpenBeforeFullscreen = !dom.sidebar.classList.contains('collapsed');
+            if (wasSidebarOpenBeforeFullscreen) setSidebarState(true);
+            setTimeout(resetIdleTimer, 400);
         } else {
-            if (dx > 80) {
-                dom.sidebar.classList.add('collapsed');
-                document.body.classList.add('sidebar-collapsed');
-                dom.sidebarToggle.classList.add('collapsed');
-                dom.sidebar.style.transform = 'translateX(calc(100% + 10px))';
-                dom.sidebarToggle.style.transform = 'translateX(0)';
-                setTimeout(() => {
-                    dom.sidebar.style.transform = '';
-                    dom.sidebarToggle.style.transform = '';
-                }, 300);
-            } else {
-                dom.sidebar.style.transform = '';
-                dom.sidebarToggle.style.transform = '';
-            }
+            icon.classList.remove('fa-compress');
+            icon.classList.add('fa-expand');
+            if (wasSidebarOpenBeforeFullscreen) setSidebarState(false);
+            clearTimeout(state.idleTimer);
+            exitIdleState();
+            document.body.classList.remove('fullscreen-idle');
         }
-        e.preventDefault();
+
+        resize();
+        requestRender();
+        setTimeout(() => {
+            resize();
+            requestRender();
+        }, 350);
+    };
+
+    document.addEventListener('fullscreenchange', fsChange);
+    document.addEventListener('webkitfullscreenchange', fsChange);
+
+    ['mousemove', 'mousedown', 'wheel', 'keydown', 'touchstart'].forEach(evt => {
+        window.addEventListener(evt, () => {
+            if (document.fullscreenElement || document.webkitFullscreenElement) resetIdleTimer();
+        }, {
+            passive: true
+        });
     });
 }
 
@@ -400,10 +451,8 @@ function setupCanvasTouchEvents() {
         state.hoveredR = null;
         state.visHoverX = null;
         state.visHoverY = null;
-        if (!state.isEmbedMode && !dom.sidebar.classList.contains('collapsed')) {
-            dom.sidebar.classList.add('collapsed');
-            document.body.classList.add('sidebar-collapsed');
-            dom.sidebarToggle.classList.add('collapsed');
+        if (!state.isEmbedMode && !dom.sidebar.classList.contains('collapsed') && !sidebarAnimating) {
+            setSidebarState(true);
         }
         if (e.touches.length === 1) {
             const r = dom.cvs.getBoundingClientRect(),
@@ -1042,16 +1091,13 @@ function setupUITogglesAndSliders() {
 
 function updateTextureUI() {
     const hasTexture = !!state.texImg;
-    
-    // Hide Curve Width slider row
+
     const curveWidthRow = dom.sCurveW.closest('.slider-row');
     if (curveWidthRow) curveWidthRow.style.display = hasTexture ? 'none' : '';
-    
-    // Hide Alternative Tiles slider row
+
     const alterTilesRow = dom.sAlterTiles.closest('.slider-row');
     if (alterTilesRow) alterTilesRow.style.display = hasTexture ? 'none' : '';
-    
-    // Hide Curve Colors section block
+
     const curveColorsSection = dom.curveList.closest('.sb-section');
     if (curveColorsSection) curveColorsSection.style.display = hasTexture ? 'none' : '';
 }
@@ -1088,9 +1134,9 @@ function setupTextureEditor() {
         dom.fileName.textContent = '';
         toast('Texture reset to default');
         dom.resetTexBtn.style.display = 'none';
-        
+
         updateTextureUI();
-        
+
         requestRender();
     };
 
@@ -1310,10 +1356,8 @@ function setupKeyboardShortcuts() {
         if (e.key === 'Escape') {
             if (dom.exportOverlay.classList.contains('active')) {
                 closeExportOverlay();
-            } else if (document.body.classList.contains('sidebar-collapsed')) {
-                document.body.classList.remove('sidebar-collapsed');
-                dom.sidebar.classList.remove('collapsed');
-                dom.sidebarToggle.classList.remove('collapsed');
+            } else if (document.body.classList.contains('sidebar-collapsed') && !sidebarAnimating) {
+                animateSidebarToggle(false);
             }
         }
     });
@@ -1334,7 +1378,7 @@ export function scheduleLiveTwist() {
 export function applyPanDelta(dx, dy, useParallax = true) {
     state.panX += dx;
     state.panY += dy;
-    
+
     if (useParallax) {
         state.starPanX5 += dx * CONFIG.STAR_PARALLAX_LARGE;
         state.starPanY5 += dy * CONFIG.STAR_PARALLAX_LARGE;
@@ -1417,7 +1461,6 @@ function predictTwistImpact(q, r) {
 
     let impact = 0;
 
-    // 1. PRIORITIZE SPLITS: Breaking a same-color connection causes a global split, spawning a new color!
     for (const pair of oldPairs) {
         const e1 = pair[0],
             e2 = pair[1];
@@ -1427,11 +1470,10 @@ function predictTwistImpact(q, r) {
         const c2 = state.curveMap.has(id2) ? state.curveMap.get(id2) : -1;
 
         if (c1 !== -1 && c1 === c2) {
-            impact += 2.0; // Increased from 0.5 to 2.0 to prioritize new colors
+            impact += 2.0;
         }
     }
 
-    // 2. DEPRIORITIZE MERGES: Connecting different colors just reduces the total color count
     for (const pair of newPairs) {
         const e1 = pair[0],
             e2 = pair[1];
@@ -1505,7 +1547,7 @@ function removeMarkerAt(mx, my) {
             });
             state.gradientMarkers.splice(clickedMarkerIdx, 1);
             state.gradientMarkersRGB.splice(clickedMarkerIdx, 1);
-            
+
             if (state.gradientMarkers.length === 1) {
                 state.markersVisible = false;
                 dom.markersToggle.checked = false;
@@ -1558,7 +1600,7 @@ function loadFile(file) {
         img.onload = () => {
             state.texImg = img;
             dom.resetTexBtn.style.display = 'block';
-            
+
             updateTextureUI();
             openEditor();
             requestRender();
@@ -1616,9 +1658,8 @@ export function resetIdleTimer() {
 }
 
 function enterIdleState() {
-    if (!document.fullscreenElement) return;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) return;
     state.isIdle = true;
-
     state.hoveredQ = null;
     state.hoveredR = null;
     state.visHoverX = null;
@@ -1629,11 +1670,7 @@ function enterIdleState() {
     dom.cvs.style.cursor = 'none';
 
     state.sidebarWasOpenBeforeIdle = !dom.sidebar.classList.contains('collapsed');
-    if (state.sidebarWasOpenBeforeIdle) {
-        dom.sidebar.classList.add('collapsed');
-        document.body.classList.add('sidebar-collapsed');
-        dom.sidebarToggle.classList.add('collapsed');
-    }
+    if (state.sidebarWasOpenBeforeIdle) setSidebarState(true);
 
     state.gridWasVisibleBeforeIdle = state.showGrid;
     if (state.gridWasVisibleBeforeIdle) state.showGrid = false;
@@ -1651,12 +1688,7 @@ function exitIdleState() {
     document.body.style.cursor = '';
     dom.cvs.style.cursor = '';
 
-    if (state.sidebarWasOpenBeforeIdle) {
-        dom.sidebar.classList.remove('collapsed');
-        document.body.classList.remove('sidebar-collapsed');
-        dom.sidebarToggle.classList.remove('collapsed');
-    }
-
+    if (state.sidebarWasOpenBeforeIdle) setSidebarState(false);
     if (state.gridWasVisibleBeforeIdle) state.showGrid = true;
     if (state.markersWereVisibleBeforeIdle) state.markersVisible = true;
 
