@@ -1,3 +1,7 @@
+import { library, dom as faDom } from '@fortawesome/fontawesome-svg-core';
+import { faChevronRight, faExpand, faPlus, faMinus, faShareFromSquare, faDice, faSyncAlt, faCompass, faImage, faCloudUploadAlt, faMapPin, faStar, faCubes, faWater, faLink, faCode, faWandMagicSparkles, faWind, faTimes, faCopy } from '@fortawesome/free-solid-svg-icons';
+import { faGithub } from '@fortawesome/free-brands-svg-icons';
+
 import {
     CONFIG,
     COLORS
@@ -40,6 +44,9 @@ import {
     setupExport,
     getScreenSVG
 } from './export.js';
+
+library.add(faChevronRight, faExpand, faPlus, faMinus, faShareFromSquare, faDice, faSyncAlt, faCompass, faImage, faCloudUploadAlt, faMapPin, faStar, faCubes, faWater, faWandMagicSparkles, faWind, faTimes, faCopy, faLink, faCode, faGithub);
+faDom.watch();
 
 async function initializeApp() {
     injectCssVariables();

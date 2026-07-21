@@ -12,6 +12,10 @@
     "vite-plugin-url-copy": "^1.1.4"
   },
   "dependencies": {
+    "@fontsource/space-grotesk": "^5.3.0",
+    "@fortawesome/fontawesome-svg-core": "^7.3.1",
+    "@fortawesome/free-brands-svg-icons": "^7.3.1",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
     "jspdf": "^4.2.1",
     "svg2pdf.js": "^2.7.0"
   }
