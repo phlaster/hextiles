@@ -390,6 +390,8 @@ export function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offse
     const n = allMarkers.length;
     if (n === 0) return;
 
+    const mathScale = 0.5; 
+    
     for (let py = 0; py < lowH; py++) {
         for (let px = 0; px < lowW; px++) {
             let totalWeight = 0,
@@ -398,9 +400,9 @@ export function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offse
                 b = 0;
             for (let i = 0; i < n; i++) {
                 const m = allMarkers[i];
-                const dx = px - (m.x * qualityScale);
-                const dy = py - (m.y * qualityScale);
-                const distSq = dx * dx + dy * dy + 0.5 * coordScale * coordScale;
+                const dx = (px - (m.x * qualityScale)) * mathScale;
+                const dy = (py - (m.y * qualityScale)) * mathScale;
+                const distSq = dx * dx + dy * dy + 0.5;
                 const weight = (1 / (distSq * distSq)) * m.weight;
                 totalWeight += weight;
                 r += m.r * weight;
@@ -414,9 +416,9 @@ export function updateIDWGradientCanvas(W, H, coordScale = 1, offsetX = 0, offse
                 data[idx + 2] = b / totalWeight;
                 data[idx + 3] = 255;
             } else {
-                data[idx] = avgR;
-                data[idx + 1] = avgG;
-                data[idx + 2] = avgB;
+                data[idx] = bgR;
+                data[idx + 1] = bgG;
+                data[idx + 2] = bgB;
                 data[idx + 3] = 255;
             }
         }

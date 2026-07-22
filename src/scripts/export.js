@@ -950,7 +950,9 @@ function buildExportSVG(params) {
 
 function buildSvgGradient(eW, eH, scale, fx, fy) {
     if (state.gradientMarkersRGB.length === 0 && state.fadingMarkersRGB.length === 0) return '';
-    updateIDWGradientCanvas(eW, eH, scale, fx, fy, 0.5);
+    
+    updateIDWGradientCanvas(eW, eH, scale, fx, fy, 1.0); 
+    
     const gradUrl = state.gradientCanvas.toDataURL('image/png');
     return `<image href="${gradUrl}" xlink:href="${gradUrl}" width="${eW}" height="${eH}" preserveAspectRatio="none"/>`;
 }
