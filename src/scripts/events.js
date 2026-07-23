@@ -541,6 +541,10 @@ function setupCanvasTouchEvents() {
                 }
             }, CONFIG.LONG_PRESS_DUR);
         } else if (e.touches.length === 2) {
+            if (state.isEmbedMode) {
+                e.preventDefault();
+                return;
+            }
             if (state.touchState.mode === 'marker_wait' || state.touchState.mode === 'pan_wait') clearTimeout(state.touchState.timer);
             state.targetInteractionFade = 1.0;
             if (state.touchState.mode === 'marker_drag') {
@@ -636,6 +640,7 @@ function setupCanvasTouchEvents() {
             }
             requestRender();
         } else if (state.touchState.mode === 'pinch' && e.touches.length === 2) {
+            if (state.isEmbedMode) return;
             const dx = e.touches[0].clientX - e.touches[1].clientX,
                 dy = e.touches[0].clientY - e.touches[1].clientY,
                 newDist = Math.hypot(dx, dy);
