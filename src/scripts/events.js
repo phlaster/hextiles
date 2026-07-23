@@ -1413,7 +1413,18 @@ function setupVisibilityHandler() {
 export function scheduleLiveTwist() {
     clearTimeout(state.liveTwistsTimer);
     if (!state.liveTwistsEnabled) return;
-    const delay = CONFIG.LIVE_TWIST_MIN_DELAY + Math.random() * CONFIG.LIVE_TWIST_DELAY_DELTA;
+
+    if (state.liveTwistMode === 'disabled') return;
+
+    let minDelay = CONFIG.LIVE_TWIST_MIN_DELAY;
+    let delayDelta = CONFIG.LIVE_TWIST_DELAY_DELTA;
+
+    if (state.liveTwistMode === 'reduced') {
+        minDelay *= 2;
+        delayDelta *= 2;
+    }
+
+    const delay = minDelay + Math.random() * delayDelta;
     state.liveTwistsTimer = setTimeout(() => {
         if (state.liveTwistsEnabled) {
             performLiveTwist();

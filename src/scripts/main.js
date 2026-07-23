@@ -1,6 +1,32 @@
-import { library, dom as faDom } from '@fortawesome/fontawesome-svg-core';
-import { faChevronRight, faExpand, faPlus, faMinus, faShareFromSquare, faDice, faSyncAlt, faCompass, faImage, faCloudUploadAlt, faMapPin, faStar, faCubes, faWater, faLink, faCode, faWandMagicSparkles, faWind, faTimes, faCopy } from '@fortawesome/free-solid-svg-icons';
-import { faGithub } from '@fortawesome/free-brands-svg-icons';
+import {
+    library,
+    dom as faDom
+} from '@fortawesome/fontawesome-svg-core';
+import {
+    faChevronRight,
+    faExpand,
+    faPlus,
+    faMinus,
+    faShareFromSquare,
+    faDice,
+    faSyncAlt,
+    faCompass,
+    faImage,
+    faCloudUploadAlt,
+    faMapPin,
+    faStar,
+    faCubes,
+    faWater,
+    faLink,
+    faCode,
+    faWandMagicSparkles,
+    faWind,
+    faTimes,
+    faCopy
+} from '@fortawesome/free-solid-svg-icons';
+import {
+    faGithub
+} from '@fortawesome/free-brands-svg-icons';
 
 import {
     CONFIG,
@@ -70,6 +96,12 @@ async function initializeApp() {
                     type: 'SEND_FRAME',
                     error: e.message
                 }, '*');
+            }
+        }
+        if (event.data && event.data.type === 'HEX_LIVE_TWIST') {
+            state.liveTwistMode = event.data.mode;
+            if (state.liveTwistsEnabled) {
+                scheduleLiveTwist();
             }
         }
     });
@@ -598,7 +630,7 @@ function startEmbedRender() {
     }
 
     render();
-    
+
     if (state.liveTwistsEnabled) scheduleLiveTwist();
 }
 

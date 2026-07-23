@@ -91,8 +91,8 @@ export const CONFIG = {
     HAPTIC_DUR: 50,
     MARKER_HIT_RADIUS: 30,
 
-    // Live twist every 0.5 to 3s:
-    LIVE_TWIST_MIN_DELAY: 500, // ms
+    // Live twist every 1 to 3.5s:
+    LIVE_TWIST_MIN_DELAY: 1000, // ms
     LIVE_TWIST_DELAY_DELTA: 2500, // ms
 
     // UI & Limits

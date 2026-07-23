@@ -178,6 +178,8 @@ export const state = {
     magnetTimer: null,
     isRenderScheduled: false,
     lastStatsUpdate: 0,
+    curveWorkWasRemaining: false,
+    liveTwistMode: 'normal',
 
     // Fullscreen Idle Mode
     isIdle: false,

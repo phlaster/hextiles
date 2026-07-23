@@ -948,7 +948,13 @@ function processVisibleHexes(z, px, py, W, H, img, curveAlpha) {
                 didWork = false;
             }
         }
-        if (didWork) curveWorkRemaining = true;
+        if (didWork) {
+            curveWorkRemaining = true;
+            state.curveWorkWasRemaining = true;
+        } else if (state.curveWorkWasRemaining) {
+            state.curveWorkWasRemaining = false;
+            state.lastStatsUpdate = 0;
+        }
     }
 
     return {
