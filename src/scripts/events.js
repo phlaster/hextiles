@@ -1420,8 +1420,8 @@ export function scheduleLiveTwist() {
     let delayDelta = CONFIG.LIVE_TWIST_DELAY_DELTA;
 
     if (state.liveTwistMode === 'reduced') {
-        minDelay *= 2;
-        delayDelta *= 2;
+        minDelay *= 3;
+        delayDelta *= 3;
     }
 
     const delay = minDelay + Math.random() * delayDelta;
