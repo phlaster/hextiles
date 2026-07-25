@@ -538,7 +538,7 @@ async function generateEmbedCode() {
         m.color
     ]);
 
-    const EMBED_BAKE_MARGIN = 0.5;
+    const EMBED_BAKE_MARGIN = 0.25;
     const padW = eW * (1 + 2 * EMBED_BAKE_MARGIN);
     const padH = eH * (1 + 2 * EMBED_BAKE_MARGIN);
     const padPanX = ePanX + (padW - eW) / 2;
